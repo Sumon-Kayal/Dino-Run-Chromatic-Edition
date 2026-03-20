@@ -53,11 +53,8 @@ body {
   color: var(--text);
   font-family: 'Press Start 2P', monospace;
   min-height: 100vh;
-  display: -webkit-flex;
   display: flex;
-  -webkit-flex-direction: column;
   flex-direction: column;
-  -webkit-align-items: center;
   align-items: center;
   overflow-x: hidden;
 }
@@ -65,13 +62,10 @@ body {
 /* ── HEADER ──────────────────────────────────────────────── */
 header {
   width: 100%;
-  max-width: 900px;
+  max-width: 960px;
   padding: 14px 20px 10px;
-  display: -webkit-flex;
   display: flex;
-  -webkit-justify-content: space-between;
   justify-content: space-between;
-  -webkit-align-items: center;
   align-items: center;
   border-bottom: 1px solid var(--border);
 }
@@ -92,7 +86,7 @@ header {
 /* ── GAME AREA ───────────────────────────────────────────── */
 .game-area {
   width: 100%;
-  max-width: 900px;
+  max-width: 960px;
   padding: 0 12px;
   margin-top: 14px;
 }
@@ -114,8 +108,6 @@ canvas {
   display: block;
   width: 100%;
   height: auto;
-  image-rendering: -webkit-optimize-contrast;
-  image-rendering: -moz-crisp-edges;
   image-rendering: crisp-edges;
   image-rendering: pixelated;
 }
@@ -124,13 +116,9 @@ canvas {
 .overlay {
   position: absolute;
   top: 0; right: 0; bottom: 0; left: 0;
-  display: -webkit-flex;
   display: flex;
-  -webkit-flex-direction: column;
   flex-direction: column;
-  -webkit-align-items: center;
   align-items: center;
-  -webkit-justify-content: center;
   justify-content: center;
   background: rgba(255, 255, 255, 0.93);
 }
@@ -163,9 +151,7 @@ canvas {
 .go-scores {
   font-size: clamp(7px, 1.8vw, 11px);
   color: var(--gold);
-  display: -webkit-flex;
   display: flex;
-  -webkit-align-items: center;
   align-items: center;
 }
 .go-scores .go-sep { color: var(--border); margin: 0 10px; }
@@ -182,7 +168,6 @@ canvas {
   cursor: pointer;
   border-radius: 3px;
   letter-spacing: 1px;
-  -webkit-transition: opacity 0.15s;
   transition: opacity 0.15s;
 }
 .chrome-btn:hover { opacity: 0.88; }
@@ -190,20 +175,15 @@ canvas {
 
 /* Blink animation for restart button */
 .blink {
-  -webkit-animation: blink 1s steps(1) infinite;
   animation: blink 1s steps(1) infinite;
 }
-@-webkit-keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
 @keyframes blink          { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
 
 /* ── CONTROLS ────────────────────────────────────────────── */
 .controls {
-  display: -webkit-flex;
   display: flex;
   padding: 10px 0;
-  -webkit-justify-content: center;
   justify-content: center;
-  -webkit-flex-wrap: wrap;
   flex-wrap: wrap;
 }
 
@@ -217,9 +197,7 @@ canvas {
   font-size: clamp(6px, 1.5vw, 8px);
   cursor: pointer;
   border-radius: 3px;
-  -webkit-transition: all 0.12s;
   transition: all 0.12s;
-  -webkit-user-select: none;
   user-select: none;
   box-shadow: var(--shadow);
   letter-spacing: 1px;
@@ -236,7 +214,6 @@ canvas {
 .ctrl-btn.duck.active,
 .ctrl-btn.duck:active {
   background: var(--green); color: #fff; border-color: var(--green);
-  -webkit-transform: scale(0.95);
   transform: scale(0.95);
 }
 
@@ -256,7 +233,7 @@ canvas {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 14px;
-  max-width: 900px;
+  max-width: 960px;
   width: 100%;
   padding: 4px 12px 20px;
 }
@@ -279,21 +256,15 @@ canvas {
   border-bottom: 1px solid var(--border);
   padding-bottom: 10px;
   margin-bottom: 14px;
-  display: -webkit-flex;
   display: flex;
-  -webkit-justify-content: space-between;
   justify-content: space-between;
-  -webkit-align-items: center;
   align-items: center;
 }
 
 /* ── STATS ───────────────────────────────────────────────── */
 .stat-row {
-  display: -webkit-flex;
   display: flex;
-  -webkit-justify-content: space-between;
   justify-content: space-between;
-  -webkit-align-items: center;
   align-items: center;
   padding: 7px 0;
   border-bottom: 1px solid rgba(224,224,224,0.6);
@@ -323,16 +294,13 @@ canvas {
   height: 100%;
   background: linear-gradient(90deg, var(--blue), var(--danger));
   border-radius: 2px;
-  -webkit-transition: width 0.5s ease;
   transition: width 0.5s ease;
   width: 0%;
 }
 
 /* ── DB BADGE ────────────────────────────────────────────── */
 .db-badge {
-  display: -webkit-inline-flex;
   display: inline-flex;
-  -webkit-align-items: center;
   align-items: center;
   font-size: clamp(5px, 1vw, 6px);
   color: var(--muted);
@@ -345,25 +313,19 @@ canvas {
   background: var(--green);
   box-shadow: 0 0 4px var(--green);
   margin-right: 6px;
-  -webkit-flex-shrink: 0;
   flex-shrink: 0;
-  -webkit-animation: pulse 2s infinite;
   animation: pulse 2s infinite;
 }
-@-webkit-keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 @keyframes pulse          { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
 
 /* ── NAME FORM ───────────────────────────────────────────── */
 .name-section { margin-bottom: 12px; }
 .name-form {
-  display: -webkit-flex;
   display: flex;
-  -webkit-flex-wrap: wrap;
   flex-wrap: wrap;
   margin-top: 6px;
 }
 .name-input {
-  -webkit-flex: 1;
   flex: 1;
   min-width: 80px;
   background: var(--bg);
@@ -396,7 +358,6 @@ canvas {
   cursor: pointer;
   border-radius: 2px;
   letter-spacing: 1px;
-  -webkit-transition: all 0.15s;
   transition: all 0.15s;
 }
 .clear-btn:hover { background: var(--danger); color: #fff; }
@@ -446,7 +407,7 @@ canvas {
 
 /* ── FOOTER ──────────────────────────────────────────────── */
 footer {
-  max-width: 900px;
+  max-width: 960px;
   width: 100%;
   padding: 12px 20px;
   text-align: center;
@@ -456,3 +417,4 @@ footer {
   margin-top: auto;
   letter-spacing: 2px;
 }
+                   
