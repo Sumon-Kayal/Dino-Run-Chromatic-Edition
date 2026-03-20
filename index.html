@@ -1,0 +1,137 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Dino Run</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- ══════════════════════════ HEADER ══════════════════════════ -->
+  <header>
+    <div class="logo">&#127990; DINO RUN</div>
+    <div class="score-display">
+      <span class="hi-label">HI</span>
+      <span id="hdr-hi">00000</span>
+      &nbsp;
+      <span id="hdr-score" class="score-val">00000</span>
+    </div>
+  </header>
+
+  <!-- ══════════════════════════ GAME AREA ═══════════════════════ -->
+  <div class="game-area">
+    <div class="game-frame" id="gameFrame">
+      <canvas id="gameCanvas" width="900" height="300"></canvas>
+
+      <!-- Start overlay -->
+      <div class="overlay" id="startScreen">
+        <div class="dino-404">404</div>
+        <h2 class="overlay-title">PRESS SPACE TO PLAY</h2>
+        <p class="overlay-hint">
+          SPACE / &#8679; = JUMP &nbsp;&middot;&nbsp;
+          &#8681; / HOLD = DUCK &nbsp;&middot;&nbsp;
+          P = PAUSE
+        </p>
+      </div>
+
+      <!-- Game-over overlay -->
+      <div class="overlay hidden" id="gameOverScreen">
+        <h2 class="overlay-title danger">GAME OVER</h2>
+        <div class="go-scores">
+          <span id="go-score">SCORE 00000</span>
+          <span class="go-sep">&middot;</span>
+          <span id="go-hi" class="go-hi">HI 00000</span>
+        </div>
+        <button class="chrome-btn primary blink" id="restartBtn">&#8635; RESTART</button>
+      </div>
+
+      <!-- Pause overlay -->
+      <div class="overlay hidden" id="pauseScreen">
+        <h2 class="overlay-title">PAUSED</h2>
+        <p class="overlay-hint">P OR TAP PAUSE TO RESUME</p>
+      </div>
+    </div>
+
+    <!-- Mobile controls -->
+    <div class="controls">
+      <button class="ctrl-btn jump"      id="jumpBtn">&#9650; JUMP</button>
+      <button class="ctrl-btn duck"      id="duckBtn">&#9660; DUCK</button>
+      <button class="ctrl-btn pause-btn" id="pauseBtn">&#9646;&#9646; PAUSE</button>
+      <button class="ctrl-btn mute-btn"  id="muteBtn">&#128266;</button>
+    </div>
+  </div>
+
+  <!-- ══════════════════════════ PANELS ══════════════════════════ -->
+  <div class="panel-row">
+
+    <!-- Stats panel -->
+    <div class="panel">
+      <div class="panel-title">SESSION STATS</div>
+      <div class="stat-row">
+        <span class="stat-label">GAMES PLAYED</span>
+        <span class="stat-value" id="stat-games">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">BEST SCORE</span>
+        <span class="stat-value gold" id="stat-best">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">OBSTACLES DODGED</span>
+        <span class="stat-value" id="stat-obs">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">DEATHS</span>
+        <span class="stat-value danger" id="stat-deaths">0</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">TOTAL DISTANCE</span>
+        <span class="stat-value" id="stat-dist">0</span>
+      </div>
+      <div class="speed-bar-wrap">
+        <div class="speed-label">SPEED</div>
+        <div class="speed-bar-bg">
+          <div class="speed-bar-fill" id="speed-fill"></div>
+        </div>
+      </div>
+      <div class="db-badge">
+        <div class="db-dot"></div>
+        <span id="db-status">Calculating…</span>
+      </div>
+    </div>
+
+    <!-- Leaderboard panel -->
+    <div class="panel">
+      <div class="panel-title">
+        <span>LEADERBOARD &middot; TOP 10</span>
+        <button class="clear-btn" id="clearLbBtn">CLEAR</button>
+      </div>
+      <div class="name-section">
+        <div class="name-form">
+          <input class="name-input" id="nameInput" maxlength="10"
+                 placeholder="YOUR NAME" autocomplete="off" spellcheck="false"/>
+          <button class="chrome-btn small" id="nameSaveBtn">SAVE</button>
+        </div>
+        <div class="player-name-label" id="currentName">&#9656; ANON</div>
+      </div>
+      <table class="lb-table">
+        <thead>
+          <tr><th>#</th><th>NAME</th><th>SCORE</th><th>WHEN</th></tr>
+        </thead>
+        <tbody id="lbBody">
+          <tr><td colspan="4" class="lb-empty">NO RECORDS YET</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+  </div><!-- /panel-row -->
+
+  <!-- ══════════════════════════ FOOTER ══════════════════════════ -->
+  <footer>
+    DINO RUN &middot; CHROMATIC EDITION &middot; 2026
+  </footer>
+
+  <script src="db.js"></script>
+  <script src="game.js"></script>
+</body>
+</html>

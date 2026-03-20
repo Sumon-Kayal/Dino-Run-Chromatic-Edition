@@ -1,0 +1,256 @@
+/* ═══════════════════════════════════════════════════════════
+   DINO RUN — CHROMATIC EDITION
+   db.js — Local Storage Layer  (5 MB aware)
+
+   All data is stored LOCALLY on this device only.
+   No global leaderboard. No network calls. Fully offline.
+
+   Storage backend (auto-detected):
+     1. localStorage  — Chrome, Firefox, Safari, Edge, Cromite…
+     2. In-memory     — private/restricted contexts (session only)
+
+   5 MB strategy:
+     · Data stored with JSON.stringify (no whitespace)
+     · navigator.storage.persist() requested at startup to prevent
+       the browser evicting our data under storage pressure
+     · navigator.storage.estimate() polled so the UI can show
+       real quota usage
+     · QuotaExceededError caught and surfaced instead of silently
+       swallowed — writes that exceed quota return false and the
+       caller can decide how to handle it
+
+   Exposes: window.DB  (must be loaded before game.js)
+   ═══════════════════════════════════════════════════════════ */
+'use strict';
+
+window.DB = (function () {
+
+  /* ─── Backend detection ─────────────────────────────────── */
+  var useLocalStorage = (function () {
+    try {
+      localStorage.setItem('_dinotest', '1');
+      localStorage.removeItem('_dinotest');
+      return true;
+    } catch (e) { return false; }
+  }());
+
+  /* ─── In-memory fallback ────────────────────────────────── */
+  var memStore = {};
+
+  /* ─── Quota tracking (updated asynchronously) ───────────── */
+  var quotaUsed  = 0;     // bytes used  (from estimate())
+  var quotaTotal = 5 * 1024 * 1024;  // default assume 5 MB
+  var quotaError = false; // true when last write hit quota limit
+
+  /* Request persistent storage so the browser won't evict us */
+  if (navigator.storage && navigator.storage.persist) {
+    navigator.storage.persist().catch(function () {});
+  }
+
+  /* Poll quota usage once at startup and export for UI */
+  function refreshQuota() {
+    if (navigator.storage && navigator.storage.estimate) {
+      navigator.storage.estimate().then(function (est) {
+        quotaUsed  = est.usage  || 0;
+        quotaTotal = est.quota  || quotaTotal;
+        quotaError = false;
+        /* Fire a custom event so game.js can update the badge */
+        window.dispatchEvent(new CustomEvent('db:quota', {
+          detail: { used: quotaUsed, total: quotaTotal }
+        }));
+      }).catch(function () {});
+    }
+  }
+  refreshQuota();
+
+  /* ─── Low-level get / set ───────────────────────────────── */
+
+  /**
+   * Read a value from storage.
+   * @param  {string} key
+   * @returns {string|null}
+   */
+  function dbGet(key) {
+    if (useLocalStorage) {
+      try { return localStorage.getItem(key); }
+      catch (e) { return null; }
+    }
+    return (key in memStore) ? memStore[key] : null;
+  }
+
+  /**
+   * Write a value to storage.
+   * BUG-4 FIX: catches QuotaExceededError explicitly instead of
+   *            swallowing it silently. Returns false on failure.
+   * @param  {string} key
+   * @param  {string} val  — must be a string (JSON.stringify first)
+   * @returns {boolean} true = success, false = quota exceeded / error
+   */
+  function dbSet(key, val) {
+    if (useLocalStorage) {
+      try {
+        localStorage.setItem(key, val);
+        /* Refresh quota estimate after every successful write */
+        refreshQuota();
+        return true;
+      } catch (e) {
+        var name = e.name || '';
+        if (name === 'QuotaExceededError' ||
+            name === 'NS_ERROR_DOM_QUOTA_REACHED' ||   /* Firefox */
+            e.code === 22 ||                            /* Chrome  */
+            e.code === 1014) {                          /* Firefox */
+          quotaError = true;
+          window.dispatchEvent(new CustomEvent('db:quotaFull'));
+          console.warn('[DB] localStorage quota exceeded — key:', key);
+        } else {
+          console.warn('[DB] localStorage write error:', e);
+        }
+        return false;
+      }
+    }
+    /* in-memory fallback */
+    memStore[key] = val;
+    return true;
+  }
+
+  /* ─── Helpers ───────────────────────────────────────────── */
+
+  // FIX-4: escapeText() was here but it caused a double-encoding visual bug.
+  // game.js renders leaderboard names via td.textContent (not innerHTML), which
+  // is already 100% XSS-safe. Manual entity encoding made "&lt;" print
+  // literally on screen instead of "<". The function has been removed; names
+  // are stored and retrieved as plain strings.
+
+  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun',
+                'Jul','Aug','Sep','Oct','Nov','Dec'];
+
+  /** Returns "19 Mar '26 14:07" */
+  function makeTimestamp() {
+    var now = new Date();
+    var d   = String(now.getDate()).padStart(2, '0');
+    var mon = MONTHS[now.getMonth()];
+    var yr  = String(now.getFullYear()).slice(-2);
+    var hh  = String(now.getHours()).padStart(2, '0');
+    var mm  = String(now.getMinutes()).padStart(2, '0');
+    return d + ' ' + mon + " '" + yr + ' ' + hh + ':' + mm;
+  }
+
+  /* ─── Quota pruning ─────────────────────────────────────── */
+  /**
+   * If a write fails due to quota, merge the new entries with the
+   * existing leaderboard, sort by score, prune to top-10, and retry.
+   * Falls back to top-5 if still too large.
+   * Returns true if the retry succeeded.
+   *
+   * FIX-1 (was pruneAndRetry): Previously discarded the new data
+   *   entirely — it pruned the old stored array and saved that,
+   *   so the new score was silently lost. Now merges newLb into the
+   *   existing entries before pruning so no score is dropped unfairly.
+   * FIX-4: Removed the unused `val` parameter that was never read.
+   */
+  function pruneAndSave(key, newLb) {
+    var existing = (function () {
+      var raw = dbGet(key);
+      try { return raw ? JSON.parse(raw) : []; } catch (e) { return []; }
+    }());
+
+    /* Merge new entries, dedup by timestamp, sort best-first, keep top 10 */
+    var combined = existing.concat(newLb.filter(function (n) {
+      return !existing.some(function (e) { return e.when === n.when; });
+    }));
+    combined.sort(function (a, b) { return b.score - a.score; });
+    combined = combined.slice(0, 10);
+
+    if (dbSet(key, JSON.stringify(combined))) { return true; }
+
+    /* Still too large — fall back to top 5 */
+    if (combined.length > 5) {
+      combined = combined.slice(0, 5);
+      return dbSet(key, JSON.stringify(combined));
+    }
+    return false;
+  }
+
+  /* ─── Public API ────────────────────────────────────────── */
+  return {
+
+    /** Which storage backend is active */
+    backendName: useLocalStorage
+      ? 'LOCAL STORAGE \xB7 OFFLINE'
+      : 'IN-MEMORY (SESSION ONLY)',
+
+    /** Current quota info — updated async by refreshQuota() */
+    get quotaUsed()  { return quotaUsed;  },
+    get quotaTotal() { return quotaTotal; },
+    get quotaError() { return quotaError; },
+
+    /* Leaderboard ------------------------------------------ */
+    getLeaderboard: function () {
+      var raw = dbGet('dino:lb');
+      try { return raw ? JSON.parse(raw) : []; }
+      catch (e) { return []; }
+    },
+
+    saveLeaderboard: function (lb) {
+      var json = JSON.stringify(lb);   /* compact — no whitespace */
+      if (dbSet('dino:lb', json)) { return true; }
+      /* Quota exceeded — merge + prune, then retry */
+      if (!pruneAndSave('dino:lb', lb)) {
+        console.error('[DB] Failed to save leaderboard after pruning');
+        return false;
+      }
+      return true;
+    },
+
+    /**
+     * Add score to local top-10.
+     * Stores: name, score, when (day Mon 'YY HH:MM).
+     * @param  {string} name
+     * @param  {number} score
+     * @returns {Array} updated leaderboard
+     */
+    addScore: function (name, score) {
+      var lb = this.getLeaderboard();
+      lb.push({
+        name:  String(name),   // FIX-4: plain string; textContent handles XSS
+        score: score,
+        when:  makeTimestamp()
+      });
+      lb.sort(function (a, b) { return b.score - a.score; });
+      lb = lb.slice(0, 10);
+      if (!this.saveLeaderboard(lb)) {
+        console.warn('[DB] Score not persisted — storage full');
+        return null;  // FIX-2: signal failure to caller
+      }
+      return lb;
+    },
+
+    /* Stats ------------------------------------------------- */
+    getStats: function () {
+      var raw = dbGet('dino:stats');
+      var def = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0 };
+      try { return raw ? JSON.parse(raw) : def; }
+      catch (e) { return def; }
+    },
+
+    saveStats: function (s) {
+      dbSet('dino:stats', JSON.stringify(s));
+    },
+
+    /* Player name ------------------------------------------- */
+    getPlayerName: function () {
+      return dbGet('dino:player') || 'ANON';
+    },
+
+    savePlayerName: function (n) {
+      dbSet('dino:player', n);
+    },
+
+    /* Clear leaderboard ------------------------------------- */
+    clearLeaderboard: function () {
+      dbSet('dino:lb', JSON.stringify([]));
+    }
+
+  };
+
+}());
