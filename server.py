@@ -1,6 +1,7 @@
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import ssl
 import os
+import sys
 
 # ── Serve from this script's folder, not wherever you ran it from ──
 DIR = os.path.dirname(os.path.abspath(__file__))
@@ -8,6 +9,27 @@ DIR = os.path.dirname(os.path.abspath(__file__))
 class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIR, **kwargs)
+
+    # Block TLS credential files from being served even though they sit in DIR.
+    # Both GET and HEAD are intercepted; any other method falls through to the
+    # default 501 handler so no new attack surface is added.
+    _DENIED = {'cert.pem', 'key.pem'}
+
+    def _is_denied(self):
+        # self.path may include a query string; strip it before comparing.
+        return os.path.basename(self.path.split('?')[0]) in self._DENIED
+
+    def do_GET(self):
+        if self._is_denied():
+            self.send_error(403, 'Forbidden')
+            return
+        super().do_GET()
+
+    def do_HEAD(self):
+        if self._is_denied():
+            self.send_error(403, 'Forbidden')
+            return
+        super().do_HEAD()
 
     # Correct MIME types — Firefox silently rejects fonts without them
     extensions_map = {
@@ -25,17 +47,18 @@ httpd = HTTPServer(('0.0.0.0', 1999), Handler)
 
 # ssl.wrap_socket() was removed in Python 3.12.
 # SSLContext is the correct API (works Python 3.4 → 3.12+).
-#
-# FIX-1: cert files may not exist (e.g. during local dev).
-# If they are missing, fall back to plain HTTP instead of crashing.
-try:
-    ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-    ctx.load_cert_chain(certfile=os.path.join(DIR, 'cert.pem'),
-                        keyfile=os.path.join(DIR, 'key.pem'))
-    httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
-    print("HTTPS running on https://localhost:1999")
-except FileNotFoundError:
-    print("WARNING: cert.pem / key.pem not found — falling back to plain HTTP.")
-    print("HTTP  running on http://localhost:1999")
+cert = os.path.join(DIR, 'cert.pem')
+key  = os.path.join(DIR, 'key.pem')
+if not os.path.exists(cert) or not os.path.exists(key):
+    print("ERROR: cert.pem / key.pem not found.")
+    print("Generate them with:")
+    print("  openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem \\")
+    print("    -days 365 -nodes -subj '/CN=localhost'")
+    sys.exit(1)
+
+ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+ctx.load_cert_chain(certfile=cert, keyfile=key)
+httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
+print("HTTPS running on https://localhost:1999")
 
 httpd.serve_forever()
