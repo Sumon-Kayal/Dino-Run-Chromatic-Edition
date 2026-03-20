@@ -78,6 +78,7 @@ dino-run/
 ├── cert.pem            # TLS certificate (self-signed, not tracked in VCS)
 ├── key.pem             # TLS private key  (self-signed, not tracked in VCS)
 ├── README.md
+├── CHANGELOG.md
 └── LICENSE             # MIT
 ```
 
@@ -97,7 +98,7 @@ curl -L -o fonts/press-start-2p.woff2 \
   https://cdn.jsdelivr.net/fontsource/fonts/press-start-2p@latest/latin-400-normal.woff2
 curl -L -o fonts/vt323.woff2 \
   https://cdn.jsdelivr.net/fontsource/fonts/vt323@latest/latin-400-normal.woff2
-```
+```text
 
 ---
 
@@ -177,7 +178,7 @@ cannot be persisted.
 - All sprites drawn with `fillRect` — no image assets
 - Speed scales from 5.5 → 18 as score increases
 - Pterodactyls appear after score 200; three flight heights with distinct dodge requirements
-- All 12 known cross-browser bugs fixed
+- All 12 known cross-browser bugs fixed (see CHANGELOG.md)
 
 ---
 
