@@ -81,7 +81,7 @@ dino-run/
 ├── CHANGELOG.md
 └── LICENSE             # MIT
 
-```text
+```
 
 ---
 
