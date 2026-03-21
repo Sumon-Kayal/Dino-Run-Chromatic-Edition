@@ -33,7 +33,7 @@
   --text:     #595959;   /* Chrome's body-text gray */
   --muted:    #9aa0a6;
   --accent:   #535353;   /* Chrome dino gray */
-  --gold:     #b8860b;
+  --gold:     #ffd700;  /* BUG-6 FIX: was #b8860b (dark gold), now matches JS renderLeaderboard() */
   --danger:   #c0392b;
   --green:    #1e7e34;
   --blue:     #1a73e8;   /* Chrome brand blue */
@@ -157,6 +157,13 @@ canvas {
 .go-scores .go-sep { color: var(--border); margin: 0 10px; }
 .go-scores .go-hi  { color: var(--muted); }
 
+.go-newbest {
+  font-size: 10px;
+  color: var(--gold);
+  letter-spacing: 0.1em;
+  animation: pulse 1s infinite;
+}
+
 /* Shared button style */
 .chrome-btn {
   padding: 10px 22px;
@@ -227,6 +234,81 @@ canvas {
 /* Mute — just an icon button */
 .ctrl-btn.mute-btn { font-size: 16px; padding: 7px 12px; }
 .ctrl-btn.mute-btn.active { background: var(--border); }
+
+/* Fullscreen */
+.ctrl-btn.fullscreen-btn { border-color: var(--muted); color: var(--muted); }
+.ctrl-btn.fullscreen-btn:active,
+.ctrl-btn.fullscreen-btn.active {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+
+/* stylelint-disable selector-no-vendor-prefix */
+/* ── FULLSCREEN MODE ─────────────────────────────────────── */
+/* Standard (:fullscreen) — Chrome 71+, Firefox 64+, Edge 79+
+   WebKit prefix (:-webkit-full-screen) — Safari desktop/iOS
+   No -moz- prefix needed: Firefox 64+ uses the standard pseudo-class.
+   Our minimum (Firefox 93) is well past that threshold.            */
+:fullscreen body,
+:-webkit-full-screen body {
+  background: #000;
+  /* height must be explicit (not just min-height) so the flex column
+     has a fixed container height and justify-content: center works   */
+  height: 100vh;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+:fullscreen header,
+:-webkit-full-screen header,
+:fullscreen .panel-row,
+:-webkit-full-screen .panel-row,
+:fullscreen footer,
+:-webkit-full-screen footer {
+  display: none;
+}
+
+:fullscreen .game-area,
+:-webkit-full-screen .game-area {
+  max-width: none;
+  width: 100vw;
+  height: 100vh;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+/* Scale game frame to fill viewport, preserving 854:480 (16:9) ratio.
+   min() picks whichever dimension is the constraint:
+     landscape: height is the limit → width = 100vh × 854/480
+     portrait:  width  is the limit → use 100vw directly            */
+:fullscreen .game-frame,
+:-webkit-full-screen .game-frame {
+  width: min(100vw, calc(100vh * 854 / 480));
+  max-width: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+/* Mobile controls float at the bottom in fullscreen */
+:fullscreen .controls,
+:-webkit-full-screen .controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+/* stylelint-enable selector-no-vendor-prefix */
 
 /* ── PANEL GRID ──────────────────────────────────────────── */
 .panel-row {
