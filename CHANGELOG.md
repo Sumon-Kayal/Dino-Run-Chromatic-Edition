@@ -57,7 +57,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   
 ---
 
-## ## [0.9.0-rc] — Testing Period: 2026-03-15 to 2026-03-19
+## [0.9.0-rc] — Testing Period: 2026-03-15 to 2026-03-19
 
 ### Testing Summary
 
