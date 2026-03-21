@@ -8,13 +8,16 @@ No network calls · No tracking · No image assets.
 
 ## ✨ Features
 
-- **Endless runner** with delta-time physics (consistent across all refresh rates)
+- **Endless runner** with delta-time physics (consistent across 60/90/120/144 Hz)
+- **Speed calibrated to the original Chrome Dino** — `8.5 → 18.5 px/frame` derived from Chromium source, reaching max speed at score ~2660
 - **Chromatic day/night cycle** with colour-interpolated sky, stars, cloud parallax
+- **Fullscreen mode** — `F` key or `FULL` button; canvas scales to fill viewport at 16:9
 - **Top-10 local leaderboard** persisted in `localStorage` (session-only fallback for private contexts)
+- **★ NEW BEST ★ banner** — pulsing gold overlay when the player beats their previous best
 - **5 MB storage awareness** — quota display, graceful pruning on overflow, user-visible warning
-- **Web Audio** sound effects (mutable)
+- **Web Audio** sound effects (mutable, `M` shortcut)
 - **Mobile-friendly** — touch jump/duck controls, no double-fire
-- **Keyboard shortcuts** — `Space`/`↑` jump · `↓`/hold duck · `P` pause
+- **Keyboard shortcuts** — `Space`/`↑` jump · `↓` duck · `P` pause · `M` mute · `F` fullscreen
 - **HTTPS dev server** included (`server.py`)
 
 ---
@@ -33,7 +36,8 @@ python3 server.py
 ```
 
 Open **https://localhost:1999** (accept the self-signed cert warning).  
-The zip includes dev certs (`cert.pem` / `key.pem`). To regenerate them, see below.
+If `cert.pem` / `key.pem` are missing in your source download, generate them
+before running `server.py` (see the certificate section below).
 
 ### 📱 Termux (Android)
 
@@ -55,9 +59,9 @@ One-liner (no correct MIME types, fallback fonts only):
 python3 -m http.server 1999
 ```
 
-### 🔐 Regenerating the self-signed certificate
+### 🔐 Generating the self-signed certificate
 
-The zip ships with ready-to-use dev certs. To replace them:
+`cert.pem` and `key.pem` are not tracked in git and are not included in source downloads. Generate them locally before running `server.py`:
 
 ```bash
 openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem \
@@ -78,8 +82,8 @@ Dino-Run-Chromatic-Edition-main/
 ├── fonts/
 │   ├── press-start-2p.woff2   # Pixel heading font
 │   └── vt323.woff2            # Monospace body font
-├── cert.pem            # TLS certificate (dev cert — regenerate for real use)
-├── key.pem             # TLS private key  (dev cert — regenerate for real use)
+├── cert.pem            # Optional local TLS certificate (not tracked in git)
+├── key.pem             # Optional local TLS private key  (not tracked in git)
 ├── .gitignore          # Excludes cert.pem / key.pem from version control
 ├── .github/
 │   └── workflows/
@@ -138,11 +142,12 @@ storage usage (e.g. `LOCAL STORAGE · OFFLINE · 12KB (0.2%)`).
 
 ### 🗝️ Storage keys
 
-| Key           | Contents                                            |
-|---------------|-----------------------------------------------------|
-| `dino:lb`     | Top-10 leaderboard (JSON array)                     |
-| `dino:stats`  | Lifetime stats (games, deaths, distance, obstacles) |
-| `dino:player` | Player display name (max 10 chars)                  |
+| Key             | Contents                                            |
+|-----------------|-----------------------------------------------------|
+| `dino:lb`       | Top-10 leaderboard (JSON array)                     |
+| `dino:stats`    | Lifetime stats (games, deaths, distance, obstacles) |
+| `dino:player`   | Player display name (max 10 chars)                  |
+| `dino:version`  | Schema version — used for automatic data migration  |
 
 ### 📊 Quota handling
 
@@ -186,16 +191,16 @@ cannot be persisted.
 - Canvas rendered at 854×480 px (16:9), scaled to full width via CSS
 - In fullscreen, canvas scales to fill the viewport maintaining 16:9 aspect ratio
 - All sprites drawn with `fillRect` — no image assets
-- Speed scales from 8.5 → 18.5 as score increases
+- Speed scales from `8.5 → 18.5 px/frame` as score increases (calibrated to original Chromium source)
 - Pterodactyls appear after score 900; three flight heights with distinct dodge requirements
-- All 12 known cross-browser bugs fixed (see CHANGELOG.md)
+- All cross-browser bugs fixed and documented (see CHANGELOG.md)
 
 ---
 
 ## 📋 Changelog
 
 Full release history with bug fix details is in
-[CHANGELOG.md](https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition/blob/f55107ebd307857e6bd43b2001713b9945901551/CHANGELOG.md).
+[CHANGELOG.md](https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition/blob/main/CHANGELOG.md).
 
 ---
 
