@@ -17,10 +17,16 @@ class Handler(SimpleHTTPRequestHandler):
     _DENIED = {'cert.pem', 'key.pem'}
 
     def _is_denied(self):
-        # BUG-4 FIX: URL-decode the path before extracting the basename.
-        # Without this, /%63ert.pem or //cert.pem bypasses the string match
-        # because self.path is the raw, undecoded URL string.
-        decoded = urllib.parse.unquote(self.path.split('?')[0])
+        # BUG-4 FIX: iteratively URL-decode the path before extracting the
+        # basename. A single unquote() pass is insufficient — /%2563ert.pem
+        # decodes once to /%63ert.pem (basename still "%63ert.pem", no match).
+        # Loop until the string is stable so all encoding layers are stripped.
+        path = self.path.split('?')[0]
+        while True:
+            decoded = urllib.parse.unquote(path)
+            if decoded == path:
+                break
+            path = decoded
         return os.path.basename(decoded) in self._DENIED
 
     def do_GET(self):
