@@ -242,6 +242,7 @@ canvas {
   background: var(--accent); color: #fff; border-color: var(--accent);
 }
 
+/* stylelint-disable selector-no-vendor-prefix */
 /* ── FULLSCREEN MODE ─────────────────────────────────────── */
 /* Standard (:fullscreen) — Chrome 71+, Firefox 64+, Edge 79+
    WebKit prefix (:-webkit-full-screen) — Safari desktop/iOS
@@ -249,7 +250,7 @@ canvas {
    Our minimum (Firefox 93) is well past that threshold.            */
 :fullscreen body,
 :-webkit-full-screen body {
-  background: #000;
+  background: `#000`;
   /* height must be explicit (not just min-height) so the flex column
      has a fixed container height and justify-content: center works   */
   height: 100vh;
@@ -306,6 +307,7 @@ canvas {
   justify-content: center;
   flex-wrap: nowrap;
 }
+/* stylelint-enable selector-no-vendor-prefix */
 
 /* ── PANEL GRID ──────────────────────────────────────────── */
 .panel-row {
