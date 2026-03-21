@@ -21,7 +21,7 @@ No network calls · No tracking · No image assets.
 
 ## 🚀 Quick Start
 
-### Desktop / any Python environment
+### 🖥️ Desktop / any Python environment
 
 ```bash
 # 1. Extract
@@ -133,7 +133,7 @@ no global leaderboard.
 The DB badge in the Stats panel shows which backend is active and current
 storage usage (e.g. `LOCAL STORAGE · OFFLINE · 12KB (0.2%)`).
 
-### Storage keys
+### 🗝️ Storage keys
 
 | Key           | Contents                                            |
 |---------------|-----------------------------------------------------|
@@ -141,7 +141,7 @@ storage usage (e.g. `LOCAL STORAGE · OFFLINE · 12KB (0.2%)`).
 | `dino:stats`  | Lifetime stats (games, deaths, distance, obstacles) |
 | `dino:player` | Player display name (max 10 chars)                  |
 
-### Quota handling
+### 📊 Quota handling
 
 localStorage provides ~5 MB per origin in all major browsers. The game uses
 a few KB at most. `navigator.storage.persist()` is requested at startup to
