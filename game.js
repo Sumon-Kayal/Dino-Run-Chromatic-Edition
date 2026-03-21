@@ -289,15 +289,21 @@ function gameOver() {
   dbStats.obstacles  += gameObstacles;
   if (s > dbStats.bestScore) dbStats.bestScore = s;
 
-  // DB calls are now synchronous (localStorage)
-  DB.saveStats(dbStats);
+  // BUG-1 FIX (part 2): write leaderboard BEFORE committing stats.
+  // If addScore() fails (quota full) we roll back dbStats.bestScore so
+  // the two stores never diverge via a failed write.
   var lb = DB.addScore(playerName, s);
   if (lb) {
+    DB.saveStats(dbStats);
     renderLeaderboard(lb);
   } else {
+    // Leaderboard write failed — revert bestScore to existing lb leader
+    var existingLb = DB.getLeaderboard();
+    dbStats.bestScore = existingLb.length ? existingLb[0].score : 0;
+    DB.saveStats(dbStats);
     console.warn('[Game] Score not saved — storage full');
-    renderLeaderboard(DB.getLeaderboard()); // show existing board
-    document.getElementById('db-status').textContent = 'STORAGE FULL \u26A0 — Score not saved';
+    renderLeaderboard(existingLb);
+    document.getElementById('db-status').textContent = 'STORAGE FULL \u26A0 \u2014 Score not saved';
     document.getElementById('db-status').style.color = 'var(--danger)';
   }
   updateStatUI();
@@ -877,9 +883,14 @@ document.getElementById('nameInput').addEventListener('keydown', function (e) {
 document.getElementById('clearLbBtn').addEventListener('click', function() {
   if (!confirm('Clear all leaderboard records?')) return;
   DB.clearLeaderboard();
+  // BUG-1/2 FIX: also reset the persisted best score so the stats panel
+  // stays in sync with the leaderboard, then refresh the UI immediately.
+  dbStats.bestScore = 0;
+  DB.saveStats(dbStats);
   renderLeaderboard([]);
   hiScore = 0;
   document.getElementById('hdr-hi').textContent = '00000';
+  updateStatUI();
 });
 
 /* ───────────────────────────────────────────────────────────
