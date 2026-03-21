@@ -68,7 +68,7 @@ openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem \
 
 ## 📁 Project Structure
 
-```
+```text
 Dino-Run-Chromatic-Edition-main/
 ├── index.html          # Main HTML — UI structure, overlays, panels
 ├── style.css           # All styling (retro pixel aesthetic)
