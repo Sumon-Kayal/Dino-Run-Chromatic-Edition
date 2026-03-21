@@ -11,53 +11,81 @@
 if (typeof window.DB === 'undefined') {
   throw new Error('game.js: window.DB not found — load db.js before game.js');
 }
-var DB = window.DB;
+const DB = window.DB;
 
 /* Update the DB status badge */
 document.getElementById('db-status').textContent = DB.backendName;
 
 /* BUG-4/5 FIX: Listen for quota updates from db.js and show usage in badge */
 window.addEventListener('db:quota', function (e) {
-  var used  = e.detail.used;
-  var total = e.detail.total;
-  var pct   = total > 0 ? ((used / total) * 100).toFixed(1) : '?';
-  var usedKB = (used / 1024).toFixed(0);
-  var badge = document.getElementById('db-status');
+  let used  = e.detail.used;
+  let total = e.detail.total;
+  let pct   = total > 0 ? ((used / total) * 100).toFixed(1) : '?';
+  let usedKB = (used / 1024).toFixed(0);
+  let badge = document.getElementById('db-status');
   badge.textContent = DB.backendName + ' \xB7 ' + usedKB + 'KB (' + pct + '%)';
-  badge.style.color = '';   // reset danger colour if storage has freed up
+  badge.style.removeProperty('color');   // clear danger colour if storage freed up
 });
 
 /* Show quota full warning if a write fails */
 window.addEventListener('db:quotaFull', function () {
-  document.getElementById('db-status').textContent = 'STORAGE FULL \u26A0';
-  document.getElementById('db-status').style.color = 'var(--danger)';
+  let el = document.getElementById('db-status');
+  el.textContent = 'STORAGE FULL \u26A0';
+  // Use setProperty() — the correct CSSOM path for CSS custom property
+  // references. element.style.color = 'var(--x)' may be silently ignored
+  // by some browsers because the shorthand setter expects a resolved value.
+  el.style.setProperty('color', 'var(--danger)');
 });
 
 /* ───────────────────────────────────────────────────────────
    CANVAS + CONSTANTS
    ─────────────────────────────────────────────────────────── */
-var canvas = document.getElementById('gameCanvas');
-var ctx    = canvas.getContext('2d');
+const canvas = document.getElementById('gameCanvas');
+const ctx    = canvas.getContext('2d');
 
-// World dimensions (canvas intrinsic pixels)
-var W  = 900;   // canvas width
-var H  = 300;   // canvas height
-var GY = 225;   // ground Y position
+// World dimensions (canvas intrinsic pixels — 854×480, 16:9)
+const W  = 854;   // canvas width
+const H  = 480;   // canvas height
+const GY = 360;   // ground Y position (75% of H)
 
 // Physics
-var GRAVITY = 0.65;
-var JUMP_V  = -14;
+const GRAVITY = 0.65;
+const JUMP_V  = -14;
 
 // Dino dimensions
-var DINO_W = 44;
-var DINO_H = 52;
-var DUCK_H = 28;   // height when ducking
-var DINO_X = 80;   // fixed horizontal position
+const DINO_W = 44;
+const DINO_H = 52;
+const DUCK_H = 28;   // height when ducking
+const DINO_X = 80;   // fixed horizontal position
+
+/* ───────────────────────────────────────────────────────────
+   TUNING CONFIG — all magic numbers in one place
+   Change values here to adjust difficulty, spawn rates, etc.
+   ─────────────────────────────────────────────────────────── */
+const CONFIG = {
+  // Speed values derived from original Chrome Dino (Chromium source):
+  // start=6 px/frame, max=13 px/frame on a 600px-wide canvas.
+  // Our canvas is 854px wide (scale ×1.4233): 6×1.4233≈8.5, 13×1.4233≈18.5.
+  SPEED_MIN:    8.5,   // starting speed  (was 5.5 — original scaled from 6 px/f on 600px canvas)
+  SPEED_MAX:    18.5,  // terminal speed  (was 18  — original scaled from 13 px/f)
+  PTERA_CHANCE: 0.28,  // probability of pterodactyl vs cactus
+  PTERA_SCORE:  900,   // score before pteras appear (was 200; scaled with ramp divisor)
+  CACTUS_H_MIN: 40,    // cactus minimum height (px)
+  CACTUS_H_RNG: 38,    // cactus height random range added to min
+  CACTUS_W_MIN: 16,    // cactus minimum stem width
+  CACTUS_W_RNG: 14,    // cactus width random range
+  CACTUS_DBL:   0.35,  // probability of double-cactus cluster
+  OBS_CD_INIT:  60,    // initial obstacle cooldown (frames)
+  OBS_CD_MIN:   30,    // minimum cooldown (frames) — hard floor
+  OBS_CD_BASE:  55,    // base cooldown for random calculation
+  OBS_CD_RNG:   70,    // random range added to base
+  OBS_CD_SPEED: 1.5    // speed scaling subtracted from cooldown
+};
 
 // Draw colour palette — recalculated each frame in draw()
 // Day:  white bg / #535353 fg  (Chrome default)
 // Night:#404040 bg / #f0f0f0 fg (Chrome inverted)
-var C = {
+const C = {
   cloud:   '#e0e0e0',
   dino:    '#535353',
   dinoAcc: '#404040',
@@ -67,80 +95,102 @@ var C = {
 };
 
 /* Pixel-fill shorthand */
+/**
+ * Pixel-fill shorthand — fills a rectangle on the canvas.
+ * @param {string} color - CSS colour string
+ * @param {number} x - Left edge (floored)
+ * @param {number} y - Top edge (floored)
+ * @param {number} w - Width in pixels
+ * @param {number} h - Height in pixels
+ */
 function px(color, x, y, w, h) {
   ctx.fillStyle = color;
   ctx.fillRect(x|0, y|0, w, h);
 }
 
 /* Linear interpolation */
+/**
+ * Linear interpolation between two numbers.
+ * @param {number} a - Start value
+ * @param {number} b - End value
+ * @param {number} t - Blend factor [0..1]
+ * @returns {number}
+ */
 function lerp(a, b, t) { return a + (b - a) * t; }
 
 /* Interpolate between two #rrggbb hex colours */
+/**
+ * Interpolate between two #rrggbb hex colours.
+ * @param {string} ca - Start colour e.g. "#ffffff"
+ * @param {string} cb - End colour
+ * @param {number} t  - Blend factor [0..1]
+ * @returns {string} CSS rgb() string
+ */
 function lerpRGB(ca, cb, t) {
-  var pa = parseInt(ca.slice(1), 16);
-  var pb = parseInt(cb.slice(1), 16);
-  var r  = (lerp((pa >> 16) & 0xff, (pb >> 16) & 0xff, t)) | 0;
-  var g  = (lerp((pa >>  8) & 0xff, (pb >>  8) & 0xff, t)) | 0;
-  var bl = (lerp( pa        & 0xff,  pb        & 0xff, t)) | 0;
+  let pa = parseInt(ca.slice(1), 16);
+  let pb = parseInt(cb.slice(1), 16);
+  let r  = (lerp((pa >> 16) & 0xff, (pb >> 16) & 0xff, t)) | 0;
+  let g  = (lerp((pa >>  8) & 0xff, (pb >>  8) & 0xff, t)) | 0;
+  let bl = (lerp( pa        & 0xff,  pb        & 0xff, t)) | 0;
   return 'rgb(' + r + ',' + g + ',' + bl + ')';
 }
 
 /* ───────────────────────────────────────────────────────────
    GAME STATE
    ─────────────────────────────────────────────────────────── */
-var state      = 'idle';   // 'idle' | 'running' | 'dead'
-var score      = 0;
-var hiScore    = 0;
-var speed      = 0;
-var frameCount = 0;
-var animFrame  = null;
+let state      = 'idle';   // 'idle' | 'running' | 'dead'
+let score      = 0;
+let hiScore    = 0;
+let speed      = 0;
+let frameCount = 0;
+let animFrame  = null;
 // FIX-1: delta-time tracking — lastTime is reset to 0 before every new game
 // so the first frame never computes a huge dt from a prior timestamp.
-var lastTime   = 0;
+let lastTime   = 0;
 
-var dino        = {};
-var obstacles   = [];
-var clouds      = [];
-var stars       = [];
-var obsCooldown = 0;
+let dino        = {};
+let obstacles   = [];
+let clouds      = [];
+let stars       = [];
+let obsCooldown = 0;
 
 // FIX-10: symmetric day/night — both peaks get a 350-frame pause
-var dayPhase   = 0;    // 0 = full day, 1 = full night
-var dayDir     = 1;    // direction of transition
-var dayTimer   = 0;
-var dayPauseAt = -1;   // frame number at which pause ends (-1 = not pausing)
+let dayPhase   = 0;    // 0 = full day, 1 = full night
+let dayDir     = 1;    // direction of transition
+let dayTimer   = 0;
+let dayPauseAt = -1;   // frame number at which pause ends (-1 = not pausing)
 
-var duckHeld   = false;
-var playerName = 'ANON';
+let duckHeld   = false;
+let playerName = 'ANON';
 
 // ── Pause ──────────────────────────────────────────────────
-var paused = false;
+let paused = false;
 
 // ── Score milestone flash (every 100 pts) ─────────────────
-var flashFrames   = 0;
-var lastMilestone = 0;
+let flashFrames   = 0;
+let lastMilestone = 0;
 
 // ── Web Audio ─────────────────────────────────────────────
-var AudioCtxCtor = window.AudioContext || window.webkitAudioContext;
-var audioCtx     = null;
-var soundMuted   = false;
+const AudioCtxCtor = window.AudioContext || window.webkitAudioContext;
+let audioCtx     = null;
+let soundMuted   = false;
 
 function initAudio() {
   if (audioCtx || !AudioCtxCtor) return;
   try { audioCtx = new AudioCtxCtor(); } catch(e) { audioCtx = null; }
 }
 function resumeAudio() {
-  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(function(){});
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume().catch(() => {});
 }
 function playBeep(freq, type, dur, vol, endF) {
   if (soundMuted || !audioCtx) return;
   resumeAudio();
   try {
-    var osc = audioCtx.createOscillator();
-    var gain = audioCtx.createGain();
+    let osc = audioCtx.createOscillator();
+    let gain = audioCtx.createGain();
     osc.connect(gain); gain.connect(audioCtx.destination);
     osc.type = type || 'square';
-    var t = audioCtx.currentTime;
+    let t = audioCtx.currentTime;
     osc.frequency.setValueAtTime(freq, t);
     if (endF) osc.frequency.exponentialRampToValueAtTime(endF, t + dur);
     gain.gain.setValueAtTime(vol || 0.07, t);
@@ -151,27 +201,30 @@ function playBeep(freq, type, dur, vol, endF) {
 function soundJump() { playBeep(400, 'square', 0.12, 0.07, 880); }
 function soundDie() {
   playBeep(440, 'square', 0.10, 0.08);
-  setTimeout(function(){ playBeep(220, 'square', 0.18, 0.07); }, 90);
+  setTimeout(() => { playBeep(220, 'square', 0.18, 0.07); }, 90);
 }
 function soundMilestone() {
   playBeep(660, 'square', 0.07, 0.07);
-  setTimeout(function(){ playBeep(880,  'square', 0.07, 0.07); }, 70);
-  setTimeout(function(){ playBeep(1100, 'square', 0.12, 0.07); }, 140);
+  setTimeout(() => { playBeep(880,  'square', 0.07, 0.07); }, 70);
+  setTimeout(() => { playBeep(1100, 'square', 0.12, 0.07); }, 140);
 }
 
-var sessionStats = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0 };
-var dbStats      = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0 };
-var gameObstacles = 0;   // BUG-A FIX: per-game counter, reset each initGame()
+const sessionStats = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0 };
+let dbStats      = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0 };  // ISSUE-2 FIX: let instead of var
+let gameObstacles = 0;   // BUG-A FIX: per-game counter, reset each initGame()
 
 /* ───────────────────────────────────────────────────────────
    INITIALISE / RESET
    ─────────────────────────────────────────────────────────── */
+/**
+ * Reset all game state to initial values. Called before each new game.
+ */
 function initGame() {
   score      = 0;
-  speed      = 5.5;
+  speed      = CONFIG.SPEED_MIN;
   frameCount = 0;
   obstacles  = [];
-  obsCooldown = 60;
+  obsCooldown = CONFIG.OBS_CD_INIT;
   gameObstacles = 0;   // BUG-A FIX: reset per-game obstacle counter
   flashFrames   = 0;
   lastMilestone = 0;
@@ -183,7 +236,7 @@ function initGame() {
   };
 
   clouds = [];
-  for (var i = 0; i < 5; i++) {
+  for (let i = 0; i < 5; i++) {
     clouds.push({
       x:  Math.random() * W,
       y:  40 + Math.random() * 60,
@@ -193,7 +246,7 @@ function initGame() {
   }
 
   stars = [];
-  for (var j = 0; j < 60; j++) {
+  for (let j = 0; j < 60; j++) {
     stars.push({
       x: Math.random() * W,
       y: Math.random() * (GY - 50),
@@ -206,6 +259,10 @@ function initGame() {
 /* ───────────────────────────────────────────────────────────
    PLAYER ACTIONS
    ─────────────────────────────────────────────────────────── */
+/**
+ * Handle a jump action from keyboard, touch, or click.
+ * Also acts as the start/restart trigger when in idle/dead states.
+ */
 function jump() {
   if (state === 'paused') return;   // ignore input while paused
   initAudio();
@@ -221,12 +278,12 @@ function jump() {
 function startDuck() {
   duckHeld = true;
   initAudio();
-  var b = document.getElementById('duckBtn');
+  let b = document.getElementById('duckBtn');
   if (b) b.classList.add('active');
 }
 function endDuck() {
   duckHeld = false;
-  var b = document.getElementById('duckBtn');
+  let b = document.getElementById('duckBtn');
   if (b) b.classList.remove('active');
 }
 
@@ -249,6 +306,40 @@ function togglePause() {
   }
 }
 
+function toggleFullscreen() {
+  let el = document.documentElement;
+  // Standard API + webkit prefix for Safari desktop
+  let isFs = document.fullscreenElement || document.webkitFullscreenElement;
+  if (!isFs) {
+    // requestFullscreen() returns a Promise in modern browsers but undefined
+    // in Safari < 16.4 — guard before calling .catch() to avoid TypeError.
+    let req = el.requestFullscreen
+      ? el.requestFullscreen()
+      : el.webkitRequestFullscreen
+        ? el.webkitRequestFullscreen()
+        : null;
+    if (req && req.catch) {
+      req.catch((err) => {
+        console.warn('[Fullscreen] Request failed:', err);
+      });
+    }
+  } else {
+    if (document.exitFullscreen) document.exitFullscreen();
+    else if (document.webkitExitFullscreen) document.webkitExitFullscreen();
+  }
+}
+
+function onFullscreenChange() {
+  let btn = document.getElementById('fullscreenBtn');
+  if (!btn) return;
+  let isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
+  btn.textContent = isFs ? 'EXIT FS' : 'FULL';
+  btn.classList.toggle('active', isFs);
+}
+// Standard event + webkit prefix for Safari
+document.addEventListener('fullscreenchange',       onFullscreenChange);
+document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
 function startGame() {
   cancelAnimationFrame(animFrame);
   paused   = false;
@@ -270,6 +361,9 @@ function restart() {
   loop();
 }
 
+/**
+ * Transition to dead state, persist stats/leaderboard, show game-over screen.
+ */
 function gameOver() {
   if (state === 'dead') return;   // guard against double-call
   state = 'dead';
@@ -277,9 +371,12 @@ function gameOver() {
 
   sessionStats.games++;
   sessionStats.deaths++;
-  var s = Math.floor(score);
+  let s = Math.floor(score);
   if (s > sessionStats.bestScore) sessionStats.bestScore = s;
   sessionStats.totalDist += s;
+
+  // Capture previous best before updating so we can show NEW BEST banner
+  let prevBest = Math.max(hiScore, dbStats.bestScore);
   if (s > hiScore) hiScore = s;
 
   // BUG-A FIX: use gameObstacles (this game only)
@@ -292,40 +389,50 @@ function gameOver() {
   // BUG-1 FIX (part 2): write leaderboard BEFORE committing stats.
   // If addScore() fails (quota full) we roll back dbStats.bestScore so
   // the two stores never diverge via a failed write.
-  var lb = DB.addScore(playerName, s);
+  let lb = DB.addScore(playerName, s);
   if (lb) {
     DB.saveStats(dbStats);
     renderLeaderboard(lb);
   } else {
     // Leaderboard write failed — revert bestScore to existing lb leader
-    var existingLb = DB.getLeaderboard();
+    let existingLb = DB.getLeaderboard();
     dbStats.bestScore = existingLb.length ? existingLb[0].score : 0;
     DB.saveStats(dbStats);
     console.warn('[Game] Score not saved — storage full');
     renderLeaderboard(existingLb);
     document.getElementById('db-status').textContent = 'STORAGE FULL \u26A0 \u2014 Score not saved';
-    document.getElementById('db-status').style.color = 'var(--danger)';
+    document.getElementById('db-status').style.setProperty('color', 'var(--danger)');
   }
   updateStatUI();
 
   document.getElementById('go-score').textContent =
-    'SCORE: ' + String(s).padStart(5, '0');
+    'SCORE ' + String(s).padStart(5, '0');  // ISSUE-1 FIX: matches HTML template (no colon)
   document.getElementById('go-hi').textContent =
     'HI: '    + String(hiScore).padStart(5, '0');
+  // Show NEW BEST banner only when the player actually beat a real prior score
+  let newBestEl = document.getElementById('go-newbest');
+  if (s > prevBest && prevBest > 0) {
+    newBestEl.classList.remove('hidden');
+  } else {
+    newBestEl.classList.add('hidden');
+  }
   document.getElementById('gameOverScreen').classList.remove('hidden');
 }
 
 /* ───────────────────────────────────────────────────────────
    OBSTACLE SPAWNING
    ─────────────────────────────────────────────────────────── */
+/**
+ * Spawn a new obstacle (cactus or pterodactyl) at the right edge.
+ */
 function spawn() {
-  var isPtera = Math.random() < 0.28 && score > 200;
+  let isPtera = Math.random() < CONFIG.PTERA_CHANCE && score > CONFIG.PTERA_SCORE;
 
   if (!isPtera) {
     // Cactus (single or double cluster)
-    var h  = 40 + Math.floor(Math.random() * 38);
-    var w  = 16 + Math.floor(Math.random() * 14);
-    var cl = Math.random() < 0.35 ? 2 : 1;
+    let h  = CONFIG.CACTUS_H_MIN + Math.floor(Math.random() * CONFIG.CACTUS_H_RNG);
+    let w  = CONFIG.CACTUS_W_MIN + Math.floor(Math.random() * CONFIG.CACTUS_W_RNG);
+    let cl = Math.random() < CONFIG.CACTUS_DBL ? 2 : 1;
     obstacles.push({
       type: 'cactus',
       x: W + 10,
@@ -354,7 +461,7 @@ function spawn() {
     // FIX-2: previous mid value was GY-75 (bottom = GY-51), which sits
     // 5px above the standing dino's top (GY-46) — never a collision.
     // Corrected to GY-60 so it properly intersects the standing hitbox.
-    var hs = [GY - 60, GY - 120, GY - 68];
+    let hs = [GY - 60, GY - 120, GY - 68];
     obstacles.push({
       type: 'ptera',
       x: W + 10,
@@ -372,13 +479,17 @@ function spawn() {
 // FIX-1: dt is a normalised multiplier where 1.0 == one 60 fps frame.
 // Every value that was previously a fixed-per-frame amount is now scaled
 // by dt so the game runs identically on 60 Hz, 90 Hz, 120 Hz, and 144 Hz.
+/**
+ * Advance all game state by one logical frame.
+ * @param {number} dt - Delta-time multiplier (1.0 = one 60 Hz frame)
+ */
 function update(dt) {
   frameCount++;
   score += speed * 0.04 * dt;
-  speed  = Math.min(5.5 + (score / 600) * 7, 18);
+  speed  = Math.min(CONFIG.SPEED_MIN + (score / 2660) * (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN), CONFIG.SPEED_MAX);  // 2660 = score at which original reaches max speed
 
   // ── Milestone flash (every 100 pts) ───────────────────
-  var ms = Math.floor(score / 100);
+  let ms = Math.floor(score / 100);
   if (ms > lastMilestone) {
     lastMilestone = ms;
     flashFrames   = 8;
@@ -415,7 +526,7 @@ function update(dt) {
     if (duckHeld) dino.vy += 2.5 * dt;
     dino.vy += GRAVITY * dt;
     dino.y  += dino.vy * dt;
-    var land = GY - DINO_H;   // always land at standing height
+    let land = GY - DINO_H;   // always land at standing height
     if (dino.y >= land) {
       dino.y       = land;
       dino.vy      = 0;
@@ -430,7 +541,7 @@ function update(dt) {
   if (dino.ft > 8) { dino.ft = 0; dino.frame = (dino.frame + 1) % 2; }
 
   // ── Clouds ─────────────────────────────────────────────
-  clouds.forEach(function (c) {
+  clouds.forEach((c) => {
     c.x -= c.sp * (speed * 0.1) * dt;
     if (c.x < -200) c.x = W + 50;
   });
@@ -440,17 +551,17 @@ function update(dt) {
   if (obsCooldown <= 0) {
     spawn();
     obsCooldown = Math.max(
-      30,
-      Math.floor(55 + Math.random() * 70 - speed * 1.5)
+      CONFIG.OBS_CD_MIN,
+      Math.floor(CONFIG.OBS_CD_BASE + Math.random() * CONFIG.OBS_CD_RNG - speed * CONFIG.OBS_CD_SPEED)
     );
   }
 
   // ── Collision detection ────────────────────────────────
-  var dh = dino.ducking ? DUCK_H : DINO_H;
-  var db = { x: dino.x + 8, y: dino.y + 6, w: DINO_W - 14, h: dh - 10 };
+  let dh = dino.ducking ? DUCK_H : DINO_H;
+  let db = { x: dino.x + 8, y: dino.y + 6, w: DINO_W - 14, h: dh - 10 };
 
-  for (var i = 0; i < obstacles.length; i++) {
-    var o = obstacles[i];
+  for (let i = 0; i < obstacles.length; i++) {
+    let o = obstacles[i];
     o.x -= speed * dt;
 
     // Pterodactyl wing animation
@@ -460,7 +571,7 @@ function update(dt) {
     }
 
     // AABB hit test (shrunk by 4px each side for leniency)
-    var ob = { x: o.x + 4, y: o.y + 4, w: o.w - 8, h: o.h - 8 };
+    let ob = { x: o.x + 4, y: o.y + 4, w: o.w - 8, h: o.h - 8 };
     if (db.x < ob.x + ob.w && db.x + db.w > ob.x &&
         db.y < ob.y + ob.h && db.y + db.h > ob.y) {
       gameOver();
@@ -469,7 +580,7 @@ function update(dt) {
   }
 
   // Count obstacles the dino successfully passed (right edge clears dino left)
-  obstacles.forEach(function (o) {
+  obstacles.forEach((o) => {
     if (!o.passed && o.x + o.w < DINO_X) {
       o.passed = true;
       sessionStats.obstacles++;   // session total (shown in UI)
@@ -478,31 +589,36 @@ function update(dt) {
   });
 
   // Remove off-screen obstacles
-  obstacles = obstacles.filter(function (o) { return o.x > -120; });
+  obstacles = obstacles.filter((o) => { return o.x > -120; });
 
   // ── HUD update ─────────────────────────────────────────
-  var sc = Math.floor(score);
+  let sc = Math.floor(score);
   document.getElementById('hdr-score').textContent =
     String(sc).padStart(5, '0');
   document.getElementById('hdr-hi').textContent =
     String(Math.max(sc, hiScore)).padStart(5, '0');
   document.getElementById('speed-fill').style.width =
-    Math.min(((speed - 5.5) / 12.5) * 100, 100) + '%';
+    Math.min(((speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)) * 100, 100) + '%';
 
-  updateStatUI();
+  // updateStatUI() intentionally removed from here — stats only change on
+  // game events (gameOver, clear), not every frame. See those handlers below.
 }
 
 /* ───────────────────────────────────────────────────────────
    DRAW (called every frame)
    ─────────────────────────────────────────────────────────── */
+/**
+ * Render the current frame to the canvas.
+ * Pure draw — must not modify game state.
+ */
 function draw() {
   ctx.clearRect(0, 0, W, H);
 
   // ── Chrome dino palette: lerp day(white/#535353) ↔ night(#404040/#f0f0f0)
-  var bgC    = lerpRGB('#ffffff', '#404040', dayPhase);
-  var fgC    = lerpRGB('#535353', '#f0f0f0', dayPhase);
-  var fgDark = lerpRGB('#404040', '#d0d0d0', dayPhase);
-  var dimC   = lerpRGB('#d4d4d4', '#606060', dayPhase);
+  let bgC    = lerpRGB('#ffffff', '#404040', dayPhase);
+  let fgC    = lerpRGB('#535353', '#f0f0f0', dayPhase);
+  let fgDark = lerpRGB('#404040', '#d0d0d0', dayPhase);
+  let dimC   = lerpRGB('#d4d4d4', '#606060', dayPhase);
 
   // Push to shared palette used by all draw helpers
   C.dino    = fgC;
@@ -522,7 +638,7 @@ function draw() {
 
   // Ground texture dots (scrolling)
   ctx.fillStyle = dimC;
-  for (var gx = ((frameCount * speed * 0.3) % 30) | 0; gx < W; gx += 30) {
+  for (let gx = ((frameCount * speed * 0.3) % 30) | 0; gx < W; gx += 30) {
     ctx.fillRect(gx,      GY + 8,  2, 1);
     ctx.fillRect(gx + 14, GY + 14, 3, 1);
   }
@@ -531,15 +647,15 @@ function draw() {
   if (dayPhase > 0.1) {
     ctx.globalAlpha = dayPhase * 0.6;
     ctx.fillStyle   = fgDark;
-    stars.forEach(function(s) { ctx.fillRect(s.x, s.y, s.r, s.r); });
+    stars.forEach((s) => { ctx.fillRect(s.x, s.y, s.r, s.r); });
     ctx.globalAlpha = 1;
   }
 
   // Clouds
-  clouds.forEach(function(c) { drawCloud(c.x, c.y, c.w); });
+  clouds.forEach((c) => { drawCloud(c.x, c.y, c.w); });
 
   // Obstacles
-  obstacles.forEach(function(o) {
+  obstacles.forEach((o) => {
     if (o.type === 'cactus') drawCactus(o.x, o.y, o.w, o.h);
     else                     drawPtera(o.x, o.y, o.frame);
   });
@@ -571,9 +687,9 @@ function draw() {
    ─────────────────────────────────────────────────────────── */
 
 function drawDino(x, y, frame, jumping, ducking) {
-  var c  = C.dino;
-  var ca = C.dinoAcc;
-  var ey = C.eye;   // eye == bg colour => hollow-cutout illusion
+  let c  = C.dino;
+  let ca = C.dinoAcc;
+  let ey = C.eye;   // eye == bg colour => hollow-cutout illusion
 
   /* ── DUCKING (bounding box 44 × 28) ────────────────────── */
   if (ducking) {
@@ -588,7 +704,7 @@ function drawDino(x, y, frame, jumping, ducking) {
     px(c,  x+2,  y+8,  36, 8);   // body upper
     px(c,  x+4,  y+14, 32, 6);   // body lower
     // Legs (short alternating stumps)
-    var lf = frame === 0 ? [x+12, x+24] : [x+18, x+30];
+    let lf = frame === 0 ? [x+12, x+24] : [x+18, x+30];
     px(c,  lf[0],    y+18, 6, 10);
     px(c,  lf[0]-2,  y+22, 12, 6); // front foot
     px(c,  lf[1],    y+18, 6, 8);
@@ -627,8 +743,8 @@ function drawDino(x, y, frame, jumping, ducking) {
   // Legs (animated walk cycle)
   if (!jumping) {
     // Frame 0: left-front / right-back   Frame 1: reversed
-    var fL = frame === 0 ? x+14 : x+22;  // front leg x
-    var bL = frame === 0 ? x+26 : x+10;  // back  leg x
+    let fL = frame === 0 ? x+14 : x+22;  // front leg x
+    let bL = frame === 0 ? x+26 : x+10;  // back  leg x
     // Front leg (longer, bigger foot)
     px(c,  fL,    y+42, 8, 10);
     px(c,  fL-2,  y+48, 14, 4);
@@ -644,32 +760,32 @@ function drawDino(x, y, frame, jumping, ducking) {
   }
 }
 function drawCactus(x, y, w, h) {
-  var c   = C.cactus;
-  var sw  = 6;                             // stem width (Chrome uses ~6px)
-  var aw  = 6;                             // arm width
-  var cx  = x + Math.floor(w / 2) - 3;   // stem left edge
+  let c   = C.cactus;
+  let sw  = 6;                             // stem width (Chrome uses ~6px)
+  let aw  = 6;                             // arm width
+  let cx  = x + Math.floor(w / 2) - 3;   // stem left edge
 
   // ── Main stem ───────────────────────────────────────────
   px(c, cx, y, sw, h);
 
   // ── Left arm ────────────────────────────────────────────
   // Junction at ~30% down; arm rises for ~22% of h, then has a flat cap
-  var ljy = y + Math.floor(h * 0.30);     // junction y
-  var lup = Math.floor(h * 0.24);         // how far up the arm rises
+  let ljy = y + Math.floor(h * 0.30);     // junction y
+  let lup = Math.floor(h * 0.24);         // how far up the arm rises
   px(c, x,         ljy,       cx - x + sw, aw);   // horizontal bar (to stem)
   px(c, x,         ljy - lup, aw,   lup + aw);    // vertical rise
 
   // ── Right arm ───────────────────────────────────────────
-  var rjy = y + Math.floor(h * 0.46);
-  var rup = Math.floor(h * 0.20);
-  var rx  = cx + sw;                               // right of stem
+  let rjy = y + Math.floor(h * 0.46);
+  let rup = Math.floor(h * 0.20);
+  let rx  = cx + sw;                               // right of stem
   px(c, rx,        rjy,  w - (rx - x), aw);       // horizontal bar
   px(c, x + w - aw, rjy - rup, aw, rup + aw);     // vertical rise
 }
 
 function drawPtera(x, y, frame) {
-  var c  = C.ptera;
-  var ey = C.eye;
+  let c  = C.ptera;
+  let ey = C.eye;
 
   // ── Body ────────────────────────────────────────────────
   px(c, x+12, y+8,  22, 10);
@@ -718,12 +834,16 @@ function drawCloud(x, y, w) {
 /* ───────────────────────────────────────────────────────────
    GAME LOOPS
    ─────────────────────────────────────────────────────────── */
+/**
+ * Main game loop — drives update() and draw() via requestAnimationFrame.
+ * @param {DOMHighResTimeStamp} timestamp - Provided by rAF
+ */
 function loop(timestamp) {
   if (state !== 'running' || paused) return;
   // FIX-1: compute dt normalised to 60 fps (1.0 = one 60 Hz frame).
   // Clamped to 3.0 to prevent a "spiral of death" if the tab was
   // backgrounded and returns with a massive timestamp gap.
-  var dt = lastTime ? Math.min((timestamp - lastTime) / (1000 / 60), 3) : 1;
+  let dt = lastTime ? Math.min((timestamp - lastTime) / (1000 / 60), 3) : 1;
   lastTime = timestamp;
   update(dt);
   draw();
@@ -738,6 +858,10 @@ function idleLoop() {
 /* ───────────────────────────────────────────────────────────
    UI HELPERS
    ─────────────────────────────────────────────────────────── */
+/**
+ * Write current session + DB stats to the stats panel DOM elements.
+ * Only called on game-over and leaderboard-clear events (not every frame).
+ */
 function updateStatUI() {
   document.getElementById('stat-games').textContent  = sessionStats.games;
   document.getElementById('stat-best').textContent   =
@@ -748,40 +872,44 @@ function updateStatUI() {
 }
 
 /* Safe DOM-only leaderboard render — shows local top-10 with timestamp */
+/**
+ * Rebuild the leaderboard table from a sorted array of entries.
+ * @param {Array<{name:string, score:number, when:string}>} lb - Top-10 entries
+ */
 function renderLeaderboard(lb) {
-  var tbody = document.getElementById('lbBody');
+  let tbody = document.getElementById('lbBody');
 
   while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
 
   if (!lb || !lb.length) {
-    var empty   = document.createElement('tr');
-    var emptyTd = document.createElement('td');
+    let empty   = document.createElement('tr');
+    let emptyTd = document.createElement('td');
     emptyTd.setAttribute('colspan', '4');
     emptyTd.className   = 'lb-empty';
     emptyTd.textContent = 'NO RECORDS YET';
     empty.appendChild(emptyTd);
     tbody.appendChild(empty);
     return;
-}
-  var medals = ['#ffd700', '#c0c0c0', '#cd7f32'];
+  }
+  let medals = ['#ffd700', '#c0c0c0', '#cd7f32'];
 
-  lb.forEach(function (entry, i) {
-    var tr    = document.createElement('tr');
-    var color = medals[i] || null;
+  lb.forEach((entry, i) => {
+    let tr    = document.createElement('tr');
+    let color = medals[i] || null;
     // 'when' is new field: "19 Mar '26 14:07"
     // fall back to legacy 'date' field for old saved entries
-    var when  = entry.when || entry.date || '--';
-    var cols  = [
+    let when  = entry.when || entry.date || '--';
+    let cols  = [
       String(i + 1),
       entry.name  || 'ANON',
       String(entry.score).padStart(5, '0'),
       when
     ];
 
-    cols.forEach(function (val, ci) {
-      var td = document.createElement('td');
+    cols.forEach((val, ci) => {
+      let td = document.createElement('td');
       if (ci === 0) {
-        var badge       = document.createElement('span');
+        let badge       = document.createElement('span');
         badge.className = 'rank-badge';
         badge.textContent = val;
         td.appendChild(badge);
@@ -811,6 +939,17 @@ document.addEventListener('keydown', function (e) {
   }
   if (e.code === 'KeyP') {
     e.preventDefault(); togglePause();
+  }
+  if (e.code === 'KeyM') {
+    e.preventDefault();
+    soundMuted = !soundMuted;
+    initAudio();
+    let muteBtn = document.getElementById('muteBtn');
+    muteBtn.textContent = soundMuted ? '\uD83D\uDD07' : '\uD83D\uDD06';
+    muteBtn.classList.toggle('active', soundMuted);
+  }
+  if (e.code === 'KeyF') {
+    e.preventDefault(); toggleFullscreen();
   }
 });
 document.addEventListener('keyup', function (e) {
@@ -863,7 +1002,7 @@ window.addEventListener('blur', endDuck);
 
 // Player name save
 document.getElementById('nameSaveBtn').addEventListener('click', function () {
-  var raw = (document.getElementById('nameInput').value || '')
+  let raw = (document.getElementById('nameInput').value || '')
     .toUpperCase().trim() || 'ANON';
   playerName = raw.slice(0, 10);
   DB.savePlayerName(playerName);
@@ -911,6 +1050,10 @@ document.getElementById('muteBtn').addEventListener('click', function(e) {
   this.classList.toggle('active', soundMuted);
 });
 
+document.getElementById('fullscreenBtn').addEventListener('click', function (e) {
+  e.stopPropagation(); toggleFullscreen();
+});
+
 /* ───────────────────────────────────────────────────────────
    VISIBILITY / FOCUS — pause when the tab is backgrounded
    ─────────────────────────────────────────────────────────── */
@@ -938,12 +1081,12 @@ document.addEventListener('visibilitychange', function () {
 (function boot() {
   try {
     // Restore player name
-    var name = DB.getPlayerName();
+    let name = DB.getPlayerName();
     playerName = name;
     document.getElementById('currentName').textContent = '\u25B6 ' + name;
 
     // Restore leaderboard
-    var lb = DB.getLeaderboard();
+    let lb = DB.getLeaderboard();
     renderLeaderboard(lb);
     if (lb.length) hiScore = lb[0].score;
     document.getElementById('hdr-hi').textContent =
@@ -969,4 +1112,6 @@ document.addEventListener('visibilitychange', function () {
   idleLoop();
 }());
          
+
+
 

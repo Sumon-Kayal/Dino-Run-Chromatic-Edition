@@ -26,7 +26,7 @@
 window.DB = (function () {
 
   /* ─── Backend detection ─────────────────────────────────── */
-  var useLocalStorage = (function () {
+  const useLocalStorage = (function () {
     try {
       localStorage.setItem('_dinotest', '1');
       localStorage.removeItem('_dinotest');
@@ -35,22 +35,52 @@ window.DB = (function () {
   }());
 
   /* ─── In-memory fallback ────────────────────────────────── */
-  var memStore = {};
+  const memStore = {};
 
-  /* ─── Quota tracking (updated asynchronously) ───────────── */
-  var quotaUsed  = 0;     // bytes used  (from estimate())
-  var quotaTotal = 5 * 1024 * 1024;  // default assume 5 MB
-  var quotaError = false; // true when last write hit quota limit
+  /* ─── Schema versioning ─────────────────────────────────── */
+  // Bump DB_VERSION whenever the stored JSON schema changes.
+  // The migration block below runs once on first load of the new version
+  // so old saved data is upgraded rather than silently breaking.
+  const DB_VERSION = 1;
+
+  (function migrate() {
+    let stored = parseInt(dbGet('dino:version') || '0', 10);
+    if (stored >= DB_VERSION) return;
+    // v0 → v1: leaderboard entries had no recordId field.
+    // Patch existing entries so pruneAndSave dedup works correctly.
+    if (stored < 1) {
+      let raw = dbGet('dino:lb');
+      if (raw) {
+        try {
+          let lb = JSON.parse(raw);
+          let changed = false;
+          lb.forEach((e) => {
+            if (!e.recordId) {
+              e.recordId = Date.now().toString(36) + Math.floor(Math.random() * 0x10000).toString(16).padStart(4, '0');
+              changed = true;
+            }
+          });
+          if (changed) dbSet('dino:lb', JSON.stringify(lb));
+        } catch (err) { /* corrupt data — leave it, getLeaderboard() handles it */ }
+      }
+    }
+    dbSet('dino:version', String(DB_VERSION));
+  }());
+
+
+  let quotaUsed  = 0;     // bytes used  (from estimate())
+  let quotaTotal = 5 * 1024 * 1024;  // default assume 5 MB
+  let quotaError = false; // true when last write hit quota limit
 
   /* Request persistent storage so the browser won't evict us */
   if (navigator.storage && navigator.storage.persist) {
-    navigator.storage.persist().catch(function () {});
+    navigator.storage.persist().catch(() => {});
   }
 
   /* Poll quota usage once at startup and export for UI */
   function refreshQuota() {
     if (navigator.storage && navigator.storage.estimate) {
-      navigator.storage.estimate().then(function (est) {
+      navigator.storage.estimate().then((est) => {
         quotaUsed  = est.usage  || 0;
         quotaTotal = est.quota  || quotaTotal;
         quotaError = false;
@@ -58,7 +88,7 @@ window.DB = (function () {
         window.dispatchEvent(new CustomEvent('db:quota', {
           detail: { used: quotaUsed, total: quotaTotal }
         }));
-      }).catch(function () {});
+      }).catch(() => {});
     }
   }
   refreshQuota();
@@ -94,7 +124,7 @@ window.DB = (function () {
         refreshQuota();
         return true;
       } catch (e) {
-        var name = e.name || '';
+        let name = e.name || '';
         if (name === 'QuotaExceededError' ||
             name === 'NS_ERROR_DOM_QUOTA_REACHED' ||   /* Firefox */
             e.code === 22 ||                            /* Chrome  */
@@ -121,17 +151,17 @@ window.DB = (function () {
   // literally on screen instead of "<". The function has been removed; names
   // are stored and retrieved as plain strings.
 
-  var MONTHS = ['Jan','Feb','Mar','Apr','May','Jun',
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun',
                 'Jul','Aug','Sep','Oct','Nov','Dec'];
 
   /** Returns "19 Mar '26 14:07" */
   function makeTimestamp() {
-    var now = new Date();
-    var d   = String(now.getDate()).padStart(2, '0');
-    var mon = MONTHS[now.getMonth()];
-    var yr  = String(now.getFullYear()).slice(-2);
-    var hh  = String(now.getHours()).padStart(2, '0');
-    var mm  = String(now.getMinutes()).padStart(2, '0');
+    const now = new Date();
+    const d   = String(now.getDate()).padStart(2, '0');
+    const mon = MONTHS[now.getMonth()];
+    const yr  = String(now.getFullYear()).slice(-2);
+    const hh  = String(now.getHours()).padStart(2, '0');
+    const mm  = String(now.getMinutes()).padStart(2, '0');
     return d + ' ' + mon + " '" + yr + ' ' + hh + ':' + mm;
   }
 
@@ -159,16 +189,16 @@ window.DB = (function () {
    * FIX-4: Removed the unused `val` parameter that was never read.
    */
   function pruneAndSave(key, newLb) {
-    var existing = (function () {
-      var raw = dbGet(key);
+    const existing = (function () {
+      let raw = dbGet(key);
       try { return raw ? JSON.parse(raw) : []; } catch (e) { return []; }
     }());
 
     /* Merge new entries, dedup by recordId, sort best-first, keep top 10 */
-    var combined = existing.concat(newLb.filter(function (n) {
+    let combined = existing.concat(newLb.filter((n) => {
       return !existing.some(function (e) { return e.recordId === n.recordId; });
     }));
-    combined.sort(function (a, b) { return b.score - a.score; });
+    combined.sort((a, b) => { return b.score - a.score; });
     combined = combined.slice(0, 10);
 
     if (dbSet(key, JSON.stringify(combined))) { return true; }
@@ -196,13 +226,13 @@ window.DB = (function () {
 
     /* Leaderboard ------------------------------------------ */
     getLeaderboard: function () {
-      var raw = dbGet('dino:lb');
+      let raw = dbGet('dino:lb');
       try { return raw ? JSON.parse(raw) : []; }
       catch (e) { return []; }
     },
 
     saveLeaderboard: function (lb) {
-      var json = JSON.stringify(lb);   /* compact — no whitespace */
+      let json = JSON.stringify(lb);   /* compact — no whitespace */
       if (dbSet('dino:lb', json)) { return true; }
       /* Quota exceeded — merge + prune, then retry */
       if (!pruneAndSave('dino:lb', lb)) {
@@ -220,14 +250,14 @@ window.DB = (function () {
      * @returns {Array} updated leaderboard
      */
     addScore: function (name, score) {
-      var lb = this.getLeaderboard();
+      let lb = this.getLeaderboard();
       lb.push({
         recordId: makeId(),        // stable unique id — dedup key in pruneAndSave
         name:     String(name),    // FIX-4: plain string; textContent handles XSS
         score:    score,
         when:     makeTimestamp()  // display only — not used for identity
       });
-      lb.sort(function (a, b) { return b.score - a.score; });
+      lb.sort((a, b) => { return b.score - a.score; });
       lb = lb.slice(0, 10);
       if (!this.saveLeaderboard(lb)) {
         console.warn('[DB] Score not persisted — storage full');
@@ -238,8 +268,8 @@ window.DB = (function () {
 
     /* Stats ------------------------------------------------- */
     getStats: function () {
-      var raw = dbGet('dino:stats');
-      var def = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0 };
+      let raw = dbGet('dino:stats');
+      const def = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0 };
       try { return raw ? JSON.parse(raw) : def; }
       catch (e) { return def; }
     },
@@ -258,6 +288,10 @@ window.DB = (function () {
     },
 
     /* Clear leaderboard ------------------------------------- */
+    // NOTE: This only clears dino:lb. Callers are responsible for
+    // also resetting dbStats.bestScore = 0 and calling DB.saveStats()
+    // to keep the stats panel in sync. See clearLbBtn handler in game.js.
+    // Failing to do so recreates the stats/leaderboard desync fixed in v2.0.0.
     clearLeaderboard: function () {
       dbSet('dino:lb', JSON.stringify([]));
     }

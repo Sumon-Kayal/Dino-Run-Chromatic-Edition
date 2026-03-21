@@ -54,6 +54,11 @@ class Handler(SimpleHTTPRequestHandler):
     }
 
 httpd = HTTPServer(('0.0.0.0', 1999), Handler)
+# Binds to all interfaces (not just 127.0.0.1) so Cromite on Android can
+# reach the server via localhost when running in Termux. On a desktop this
+# also makes the game reachable from other devices on the LAN at your
+# machine's local IP (e.g. https://192.168.x.x:1999). If you want loopback
+# only, change '0.0.0.0' to '127.0.0.1'.
 
 # ssl.wrap_socket() was removed in Python 3.12.
 # SSLContext is the correct API (works Python 3.4 → 3.12+).
