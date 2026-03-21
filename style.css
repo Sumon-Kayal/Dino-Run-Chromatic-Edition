@@ -382,10 +382,9 @@ canvas {
   font-size: clamp(12px, 2.5vw, 17px);
 }
 
-/* Gold / silver / bronze rows */
-.lb-table tbody tr:first-child  td { color: #b8860b; }
-.lb-table tbody tr:nth-child(2) td { color: #808080; }
-.lb-table tbody tr:nth-child(3) td { color: #8b4513; }
+/* BUG-3 FIX: medal colouring is applied by renderLeaderboard() via
+   td.style.color (inline JS always beats CSS). These CSS rules were
+   dead code and used a mismatched gold shade (#b8860b vs JS #ffd700). */
 
 /* FIX-3: higher specificity than :first-child so empty msg stays muted */
 .lb-table tbody tr td.lb-empty {

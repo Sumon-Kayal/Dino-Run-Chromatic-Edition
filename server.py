@@ -2,6 +2,7 @@ from http.server import HTTPServer, SimpleHTTPRequestHandler
 import ssl
 import os
 import sys
+import urllib.parse
 
 # ── Serve from this script's folder, not wherever you ran it from ──
 DIR = os.path.dirname(os.path.abspath(__file__))
@@ -16,8 +17,17 @@ class Handler(SimpleHTTPRequestHandler):
     _DENIED = {'cert.pem', 'key.pem'}
 
     def _is_denied(self):
-        # self.path may include a query string; strip it before comparing.
-        return os.path.basename(self.path.split('?')[0]) in self._DENIED
+        # BUG-4 FIX: iteratively URL-decode the path before extracting the
+        # basename. A single unquote() pass is insufficient — /%2563ert.pem
+        # decodes once to /%63ert.pem (basename still "%63ert.pem", no match).
+        # Loop until the string is stable so all encoding layers are stripped.
+        path = self.path.split('?')[0]
+        while True:
+            decoded = urllib.parse.unquote(path)
+            if decoded == path:
+                break
+            path = decoded
+        return os.path.basename(decoded) in self._DENIED
 
     def do_GET(self):
         if self._is_denied():

@@ -5,6 +5,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [2.0.0] — 2026-03-21
+
+### Fixed
+
+- **Stats and leaderboard desync after clearing** (`game.js`)  
+  Clicking CLEAR wiped `dino:lb` from localStorage but left `dbStats.bestScore`
+  untouched in `dino:stats`. On next page load the stats panel showed a stale
+  best score (e.g. 1069) while the leaderboard showed no records. The clear
+  handler now resets `dbStats.bestScore = 0`, calls `DB.saveStats()` to persist
+  the change, and calls `updateStatUI()` to refresh the panel immediately.
+
+- **Stats panel not refreshed after clearing** (`game.js`)  
+  The CLEAR handler updated the header HI value but never called `updateStatUI()`,
+  so the BEST SCORE row in the session stats panel kept its stale value until the
+  next `gameOver()` call. Fixed alongside the desync bug above.
+
+- **Stats and leaderboard desync on quota overflow in `gameOver()`** (`game.js`)  
+  `DB.saveStats(dbStats)` was called before `DB.addScore()`. If the leaderboard
+  write then failed due to a full quota, `dino:stats` already had the new high
+  score committed while `dino:lb` did not — producing the same split-brain state
+  as the clear bug above. The write order is now reversed: `DB.addScore()` is
+  attempted first, and `DB.saveStats()` is only committed on success. On failure
+  `dbStats.bestScore` is rolled back to the existing leaderboard leader's score
+  before saving, keeping both stores consistent.
+
+- **Dead CSS medal-colouring rules conflicting with JS** (`style.css`)  
+  Three CSS rules (`:first-child`, `:nth-child(2)`, `:nth-child(3)`) coloured
+  the top-3 leaderboard rows, but `renderLeaderboard()` already applies colours
+  via `td.style.color` (inline styles always win over class rules). The CSS rules
+  were therefore unreachable dead code. They also used mismatched shades —
+  dark gold `#b8860b` in CSS versus bright gold `#ffd700` in JS for rank 1.
+  The dead CSS blocks have been removed; JS remains the single source of truth
+  for medal colours.
+
+- **URL-encoded path bypass in `server.py` credential guard** (`server.py`)  
+  `_is_denied()` compared `os.path.basename(self.path)` against `{'cert.pem',
+  'key.pem'}`. Because `self.path` is the raw undecoded URL string, a request
+  for `/%63ert.pem` (URL-encoded `c`) bypassed the check. Added
+  `urllib.parse.unquote()` before the basename extraction so encoded variants
+  are normalised before comparison.
+
+---
+
 ## [1.5.0] — 2026-03-21
 
 ### Fixed
