@@ -250,7 +250,7 @@ canvas {
    Our minimum (Firefox 93) is well past that threshold.            */
 :fullscreen body,
 :-webkit-full-screen body {
-  background: #000;
+  background: `#000`;
   /* height must be explicit (not just min-height) so the flex column
      has a fixed container height and justify-content: center works   */
   height: 100vh;

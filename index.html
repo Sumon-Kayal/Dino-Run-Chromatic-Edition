@@ -3,7 +3,10 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Dino Run</title>
+  <meta name="description" content="Offline Chrome-style endless runner with chromatic day/night cycle, pterodactyls, and persistent local leaderboard. No tracking, no network calls.">
+  <title>Dino Run — Chromatic Edition</title>
+  <!-- BUG-9 FIX: inline favicon — no extra file needed -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23ffffff'/><rect x='8' y='1' width='6' height='3' fill='%23535353'/><rect x='6' y='3' width='8' height='4' fill='%23535353'/><rect x='6' y='7' width='3' height='2' fill='%23535353'/><rect x='1' y='5' width='3' height='3' fill='%23535353'/><rect x='3' y='7' width='8' height='3' fill='%23535353'/><rect x='3' y='10' width='6' height='2' fill='%23535353'/><rect x='4' y='12' width='2' height='3' fill='%23535353'/><rect x='7' y='12' width='2' height='3' fill='%23535353'/></svg>">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -22,7 +25,7 @@
   <!-- ══════════════════════════ GAME AREA ═══════════════════════ -->
   <div class="game-area">
     <div class="game-frame" id="gameFrame">
-      <canvas id="gameCanvas" width="900" height="300"></canvas>
+      <canvas id="gameCanvas" width="854" height="480"></canvas>
 
       <!-- Start overlay -->
       <div class="overlay" id="startScreen">
@@ -31,13 +34,14 @@
         <p class="overlay-hint">
           SPACE / &#8679; = JUMP &nbsp;&middot;&nbsp;
           &#8681; / HOLD = DUCK &nbsp;&middot;&nbsp;
-          P = PAUSE
+          P = PAUSE &nbsp;&middot;&nbsp; M = MUTE &nbsp;&middot;&nbsp; F = FULLSCREEN
         </p>
       </div>
 
       <!-- Game-over overlay -->
       <div class="overlay hidden" id="gameOverScreen">
         <h2 class="overlay-title danger">GAME OVER</h2>
+        <div class="go-newbest hidden" id="go-newbest">★ NEW BEST ★</div>
         <div class="go-scores">
           <span id="go-score">SCORE 00000</span>
           <span class="go-sep">&middot;</span>
@@ -55,10 +59,11 @@
 
     <!-- Mobile controls -->
     <div class="controls">
-      <button class="ctrl-btn jump"      id="jumpBtn">&#9650; JUMP</button>
-      <button class="ctrl-btn duck"      id="duckBtn">&#9660; DUCK</button>
-      <button class="ctrl-btn pause-btn" id="pauseBtn">&#9646;&#9646; PAUSE</button>
-      <button class="ctrl-btn mute-btn"  id="muteBtn">&#128266;</button>
+      <button class="ctrl-btn jump"        id="jumpBtn">&#9650; JUMP</button>
+      <button class="ctrl-btn duck"        id="duckBtn">&#9660; DUCK</button>
+      <button class="ctrl-btn pause-btn"   id="pauseBtn">&#9646;&#9646; PAUSE</button>
+      <button class="ctrl-btn mute-btn"    id="muteBtn">&#128266;</button>
+      <button class="ctrl-btn fullscreen-btn" id="fullscreenBtn">FULL</button>
     </div>
   </div>
 
