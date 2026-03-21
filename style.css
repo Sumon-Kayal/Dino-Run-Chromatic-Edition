@@ -305,7 +305,8 @@ canvas {
   padding: 6px;
   background: rgba(0, 0, 0, 0.45);
   justify-content: center;
-  flex-wrap: nowrap;
+  flex-wrap: wrap;
+  gap: 4px;
 }
 /* stylelint-enable selector-no-vendor-prefix */
 
