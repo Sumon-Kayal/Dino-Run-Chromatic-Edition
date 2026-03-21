@@ -186,8 +186,8 @@ cannot be persisted.
 - Canvas rendered at 854×480 px (16:9), scaled to full width via CSS
 - In fullscreen, canvas scales to fill the viewport maintaining 16:9 aspect ratio
 - All sprites drawn with `fillRect` — no image assets
-- Speed scales from 5.5 → 18 as score increases
-- Pterodactyls appear after score 200; three flight heights with distinct dodge requirements
+- Speed scales from 8.5 → 18.5 as score increases
+- Pterodactyls appear after score 900; three flight heights with distinct dodge requirements
 - All 12 known cross-browser bugs fixed (see CHANGELOG.md)
 
 ---
