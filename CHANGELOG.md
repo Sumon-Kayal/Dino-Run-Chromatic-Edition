@@ -5,6 +5,72 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [1.5.0] — 2026-03-21
+
+### Fixed
+
+- **`pruneAndRetry` discarded new score on quota overflow** (`db.js`)  
+  The old implementation pruned the stored leaderboard but then threw away the
+  incoming score entirely. Renamed to `pruneAndSave`; it now merges the new
+  entry with existing data, sorts by score, and keeps the top 10 (with a top-5
+  hard fallback). New scores are no longer silently lost when storage is full.
+
+- **`addScore` returned success even when save failed** (`db.js`)  
+  `addScore()` always returned the leaderboard array regardless of whether
+  `saveLeaderboard()` succeeded. It now returns `null` on failure so callers
+  can distinguish a persisted score from an ephemeral one.
+
+- **Leaderboard rendered as saved when it wasn't** (`game.js`)  
+  The game-over handler called `renderLeaderboard(lb)` unconditionally.
+  It now checks the return value of `DB.addScore()`: on `null` it falls back to
+  rendering the last persisted board and sets the storage badge to
+  `STORAGE FULL ⚠ — Score not saved`.
+
+- **Unused `val` parameter in `pruneAndRetry`** (`db.js`)  
+  The parameter was marked `no-unused-vars` but genuinely never read.
+  Removed as part of the `pruneAndSave` rewrite.
+
+- **Quota display showed stale text on first load** (`index.html`)  
+  `#db-status` was initialised to the static string `"LOCAL STORAGE"` before
+  the async `navigator.storage.estimate()` call resolved. Changed to
+  `"Calculating…"` so users never see incorrect quota information.
+
+- **`server.py` cert paths relative to CWD instead of script directory** (`server.py`)  
+  `load_cert_chain` used bare `'cert.pem'` / `'key.pem'` strings. If the server
+  was launched from a different working directory the certs would not be found
+  even though they exist next to the script. Fixed to use
+  `os.path.join(DIR, 'cert.pem')` consistent with how `DIR` is already used for
+  the file-serving root.
+
+- **Vendor-prefixed CSS declarations removed** (`style.css`)  
+  All handwritten `-webkit-` and `-moz-` prefix declarations were tripping
+  the repo's Stylelint rules. Removed 39 prefixed lines across 13 affected
+  blocks including `display: -webkit-flex`, `-webkit-flex-direction`,
+  `-webkit-align-items`, `-webkit-justify-content`, `-webkit-flex-wrap`,
+  `-webkit-flex-shrink`, `-webkit-flex`, `-webkit-transition`,
+  `-webkit-transform`, `-webkit-user-select`, `-webkit-animation`,
+  `image-rendering: -webkit-optimize-contrast`,
+  `image-rendering: -moz-crisp-edges`, and both `@-webkit-keyframes`
+  blocks (`blink`, `pulse`). Their unprefixed standard equivalents
+  (`display: flex`, `flex-direction`, `align-items`, `@keyframes`, etc.)
+  were already present in every block and are unchanged. Autoprefixer
+  is responsible for adding browser prefixes at build time.
+
+### Added
+
+- `README.md` — setup instructions, project structure, storage documentation,
+  browser compatibility table, cert generation guide.
+- `CHANGELOG.md` — this file.
+
+### Security
+
+- Leaderboard names rendered via `textContent` throughout — no `innerHTML`
+  usage, no XSS surface.
+- TLS cert/key files (`cert.pem`, `key.pem`) should not be committed to version
+  control. Generate locally with `openssl` (see README).
+  
+---
+
 ## [1.0.0] — 2026-03-20
 
 ### Fixed
@@ -54,10 +120,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   usage, no XSS surface.
 - TLS cert/key files (`cert.pem`, `key.pem`) should not be committed to version
   control. Generate locally with `openssl` (see README).
-  
+
 ---
 
-## [0.9.0-rc] — Testing Period: 2026-03-15 to 2026-03-19
+## ## [0.9.0-rc] — Testing Period: 2026-03-15 to 2026-03-19
 
 ### Testing Summary
 
