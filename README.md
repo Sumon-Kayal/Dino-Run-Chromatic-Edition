@@ -80,6 +80,7 @@ Dino-Run-Chromatic-Edition-main/
 │   └── vt323.woff2            # Monospace body font
 ├── cert.pem            # TLS certificate (dev cert — regenerate for real use)
 ├── key.pem             # TLS private key  (dev cert — regenerate for real use)
+├── .gitignore          # Excludes cert.pem / key.pem from version control
 ├── .github/
 │   └── workflows/
 │       └── codeql.yml  # CodeQL security analysis workflow
@@ -110,13 +111,15 @@ curl -L -o fonts/vt323.woff2 \
 
 ## 🎮 Controls
 
-| Action  | Keyboard    | Mobile              |
-|---------|-------------|---------------------|
-| Start   | Space / ↑   | Tap screen          |
-| Jump    | Space / ↑   | Tap / ▲ JUMP button |
-| Duck    | Hold ↓      | Hold ▼ DUCK button  |
-| Pause   | P           | ❙❙ PAUSE button     |
-| Restart | Space / Tap | ↺ RESTART button    |
+| Action     | Keyboard    | Mobile                 |
+|------------|-------------|------------------------|
+| Start      | Space / ↑   | Tap screen             |
+| Jump       | Space / ↑   | Tap / ▲ JUMP button    |
+| Duck       | Hold ↓      | Hold ▼ DUCK button     |
+| Pause      | P           | ❙❙ PAUSE button        |
+| Mute       | M           | 🔊 MUTE button         |
+| Fullscreen | F           | FULL button            |
+| Restart    | Space / Tap | ↺ RESTART button       |
 
 ---
 
@@ -180,10 +183,11 @@ cannot be persisted.
 
 ## 🔧 Technical Notes
 
-- Canvas rendered at 900×300 px, scaled to full width via CSS
+- Canvas rendered at 854×480 px (16:9), scaled to full width via CSS
+- In fullscreen, canvas scales to fill the viewport maintaining 16:9 aspect ratio
 - All sprites drawn with `fillRect` — no image assets
-- Speed scales from 5.5 → 18 as score increases
-- Pterodactyls appear after score 200; three flight heights with distinct dodge requirements
+- Speed scales from 8.5 → 18.5 as score increases
+- Pterodactyls appear after score 900; three flight heights with distinct dodge requirements
 - All 12 known cross-browser bugs fixed (see CHANGELOG.md)
 
 ---
