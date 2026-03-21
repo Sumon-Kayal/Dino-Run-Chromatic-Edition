@@ -80,6 +80,7 @@ dino-run/
 ├── README.md
 ├── CHANGELOG.md
 └── LICENSE             # MIT
+
 ```
 
 ---
@@ -98,7 +99,7 @@ curl -L -o fonts/press-start-2p.woff2 \
   https://cdn.jsdelivr.net/fontsource/fonts/press-start-2p@latest/latin-400-normal.woff2
 curl -L -o fonts/vt323.woff2 \
   https://cdn.jsdelivr.net/fontsource/fonts/vt323@latest/latin-400-normal.woff2
-```text
+```
 
 ---
 

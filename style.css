@@ -1,0 +1,420 @@
+/* ═══════════════════════════════════════════════════════════
+   DINO RUN — CHROMATIC EDITION
+   style.css — Chrome Offline Dino aesthetic
+
+   Palette mirrors the real Chrome T-Rex game:
+     Day  → white background, #535353 elements
+     Night→ #404040 background, #f0f0f0 elements
+   The canvas lerps between the two; the page UI stays
+   in Chrome's signature light-grey-on-white style.
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── LOCAL FONTS ─────────────────────────────────────────── */
+@font-face {
+  font-family: 'Press Start 2P';
+  font-style:  normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/press-start-2p.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'VT323';
+  font-style:  normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('fonts/vt323.woff2') format('woff2');
+}
+
+/* ── CSS VARIABLES ───────────────────────────────────────── */
+:root {
+  --bg:       #f5f5f5;   /* Chrome 404 page background */
+  --surface:  #ffffff;
+  --border:   #e0e0e0;
+  --text:     #595959;   /* Chrome's body-text gray */
+  --muted:    #9aa0a6;
+  --accent:   #535353;   /* Chrome dino gray */
+  --gold:     #b8860b;
+  --danger:   #c0392b;
+  --green:    #1e7e34;
+  --blue:     #1a73e8;   /* Chrome brand blue */
+  --shadow:   0 1px 4px rgba(0,0,0,0.10);
+}
+
+/* ── RESET ───────────────────────────────────────────────── */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ── BODY ────────────────────────────────────────────────── */
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Press Start 2P', monospace;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-x: hidden;
+}
+
+/* ── HEADER ──────────────────────────────────────────────── */
+header {
+  width: 100%;
+  max-width: 960px;
+  padding: 14px 20px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  font-size: clamp(9px, 2.2vw, 13px);
+  color: var(--accent);
+  letter-spacing: 3px;
+}
+
+.score-display {
+  font-size: clamp(8px, 2vw, 11px);
+  color: var(--muted);
+  letter-spacing: 1px;
+}
+.score-display .score-val { color: var(--accent); }
+
+/* ── GAME AREA ───────────────────────────────────────────── */
+.game-area {
+  width: 100%;
+  max-width: 960px;
+  padding: 0 12px;
+  margin-top: 14px;
+}
+
+.game-frame {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+/* ── CANVAS ──────────────────────────────────────────────── */
+canvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  image-rendering: crisp-edges;
+  image-rendering: pixelated;
+}
+
+/* ── OVERLAYS ────────────────────────────────────────────── */
+.overlay {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.93);
+}
+.overlay.hidden { display: none; }
+.overlay > * + * { margin-top: 14px; }
+
+/* "404" style number on start screen */
+.dino-404 {
+  font-size: clamp(28px, 8vw, 56px);
+  color: var(--border);
+  letter-spacing: 6px;
+  line-height: 1;
+}
+
+.overlay-title {
+  font-size: clamp(10px, 3vw, 18px);
+  color: var(--accent);
+  letter-spacing: 4px;
+  text-align: center;
+}
+.overlay-title.danger { color: var(--danger); }
+
+.overlay-hint {
+  font-size: clamp(5px, 1.3vw, 8px);
+  color: var(--muted);
+  text-align: center;
+  line-height: 2.2;
+}
+
+.go-scores {
+  font-size: clamp(7px, 1.8vw, 11px);
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+}
+.go-scores .go-sep { color: var(--border); margin: 0 10px; }
+.go-scores .go-hi  { color: var(--muted); }
+
+/* Shared button style */
+.chrome-btn {
+  padding: 10px 22px;
+  background: var(--blue);
+  border: none;
+  color: #fff;
+  font-family: 'Press Start 2P', monospace;
+  font-size: clamp(7px, 1.8vw, 10px);
+  cursor: pointer;
+  border-radius: 3px;
+  letter-spacing: 1px;
+  transition: opacity 0.15s;
+}
+.chrome-btn:hover { opacity: 0.88; }
+.chrome-btn.small { font-size: 7px; padding: 7px 14px; }
+
+/* Blink animation for restart button */
+.blink {
+  animation: blink 1s steps(1) infinite;
+}
+@keyframes blink          { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* ── CONTROLS ────────────────────────────────────────────── */
+.controls {
+  display: flex;
+  padding: 10px 0;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.ctrl-btn {
+  margin: 4px;
+  padding: 9px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Press Start 2P', monospace;
+  font-size: clamp(6px, 1.5vw, 8px);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: all 0.12s;
+  user-select: none;
+  box-shadow: var(--shadow);
+  letter-spacing: 1px;
+}
+
+/* Jump — blue */
+.ctrl-btn.jump { border-color: var(--blue); color: var(--blue); }
+.ctrl-btn.jump:active {
+  background: var(--blue); color: #fff; border-color: var(--blue);
+}
+
+/* Duck — green; .active persists while held */
+.ctrl-btn.duck { border-color: var(--green); color: var(--green); }
+.ctrl-btn.duck.active,
+.ctrl-btn.duck:active {
+  background: var(--green); color: #fff; border-color: var(--green);
+  transform: scale(0.95);
+}
+
+/* Pause */
+.ctrl-btn.pause-btn { border-color: var(--accent); color: var(--accent); }
+.ctrl-btn.pause-btn:active,
+.ctrl-btn.pause-btn.active {
+  background: var(--accent); color: #fff;
+}
+
+/* Mute — just an icon button */
+.ctrl-btn.mute-btn { font-size: 16px; padding: 7px 12px; }
+.ctrl-btn.mute-btn.active { background: var(--border); }
+
+/* ── PANEL GRID ──────────────────────────────────────────── */
+.panel-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  max-width: 960px;
+  width: 100%;
+  padding: 4px 12px 20px;
+}
+@media (max-width: 600px) {
+  .panel-row { grid-template-columns: 1fr; }
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+
+.panel-title {
+  font-size: clamp(6px, 1.3vw, 8px);
+  color: var(--muted);
+  letter-spacing: 2px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ── STATS ───────────────────────────────────────────────── */
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid rgba(224,224,224,0.6);
+  font-family: 'VT323', monospace;
+}
+.stat-label { color: var(--muted);  font-size: clamp(12px, 2.5vw, 16px); }
+.stat-value { color: var(--accent); font-size: clamp(14px, 3vw, 20px); }
+.stat-value.gold   { color: var(--gold);   }
+.stat-value.danger { color: var(--danger); }
+.stat-value.green  { color: var(--green);  }
+
+/* ── SPEED BAR ───────────────────────────────────────────── */
+.speed-bar-wrap { margin-top: 12px; }
+.speed-label {
+  font-size: clamp(5px, 1.1vw, 7px);
+  color: var(--muted);
+  letter-spacing: 1px;
+  margin-bottom: 5px;
+}
+.speed-bar-bg {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.speed-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue), var(--danger));
+  border-radius: 2px;
+  transition: width 0.5s ease;
+  width: 0%;
+}
+
+/* ── DB BADGE ────────────────────────────────────────────── */
+.db-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: clamp(5px, 1vw, 6px);
+  color: var(--muted);
+  margin-top: 10px;
+}
+.db-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 4px var(--green);
+  margin-right: 6px;
+  flex-shrink: 0;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse          { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* ── NAME FORM ───────────────────────────────────────────── */
+.name-section { margin-bottom: 12px; }
+.name-form {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.name-input {
+  flex: 1;
+  min-width: 80px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  padding: 6px 10px;
+  border-radius: 3px;
+  outline: none;
+  margin-right: 6px;
+  margin-bottom: 6px;
+}
+.name-input:focus { border-color: var(--blue); }
+.player-name-label {
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  color: var(--accent);
+  margin-top: 4px;
+}
+
+/* ── CLEAR BUTTON ────────────────────────────────────────── */
+.clear-btn {
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  cursor: pointer;
+  border-radius: 2px;
+  letter-spacing: 1px;
+  transition: all 0.15s;
+}
+.clear-btn:hover { background: var(--danger); color: #fff; }
+
+/* ── LEADERBOARD TABLE ───────────────────────────────────── */
+.lb-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.lb-table th {
+  color: var(--muted);
+  text-align: left;
+  padding: 4px 6px;
+  font-size: clamp(5px, 1.1vw, 6px);
+  letter-spacing: 1px;
+}
+.lb-table td {
+  padding: 6px;
+  border-bottom: 1px solid rgba(224,224,224,0.6);
+  color: var(--text);
+  font-family: 'VT323', monospace;
+  font-size: clamp(12px, 2.5vw, 17px);
+}
+
+/* Gold / silver / bronze rows */
+.lb-table tbody tr:first-child  td { color: #b8860b; }
+.lb-table tbody tr:nth-child(2) td { color: #808080; }
+.lb-table tbody tr:nth-child(3) td { color: #8b4513; }
+
+/* FIX-3: higher specificity than :first-child so empty msg stays muted */
+.lb-table tbody tr td.lb-empty {
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.rank-badge {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  background: var(--border);
+  border-radius: 2px;
+  text-align: center;
+  line-height: 18px;
+  font-size: 10px;
+}
+
+/* ── FOOTER ──────────────────────────────────────────────── */
+footer {
+  max-width: 960px;
+  width: 100%;
+  padding: 12px 20px;
+  text-align: center;
+  font-size: clamp(5px, 1.1vw, 6px);
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+  letter-spacing: 2px;
+}
+                   
