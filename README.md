@@ -6,7 +6,7 @@ No network calls · No tracking · No image assets.
 
 ---
 
-## Features
+## ✨ Features
 
 - **Endless runner** with delta-time physics (consistent across all refresh rates)
 - **Chromatic day/night cycle** with colour-interpolated sky, stars, cloud parallax
@@ -15,38 +15,39 @@ No network calls · No tracking · No image assets.
 - **Web Audio** sound effects (mutable)
 - **Mobile-friendly** — touch jump/duck controls, no double-fire
 - **Keyboard shortcuts** — `Space`/`↑` jump · `↓`/hold duck · `P` pause
-- **HTTPS dev server** included (`server.py`) with automatic HTTP fallback
+- **HTTPS dev server** included (`server.py`)
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
 ### Desktop / any Python environment
 
 ```bash
-# Unpack, then from the project root:
+# 1. Extract
+unzip Dino-Run-Chromatic-Edition-main.zip
+cd Dino-Run-Chromatic-Edition-main
+
+# 2. Start server
 python3 server.py
 ```
 
 Open **https://localhost:1999** (accept the self-signed cert warning).  
-If `cert.pem` / `key.pem` are missing, the server falls back to plain HTTP automatically.
+The zip includes dev certs (`cert.pem` / `key.pem`). To regenerate them, see below.
 
-### Termux (Android)
+### 📱 Termux (Android)
 
 ```bash
 # 1. Extract
 cd ~/storage/downloads
-unzip dino-run.zip
-cd dino-run
+unzip Dino-Run-Chromatic-Edition-main.zip
+cd Dino-Run-Chromatic-Edition-main
 
 # 2. Start server
-#    Serves on HTTPS if cert.pem / key.pem are present,
-#    otherwise falls back to plain HTTP automatically.
 python3 server.py
 
 # 3. Open in Cromite
-#    https://localhost:1999   (HTTPS, if certs present)
-#    http://localhost:1999    (HTTP fallback, no certs needed)
+#    https://localhost:1999
 ```
 
 One-liner (no correct MIME types, fallback fonts only):
@@ -54,7 +55,9 @@ One-liner (no correct MIME types, fallback fonts only):
 python3 -m http.server 1999
 ```
 
-### Generating a self-signed certificate (optional)
+### 🔐 Regenerating the self-signed certificate
+
+The zip ships with ready-to-use dev certs. To replace them:
 
 ```bash
 openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem \
@@ -63,29 +66,31 @@ openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem \
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
-```
-dino-run/
+```text
+Dino-Run-Chromatic-Edition-main/
 ├── index.html          # Main HTML — UI structure, overlays, panels
 ├── style.css           # All styling (retro pixel aesthetic)
 ├── db.js               # Storage layer — localStorage / in-memory fallback
 ├── game.js             # Game engine — physics, rendering, input, audio, UI
-├── server.py           # HTTPS dev server (Python 3.4+)
+├── server.py           # HTTPS dev server (Python 3.6+)
 ├── fonts/
 │   ├── press-start-2p.woff2   # Pixel heading font
 │   └── vt323.woff2            # Monospace body font
-├── cert.pem            # TLS certificate (self-signed, not tracked in VCS)
-├── key.pem             # TLS private key  (self-signed, not tracked in VCS)
+├── cert.pem            # TLS certificate (dev cert — regenerate for real use)
+├── key.pem             # TLS private key  (dev cert — regenerate for real use)
+├── .github/
+│   └── workflows/
+│       └── codeql.yml  # CodeQL security analysis workflow
 ├── README.md
 ├── CHANGELOG.md
 └── LICENSE             # MIT
-
 ```
 
 ---
 
-## Fonts
+## 🔤 Fonts
 
 Fonts are loaded from `fonts/` if present. If the directory or files are
 missing, the game falls back to the system monospace font — the retro pixel
@@ -103,7 +108,7 @@ curl -L -o fonts/vt323.woff2 \
 
 ---
 
-## Controls
+## 🎮 Controls
 
 | Action  | Keyboard    | Mobile              |
 |---------|-------------|---------------------|
@@ -115,7 +120,7 @@ curl -L -o fonts/vt323.woff2 \
 
 ---
 
-## Storage
+## 💾 Storage
 
 All data is stored **locally on your device only**. No server, no network,
 no global leaderboard.
@@ -149,7 +154,7 @@ cannot be persisted.
 
 ---
 
-## Leaderboard
+## 🏆 Leaderboard
 
 - **Local top-10** sorted by score (highest first)
 - Each entry stores: player name, score, and full timestamp (e.g. `19 Mar '26 14:07`)
@@ -159,7 +164,7 @@ cannot be persisted.
 
 ---
 
-## Browser Compatibility
+## 🌐 Browser Compatibility
 
 | Browser                | Minimum version |
 |------------------------|-----------------|
@@ -173,7 +178,7 @@ cannot be persisted.
 
 ---
 
-## Technical Notes
+## 🔧 Technical Notes
 
 - Canvas rendered at 900×300 px, scaled to full width via CSS
 - All sprites drawn with `fillRect` — no image assets
@@ -183,6 +188,13 @@ cannot be persisted.
 
 ---
 
-## License
+## 📋 Changelog
+
+Full release history with bug fix details is in
+[CHANGELOG.md](https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition/blob/f55107ebd307857e6bd43b2001713b9945901551/CHANGELOG.md).
+
+---
+
+## 📄 License
 
 MIT — see [LICENSE](LICENSE).
