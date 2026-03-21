@@ -201,14 +201,13 @@ function initGame() {
     });
   }
 
-  sessionStats.games++;
-  updateStatUI();
 }
 
 /* ───────────────────────────────────────────────────────────
    PLAYER ACTIONS
    ─────────────────────────────────────────────────────────── */
 function jump() {
+  if (state === 'paused') return;   // ignore input while paused
   initAudio();
   if (state === 'idle') { startGame(); return; }
   if (state === 'dead') { restart();   return; }
@@ -276,6 +275,7 @@ function gameOver() {
   state = 'dead';
   soundDie();
 
+  sessionStats.games++;
   sessionStats.deaths++;
   var s = Math.floor(score);
   if (s > sessionStats.bestScore) sessionStats.bestScore = s;
@@ -323,6 +323,7 @@ function spawn() {
     obstacles.push({
       type: 'cactus',
       x: W + 10,
+      passed: false,
       y: GY - h,
       w: w * cl + (cl - 1) * 5,
       h: h
@@ -351,6 +352,7 @@ function spawn() {
     obstacles.push({
       type: 'ptera',
       x: W + 10,
+      passed: false,
       y: hs[Math.floor(Math.random() * 3)],
       w: 44, h: 28,
       frame: 0, ft: 0
@@ -431,8 +433,6 @@ function update(dt) {
   obsCooldown -= dt;
   if (obsCooldown <= 0) {
     spawn();
-    sessionStats.obstacles++;   // session total (shown in UI)
-    gameObstacles++;            // BUG-A FIX: per-game count (saved to DB)
     obsCooldown = Math.max(
       30,
       Math.floor(55 + Math.random() * 70 - speed * 1.5)
@@ -461,6 +461,15 @@ function update(dt) {
       return;
     }
   }
+
+  // Count obstacles the dino successfully passed (right edge clears dino left)
+  obstacles.forEach(function (o) {
+    if (!o.passed && o.x + o.w < DINO_X) {
+      o.passed = true;
+      sessionStats.obstacles++;   // session total (shown in UI)
+      gameObstacles++;            // per-game count (saved to DB)
+    }
+  });
 
   // Remove off-screen obstacles
   obstacles = obstacles.filter(function (o) { return o.x > -120; });
@@ -628,7 +637,6 @@ function drawDino(x, y, frame, jumping, ducking) {
     px(c,  x+26, y+44, 12, 4);
   }
 }
-
 function drawCactus(x, y, w, h) {
   var c   = C.cactus;
   var sw  = 6;                             // stem width (Chrome uses ~6px)
@@ -748,8 +756,7 @@ function renderLeaderboard(lb) {
     empty.appendChild(emptyTd);
     tbody.appendChild(empty);
     return;
-  }
-
+}
   var medals = ['#ffd700', '#c0c0c0', '#cd7f32'];
 
   lb.forEach(function (entry, i) {
@@ -950,3 +957,5 @@ document.addEventListener('visibilitychange', function () {
   draw();
   idleLoop();
 }());
+         
+
