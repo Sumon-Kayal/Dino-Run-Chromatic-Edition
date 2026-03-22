@@ -61,7 +61,7 @@ python3 -m http.server 1999
 
 ### 🔐 Generating the self-signed certificate
 
-`cert.pem` and `key.pem` are not tracked in git and are not included in source downloads. Generate them locally before running `server.py`:
+If local TLS `cert.pem` and `key.pem` are not included in source downloads. Generate them locally before running `server.py`:
 
 ```bash
 openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem \
