@@ -1399,13 +1399,13 @@ document.addEventListener('visibilitychange', function () {
     // Restore leaderboard
     let lb = DB.getLeaderboard();
     renderLeaderboard(lb);
-    if (lb.length) hiScore = lb[0].score;
-    let hiStr = String(hiScore).padStart(5, '0');
-    DOM.hdrHi.textContent = hiStr;
-    _lastHdrHi = hiStr;   // OPT-4: prime cache so first update() doesn't re-write
-
+    
     // Restore global stats
     dbStats = DB.getStats();
+    hiScore = dbStats.bestScore || 0;
+     let hiStr = String(hiScore).padStart(5, '0');
+     DOM.hdrHi.textContent = hiStr;
+     _lastHdrHi = hiStr;   // OPT-4: prime cache so first update() doesn't re-write
     DOM.statBest.textContent = dbStats.bestScore || 0;
     let bt = dbStats.bestTime || 0;
     DOM.statTime.textContent =
