@@ -103,6 +103,9 @@ class Handler(SimpleHTTPRequestHandler):
     def do_OPTIONS(self):
         # OPTIONS is used by CORS preflight — reject it; this server is not a
         # CORS endpoint and should not advertise any cross-origin permissions.
+        if self._is_denied():
+            self.send_error(403, 'Forbidden')
+            return
         self.send_error(405, 'Method Not Allowed')
 
     # Correct MIME types — Firefox silently rejects fonts without them
