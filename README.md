@@ -252,7 +252,7 @@ blocking alert with recovery steps. Quota usage is read via
 
 ## 🔧 Technical Notes
 
-#### Canvas & rendering
+### Canvas & rendering
 
 - Intrinsic resolution: **854 × 480 px (16:9)**, scaled to full width via CSS
 - All sprites drawn with `fillRect` — zero image assets, zero HTTP requests for graphics
@@ -260,14 +260,14 @@ blocking alert with recovery steps. Quota usage is read via
 - `will-change: transform` promotes the canvas to its own GPU compositor layer
 - `contain: layout style` on the game frame isolates layout recalculation
 
-#### Physics & timing
+### Physics & timing
 
 - **Delta-time physics**: all movement scaled by `dt` (normalised to 1.0 = one 60 Hz frame)
 - Ground scroll uses accumulated `groundScrollX` (not `frameCount`) — Hz-independent
 - Best-time tracking uses `performance.now()` wall-clock delta — Hz-independent
 - Hitbox collision uses reusable `_dinoBox` / `_obsBox` objects — zero allocations per frame
 
-#### Performance summary
+### Performance summary
 
 | Optimisation | Benefit |
 |---|---|
@@ -279,7 +279,7 @@ blocking alert with recovery steps. Quota usage is read via
 | In-place obstacle splice | Zero `Array.filter` allocations at 60 Hz |
 | Debounced `refreshQuota()` | One storage IPC call per 2 s vs 2–3 per game-over |
 
-#### Speed constants
+### Speed constants
 
 | Parameter     | Value | Source                                    |
 |---------------|-------|-------------------------------------------|
@@ -288,7 +288,7 @@ blocking alert with recovery steps. Quota usage is read via
 | Ramp divisor  | 2660  | Score at which original reaches max speed |
 | `PTERA_SCORE` | 900   | 200 × (2660/600), proportional to ramp    |
 
-#### Pterodactyl flight heights
+### Pterodactyl flight heights
 
 Three distinct heights with specific dodge requirements:
 
