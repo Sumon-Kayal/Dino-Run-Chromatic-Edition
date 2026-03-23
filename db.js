@@ -331,7 +331,13 @@ window.DB = (function () {
          undefined for this field — the previous default omitted it, leaving a
          latent undefined-propagation trap for any future code without a || 0 guard. */
       const def = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0, bestTime:0 };
-      try { return raw ? JSON.parse(raw) : def; }
+      try {
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          return Object.assign({}, def, parsed);
+        }
+        return def;
+      }
       catch (e) { return def; }
     },
 
