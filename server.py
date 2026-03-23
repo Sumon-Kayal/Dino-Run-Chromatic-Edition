@@ -1,4 +1,5 @@
 from http.server import HTTPServer, SimpleHTTPRequestHandler
+from typing import ClassVar
 import ssl
 import os
 import sys
@@ -19,7 +20,7 @@ class Handler(SimpleHTTPRequestHandler):
     # Populated after cert/key paths are resolved (see bottom of file).
     # FIX-13: derived from actual cert/key basenames so the deny list stays
     # correct if filenames are ever changed — no second edit required.
-    _DENIED: set = set()
+    _DENIED: ClassVar[frozenset[str]] = frozenset()
 
     def _is_denied(self):
         # BUG-4 FIX: iteratively URL-decode the path before extracting the
@@ -140,7 +141,7 @@ if not os.path.exists(cert) or not os.path.exists(key):
 
 # FIX-13: derive the deny set from the actual cert/key basenames so it stays
 # correct if either filename is ever changed — no second edit required.
-Handler._DENIED = {os.path.basename(cert), os.path.basename(key)}
+Handler._DENIED = frozenset({os.path.basename(cert), os.path.basename(key)})
 
 ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 ctx.load_cert_chain(certfile=cert, keyfile=key)

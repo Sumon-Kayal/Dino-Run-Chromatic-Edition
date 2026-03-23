@@ -88,7 +88,7 @@ Fallback (no correct MIME types, pixel fonts may not load):
 python3 -m http.server 1999
 ```
 
-### 🔐 Generating the self-signed certificate
+## 🔐 Generating the self-signed certificate
 
 If `cert.pem` and `key.pem` are not present, generate them locally before
 running `server.py`:
@@ -112,7 +112,7 @@ Dino-Run-Chromatic-Edition/
 ├── style.css           # Retro pixel aesthetic + accessibility + reduced-motion
 ├── db.js               # Storage layer — localStorage / in-memory fallback
 ├── game.js             # Game engine — physics, rendering, input, audio, UI
-├── server.py           # HTTPS dev server with security headers (Python 3.7+)
+├── server.py           # HTTPS dev server with security headers (Python 3.6+)
 ├── fonts/
 │   ├── press-start-2p.woff2   # Pixel heading font
 │   └── vt323.woff2            # Monospace stats / leaderboard font
@@ -176,16 +176,16 @@ no global leaderboard.
 The DB badge in the Stats panel shows which backend is active and live storage
 usage (e.g. `LOCAL STORAGE · OFFLINE · 12KB (0.2%)`).
 
-### 🗝️ Storage keys
+## 🗝️ Storage keys
 
 | Key             | Contents                                                         |
 |-----------------|------------------------------------------------------------------|
 | `dino:lb`       | Top-10 leaderboard entries (JSON array)                          |
-| `dino:stats`    | Lifetime stats: games, deaths, obstacles, distance, best time    |
+| `dino:stats`    | Lifetime stats: games, deaths, obstacles, distance, best score, best time |
 | `dino:player`   | Player display name (max 10 chars, uppercase)                    |
 | `dino:version`  | Schema version — triggers automatic data migration on upgrade    |
 
-### 📊 Quota handling
+## 📊 Quota handling
 
 localStorage provides ~5 MB per origin in all major browsers. The game uses
 a few KB at most. `navigator.storage.persist()` is requested at startup to
@@ -197,7 +197,7 @@ A `db:criticalFailure` event is dispatched on total failure — triggering a
 blocking alert with recovery steps. Quota usage is read via
 `navigator.storage.estimate()`, debounced to at most one IPC call per 2 seconds.
 
-### 🏆 Reset options
+## 🏆 Reset options
 
 | Action           | HI display | Best score (persisted) | Best time | Leaderboard records |
 |------------------|:----------:|:----------------------:|:---------:|:-------------------:|
