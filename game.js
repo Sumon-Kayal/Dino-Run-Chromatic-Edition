@@ -13,35 +13,136 @@ if (typeof window.DB === 'undefined') {
 }
 const DB = window.DB;
 
+/* ───────────────────────────────────────────────────────────
+   BUG-#1 FIX: DOM VALIDATION
+   Verify all required elements exist before the game touches
+   the DOM. Throws a descriptive error during development instead
+   of a cryptic TypeError at an arbitrary line later on.
+   ─────────────────────────────────────────────────────────── */
+(function validateDOM() {
+  const required = [
+    'gameCanvas',    'gameFrame',
+    'startScreen',   'gameOverScreen', 'pauseScreen',
+    'go-score',      'go-hi',          'go-newbest',
+    'restartBtn',    'jumpBtn',         'duckBtn',
+    'pauseBtn',      'muteBtn',         'fullscreenBtn',
+    'hdr-score',     'hdr-hi',          'speed-fill',
+    'db-status',
+    'stat-games',    'stat-best',       'stat-time',
+    'stat-obs',      'stat-deaths',     'stat-dist',
+    'lbBody',        'nameInput',       'nameSaveBtn',
+    'currentName',   'clearLbBtn',      'resetHiBtn'
+  ];
+  const missing = required.filter(function (id) {
+    return !document.getElementById(id);
+  });
+  if (missing.length) {
+    throw new Error(
+      'game.js: required DOM element(s) missing — check index.html\n' +
+      'Missing IDs: ' + missing.join(', ')
+    );
+  }
+}());
+
+/* ───────────────────────────────────────────────────────────
+   OPT-1: DOM ELEMENT CACHE
+   Cache every element touched at runtime once at startup.
+   Eliminates getElementById() from the hot game loop and all
+   event handlers (~60+ lookups/second → 0).
+   ─────────────────────────────────────────────────────────── */
+const DOM = {
+  /* Canvas */
+  gameCanvas:     document.getElementById('gameCanvas'),
+  /* Header HUD — written every frame */
+  hdrScore:       document.getElementById('hdr-score'),
+  hdrHi:          document.getElementById('hdr-hi'),
+  speedFill:      document.getElementById('speed-fill'),
+  /* Storage badge */
+  dbStatus:       document.getElementById('db-status'),
+  /* Overlays */
+  startScreen:    document.getElementById('startScreen'),
+  gameOverScreen: document.getElementById('gameOverScreen'),
+  pauseScreen:    document.getElementById('pauseScreen'),
+  goScore:        document.getElementById('go-score'),
+  goHi:           document.getElementById('go-hi'),
+  goNewBest:      document.getElementById('go-newbest'),
+  /* Buttons */
+  restartBtn:     document.getElementById('restartBtn'),
+  pauseBtn:       document.getElementById('pauseBtn'),
+  muteBtn:        document.getElementById('muteBtn'),
+  fullscreenBtn:  document.getElementById('fullscreenBtn'),
+  duckBtn:        document.getElementById('duckBtn'),
+  jumpBtn:        document.getElementById('jumpBtn'),
+  gameFrame:      document.getElementById('gameFrame'),
+  /* Player / leaderboard */
+  currentName:    document.getElementById('currentName'),
+  nameInput:      document.getElementById('nameInput'),
+  nameSaveBtn:    document.getElementById('nameSaveBtn'),
+  clearLbBtn:     document.getElementById('clearLbBtn'),
+  resetHiBtn:     document.getElementById('resetHiBtn'),
+  lbBody:         document.getElementById('lbBody'),
+  /* Stats panel */
+  statGames:      document.getElementById('stat-games'),
+  statBest:       document.getElementById('stat-best'),
+  statTime:       document.getElementById('stat-time'),
+  statObs:        document.getElementById('stat-obs'),
+  statDeaths:     document.getElementById('stat-deaths'),
+  statDist:       document.getElementById('stat-dist'),
+};
+
 /* Update the DB status badge */
-document.getElementById('db-status').textContent = DB.backendName;
+DOM.dbStatus.textContent = DB.backendName;
 
 /* BUG-4/5 FIX: Listen for quota updates from db.js and show usage in badge */
 window.addEventListener('db:quota', function (e) {
-  let used  = e.detail.used;
-  let total = e.detail.total;
-  let pct   = total > 0 ? ((used / total) * 100).toFixed(1) : '?';
+  let used   = e.detail.used;
+  let total  = e.detail.total;
+  let pct    = total > 0 ? ((used / total) * 100).toFixed(1) : '?';
   let usedKB = (used / 1024).toFixed(0);
-  let badge = document.getElementById('db-status');
-  badge.textContent = DB.backendName + ' \xB7 ' + usedKB + 'KB (' + pct + '%)';
-  badge.style.removeProperty('color');   // clear danger colour if storage freed up
+  DOM.dbStatus.textContent = DB.backendName + ' \xB7 ' + usedKB + 'KB (' + pct + '%)';
+  DOM.dbStatus.style.removeProperty('color');   // clear danger colour if storage freed up
 });
 
 /* Show quota full warning if a write fails */
 window.addEventListener('db:quotaFull', function () {
-  let el = document.getElementById('db-status');
-  el.textContent = 'STORAGE FULL \u26A0';
+  DOM.dbStatus.textContent = 'STORAGE FULL \u26A0';
   // Use setProperty() — the correct CSSOM path for CSS custom property
   // references. element.style.color = 'var(--x)' may be silently ignored
   // by some browsers because the shorthand setter expects a resolved value.
-  el.style.setProperty('color', 'var(--danger)');
+  DOM.dbStatus.style.setProperty('color', 'var(--danger)');
+});
+
+/* BUG-#2 FIX: Show a prominent modal when even the top-5 pruning fallback
+   fails (storage completely exhausted). The badge update alone is too easy
+   to miss — players need actionable instructions to fix the situation.    */
+window.addEventListener('db:criticalFailure', function () {
+  DOM.dbStatus.textContent = 'STORAGE FULL \u26A0 \u2014 Score not saved';
+  DOM.dbStatus.style.setProperty('color', 'var(--danger)');
+  alert(
+    '\u26A0\uFE0F  STORAGE FULL\n\n' +
+    'Your score could not be saved because your browser\u2019s ' +
+    'local storage is completely full.\n\n' +
+    'To fix this:\n' +
+    '  1. Clear browser data for this site\n' +
+    '  2. Click \u201CCLEAR\u201D to wipe the leaderboard\n' +
+    '  3. Close other tabs and try again'
+  );
 });
 
 /* ───────────────────────────────────────────────────────────
    CANVAS + CONSTANTS
    ─────────────────────────────────────────────────────────── */
-const canvas = document.getElementById('gameCanvas');
+const canvas = DOM.gameCanvas;
 const ctx    = canvas.getContext('2d');
+// FIX: getContext returns null when hardware acceleration is disabled or the
+// browser is in a restricted context. Every downstream ctx.* call would throw
+// a TypeError with no useful message — fail loudly here with a clear cause.
+if (!ctx) {
+  throw new Error(
+    'game.js: canvas 2D context unavailable. ' +
+    'Hardware acceleration may be disabled, or the browser context is restricted.'
+  );
+}
 
 // World dimensions (canvas intrinsic pixels — 854×480, 16:9)
 const W  = 854;   // canvas width
@@ -74,7 +175,8 @@ const CONFIG = {
   CACTUS_H_RNG: 38,    // cactus height random range added to min
   CACTUS_W_MIN: 16,    // cactus minimum stem width
   CACTUS_W_RNG: 14,    // cactus width random range
-  CACTUS_DBL:   0.35,  // probability of double-cactus cluster
+  CACTUS_TRIPLE: 0.12, // probability of triple-cactus cluster
+  CACTUS_DBL:   0.35,  // probability of double-cactus cluster (checked only when not triple)
   OBS_CD_INIT:  60,    // initial obstacle cooldown (frames)
   OBS_CD_MIN:   30,    // minimum cooldown (frames) — hard floor
   OBS_CD_BASE:  55,    // base cooldown for random calculation
@@ -104,7 +206,7 @@ const C = {
  * @param {number} h - Height in pixels
  */
 function px(color, x, y, w, h) {
-  ctx.fillStyle = color;
+  setFill(color);
   ctx.fillRect(x|0, y|0, w, h);
 }
 
@@ -136,6 +238,41 @@ function lerpRGB(ca, cb, t) {
 }
 
 /* ───────────────────────────────────────────────────────────
+   OPT-2: PALETTE CACHE
+   lerpRGB() parses hex and does float arithmetic 4× per frame.
+   Cache the results and skip recomputation when dayPhase is
+   the same as last frame (e.g. during the 350-frame day/night
+   pause and any frame where speed/dt lands on the same value).
+
+   OPT-3: FILL-STYLE DEDUP
+   ctx.fillStyle is a canvas state write. Setting it to the same
+   value the GPU already has still costs a JS→WebGL bridge call.
+   setFill() guards against redundant assignments.
+   ─────────────────────────────────────────────────────────── */
+let _lastFill     = '';       // tracks current ctx.fillStyle to skip redundant sets
+let _lastDayPhase = -1;       // sentinel: -1 forces first-frame palette build
+const _pal = { bgC: '', fgC: '', fgDark: '', dimC: '' };
+
+/**
+ * Set ctx.fillStyle only when the colour actually changes.
+ * Reduces canvas state-change calls per frame by ~50% since many
+ * consecutive px() calls share the same colour.
+ * @param {string} color
+ */
+function setFill(color) {
+  if (color !== _lastFill) { ctx.fillStyle = color; _lastFill = color; }
+}
+
+/* ───────────────────────────────────────────────────────────
+   FIX-5: REUSABLE HITBOX OBJECTS
+   Allocating { x, y, w, h } inside update() creates ~60 dino-box
+   + up to 300 obstacle-box objects per second — steady minor GC
+   pressure. Mutating fixed objects eliminates all those allocations.
+   ─────────────────────────────────────────────────────────── */
+const _dinoBox = { x: 0, y: 0, w: DINO_W - 14, h: 0 };
+const _obsBox  = { x: 0, y: 0, w: 0, h: 0 };
+
+/* ───────────────────────────────────────────────────────────
    GAME STATE
    ─────────────────────────────────────────────────────────── */
 let state      = 'idle';   // 'idle' | 'running' | 'dead'
@@ -163,6 +300,11 @@ let dayPauseAt = -1;   // frame number at which pause ends (-1 = not pausing)
 let duckHeld   = false;
 let playerName = 'ANON';
 
+// ── Moon ───────────────────────────────────────────────────
+// Scrolls slowly from right to left; wraps. Stored so it persists
+// across the day→night transition instead of jumping on first night.
+let moonX      = W * 0.72;
+
 // ── Pause ──────────────────────────────────────────────────
 let paused = false;
 
@@ -170,10 +312,40 @@ let paused = false;
 let flashFrames   = 0;
 let lastMilestone = 0;
 
+// OPT-4: HUD textContent dedup — skip DOM write when displayed string is unchanged
+let _lastHdrScore = '';
+let _lastHdrHi    = '';
+
+// FIX-7: speed bar dedup — skip style.width write when percentage hasn't changed
+let _lastSpeedPct = -1;
+
+// FIX-1: wall-clock game start time for accurate bestTime at any refresh rate.
+// frameCount/60 is wrong at 120/144Hz — frameCount increments once per rAF
+// tick, not once per real second. performance.now() is Hz-independent.
+let gameStartWallTime = 0;
+
+// FIX-2: accumulated ground scroll offset — replaces frameCount*speed*0.3 which
+// is Hz-dependent. groundScrollX accrues speed*dt each update, producing the
+// same visual scroll speed at 60, 90, 120, and 144Hz.
+let groundScrollX = 0;
+
 // ── Web Audio ─────────────────────────────────────────────
 const AudioCtxCtor = window.AudioContext || window.webkitAudioContext;
 let audioCtx     = null;
 let soundMuted   = false;
+
+// SEC-4: track pending sound setTimeout IDs so they can be cancelled in
+// initGame(). Without this, soundDie/soundMilestone callbacks fire up to
+// 140ms after a fast restart — playing stale sounds over the new game.
+let _soundTimers = [];
+
+function _scheduleSound(fn, delay) {
+  _soundTimers.push(setTimeout(fn, delay));
+}
+function _cancelSoundTimers() {
+  _soundTimers.forEach(function (id) { clearTimeout(id); });
+  _soundTimers = [];
+}
 
 function initAudio() {
   if (audioCtx || !AudioCtxCtor) return;
@@ -196,21 +368,21 @@ function playBeep(freq, type, dur, vol, endF) {
     gain.gain.setValueAtTime(vol || 0.07, t);
     gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
     osc.start(t); osc.stop(t + dur);
-  } catch(e) {}
+  } catch(e) { console.warn('[Audio] playBeep failed:', e); }
 }
 function soundJump() { playBeep(400, 'square', 0.12, 0.07, 880); }
 function soundDie() {
   playBeep(440, 'square', 0.10, 0.08);
-  setTimeout(() => { playBeep(220, 'square', 0.18, 0.07); }, 90);
+  _scheduleSound(function () { playBeep(220, 'square', 0.18, 0.07); }, 90);
 }
 function soundMilestone() {
   playBeep(660, 'square', 0.07, 0.07);
-  setTimeout(() => { playBeep(880,  'square', 0.07, 0.07); }, 70);
-  setTimeout(() => { playBeep(1100, 'square', 0.12, 0.07); }, 140);
+  _scheduleSound(function () { playBeep(880,  'square', 0.07, 0.07); }, 70);
+  _scheduleSound(function () { playBeep(1100, 'square', 0.12, 0.07); }, 140);
 }
 
-const sessionStats = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0 };
-let dbStats      = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0 };  // ISSUE-2 FIX: let instead of var
+const sessionStats = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0, bestTime:0 };
+let dbStats      = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0, bestTime:0 };  // ISSUE-2 FIX: let instead of var
 let gameObstacles = 0;   // BUG-A FIX: per-game counter, reset each initGame()
 
 /* ───────────────────────────────────────────────────────────
@@ -220,6 +392,7 @@ let gameObstacles = 0;   // BUG-A FIX: per-game counter, reset each initGame()
  * Reset all game state to initial values. Called before each new game.
  */
 function initGame() {
+  _cancelSoundTimers();   // SEC-4: kill any pending sound callbacks from the last game
   score      = 0;
   speed      = CONFIG.SPEED_MIN;
   frameCount = 0;
@@ -228,6 +401,9 @@ function initGame() {
   gameObstacles = 0;   // BUG-A FIX: reset per-game obstacle counter
   flashFrames   = 0;
   lastMilestone = 0;
+  groundScrollX = 0;   // FIX-2: reset accumulated ground scroll
+  _lastSpeedPct = -1;  // FIX-7: force speed bar redraw on new game
+  moonX = W * 0.72 + Math.random() * W * 0.24;  // randomise start position
 
   dino = {
     x: DINO_X, y: GY - DINO_H,
@@ -278,12 +454,12 @@ function jump() {
 function startDuck() {
   duckHeld = true;
   initAudio();
-  let b = document.getElementById('duckBtn');
+  let b = DOM.duckBtn;
   if (b) b.classList.add('active');
 }
 function endDuck() {
   duckHeld = false;
-  let b = document.getElementById('duckBtn');
+  let b = DOM.duckBtn;
   if (b) b.classList.remove('active');
 }
 
@@ -294,15 +470,17 @@ function togglePause() {
     paused = true;
     state  = 'paused';
     cancelAnimationFrame(animFrame);
-    document.getElementById('pauseScreen').classList.remove('hidden');
-    document.getElementById('pauseBtn').classList.add('active');
+    DOM.pauseScreen.classList.remove('hidden');
+    DOM.pauseBtn.classList.add('active');
+    DOM.pauseBtn.setAttribute('aria-pressed', 'true');   // FIX-11
   } else {
     paused = false;
     state  = 'running';
     lastTime = 0;
-    document.getElementById('pauseScreen').classList.add('hidden');
-    document.getElementById('pauseBtn').classList.remove('active');
-    loop();
+    DOM.pauseScreen.classList.add('hidden');
+    DOM.pauseBtn.classList.remove('active');
+    DOM.pauseBtn.setAttribute('aria-pressed', 'false');  // FIX-11
+    animFrame = requestAnimationFrame(loop);
   }
 }
 
@@ -330,7 +508,7 @@ function toggleFullscreen() {
 }
 
 function onFullscreenChange() {
-  let btn = document.getElementById('fullscreenBtn');
+  let btn = DOM.fullscreenBtn;
   if (!btn) return;
   let isFs = !!(document.fullscreenElement || document.webkitFullscreenElement);
   btn.textContent = isFs ? 'EXIT FS' : 'FULL';
@@ -342,23 +520,25 @@ document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 
 function startGame() {
   cancelAnimationFrame(animFrame);
-  paused   = false;
-  lastTime = 0;
-  state    = 'running';
+  paused            = false;
+  lastTime          = 0;
+  gameStartWallTime = performance.now();   // FIX-1: wall-clock start for accurate bestTime
+  state             = 'running';
   initGame();
-  document.getElementById('startScreen').classList.add('hidden');
-  document.getElementById('gameOverScreen').classList.add('hidden');
-  loop();
+  DOM.startScreen.classList.add('hidden');
+  DOM.gameOverScreen.classList.add('hidden');
+  animFrame = requestAnimationFrame(loop);
 }
 
 function restart() {
   cancelAnimationFrame(animFrame);
-  paused   = false;
-  lastTime = 0;
-  state    = 'running';
+  paused            = false;
+  lastTime          = 0;
+  gameStartWallTime = performance.now();   // FIX-1: wall-clock start for accurate bestTime
+  state             = 'running';
   initGame();
-  document.getElementById('gameOverScreen').classList.add('hidden');
-  loop();
+  DOM.gameOverScreen.classList.add('hidden');
+  animFrame = requestAnimationFrame(loop);
 }
 
 /**
@@ -374,6 +554,11 @@ function gameOver() {
   let s = Math.floor(score);
   if (s > sessionStats.bestScore) sessionStats.bestScore = s;
   sessionStats.totalDist += s;
+  // FIX-1: use wall-clock elapsed time instead of frameCount/60.
+  // frameCount increments once per rAF tick — at 120Hz that is 120/s,
+  // making frameCount/60 read 2× fast. performance.now() is Hz-independent.
+  let thisTime = Math.floor((performance.now() - gameStartWallTime) / 1000);
+  if (thisTime > sessionStats.bestTime) sessionStats.bestTime = thisTime;
 
   // Capture previous best before updating so we can show NEW BEST banner
   let prevBest = Math.max(hiScore, dbStats.bestScore);
@@ -385,6 +570,7 @@ function gameOver() {
   dbStats.totalDist  += s;
   dbStats.obstacles  += gameObstacles;
   if (s > dbStats.bestScore) dbStats.bestScore = s;
+  if (thisTime > (dbStats.bestTime || 0)) dbStats.bestTime = thisTime;
 
   // BUG-1 FIX (part 2): write leaderboard BEFORE committing stats.
   // If addScore() fails (quota full) we roll back dbStats.bestScore so
@@ -400,23 +586,22 @@ function gameOver() {
     DB.saveStats(dbStats);
     console.warn('[Game] Score not saved — storage full');
     renderLeaderboard(existingLb);
-    document.getElementById('db-status').textContent = 'STORAGE FULL \u26A0 \u2014 Score not saved';
-    document.getElementById('db-status').style.setProperty('color', 'var(--danger)');
+    DOM.dbStatus.textContent = 'STORAGE FULL \u26A0 \u2014 Score not saved';
+    DOM.dbStatus.style.setProperty('color', 'var(--danger)');
   }
   updateStatUI();
 
-  document.getElementById('go-score').textContent =
-    'SCORE ' + String(s).padStart(5, '0');  // ISSUE-1 FIX: matches HTML template (no colon)
-  document.getElementById('go-hi').textContent =
+  DOM.goScore.textContent =
+    'SCORE ' + String(s).padStart(5, '0');
+  DOM.goHi.textContent =
     'HI: '    + String(hiScore).padStart(5, '0');
-  // Show NEW BEST banner only when the player actually beat a real prior score
-  let newBestEl = document.getElementById('go-newbest');
+  let newBestEl = DOM.goNewBest;
   if (s > prevBest && prevBest > 0) {
     newBestEl.classList.remove('hidden');
   } else {
     newBestEl.classList.add('hidden');
   }
-  document.getElementById('gameOverScreen').classList.remove('hidden');
+  DOM.gameOverScreen.classList.remove('hidden');
 }
 
 /* ───────────────────────────────────────────────────────────
@@ -429,17 +614,25 @@ function spawn() {
   let isPtera = Math.random() < CONFIG.PTERA_CHANCE && score > CONFIG.PTERA_SCORE;
 
   if (!isPtera) {
-    // Cactus (single or double cluster)
-    let h  = CONFIG.CACTUS_H_MIN + Math.floor(Math.random() * CONFIG.CACTUS_H_RNG);
-    let w  = CONFIG.CACTUS_W_MIN + Math.floor(Math.random() * CONFIG.CACTUS_W_RNG);
-    let cl = Math.random() < CONFIG.CACTUS_DBL ? 2 : 1;
+    // Cactus — single, double, or triple cluster.
+    // Each cactus in a cluster is drawn individually so players can clearly
+    // see how many they need to clear.  The hitbox covers the full span.
+    let h        = CONFIG.CACTUS_H_MIN + Math.floor(Math.random() * CONFIG.CACTUS_H_RNG);
+    let singleW  = CONFIG.CACTUS_W_MIN + Math.floor(Math.random() * CONFIG.CACTUS_W_RNG);
+    let cl       = Math.random() < CONFIG.CACTUS_TRIPLE ? 3
+                 : Math.random() < CONFIG.CACTUS_DBL    ? 2
+                 : 1;
+    const GAP    = 6;  // pixel gap between cacti in a cluster
+    let totalW   = singleW * cl + GAP * (cl - 1);
     obstacles.push({
       type: 'cactus',
       x: W + 10,
       passed: false,
       y: GY - h,
-      w: w * cl + (cl - 1) * 5,
-      h: h
+      w: totalW,
+      h: h,
+      count:   cl,      // number of cacti to draw
+      singleW: singleW  // width of each individual cactus
     });
   } else {
     // Pterodactyl — three possible flight heights.
@@ -546,19 +739,31 @@ function update(dt) {
     if (c.x < -200) c.x = W + 50;
   });
 
+  // ── Moon scroll ────────────────────────────────────────
+  moonX -= 0.28 * dt;
+  if (moonX < -32) moonX = W + 32;
+
   // ── Obstacle spawn ─────────────────────────────────────
   obsCooldown -= dt;
   if (obsCooldown <= 0) {
-    spawn();
+    if (obstacles.length < 5) spawn();   // cap: prevent burst after long dt spike
     obsCooldown = Math.max(
       CONFIG.OBS_CD_MIN,
       Math.floor(CONFIG.OBS_CD_BASE + Math.random() * CONFIG.OBS_CD_RNG - speed * CONFIG.OBS_CD_SPEED)
     );
   }
 
+  // FIX-2: accumulate ground scroll distance — Hz-independent replacement for
+  // frameCount * speed * 0.3. draw() reads groundScrollX directly.
+  groundScrollX = (groundScrollX + speed * dt * 0.3) % 30;
+
   // ── Collision detection ────────────────────────────────
   let dh = dino.ducking ? DUCK_H : DINO_H;
-  let db = { x: dino.x + 8, y: dino.y + 6, w: DINO_W - 14, h: dh - 10 };
+  // FIX-5: mutate reusable hitbox objects instead of allocating new ones each frame
+  _dinoBox.x = dino.x + 8;
+  _dinoBox.y = dino.y + 6;
+  _dinoBox.h = dh - 10;
+  // _dinoBox.w is constant (DINO_W - 14) — set once in declaration
 
   for (let i = 0; i < obstacles.length; i++) {
     let o = obstacles[i];
@@ -571,9 +776,13 @@ function update(dt) {
     }
 
     // AABB hit test (shrunk by 4px each side for leniency)
-    let ob = { x: o.x + 4, y: o.y + 4, w: o.w - 8, h: o.h - 8 };
-    if (db.x < ob.x + ob.w && db.x + db.w > ob.x &&
-        db.y < ob.y + ob.h && db.y + db.h > ob.y) {
+    // FIX-5: reuse _obsBox instead of allocating per obstacle per frame
+    _obsBox.x = o.x + 4;
+    _obsBox.y = o.y + 4;
+    _obsBox.w = o.w - 8;
+    _obsBox.h = o.h - 8;
+    if (_dinoBox.x < _obsBox.x + _obsBox.w && _dinoBox.x + _dinoBox.w > _obsBox.x &&
+        _dinoBox.y < _obsBox.y + _obsBox.h && _dinoBox.y + _dinoBox.h > _obsBox.y) {
       gameOver();
       return;
     }
@@ -588,17 +797,32 @@ function update(dt) {
     }
   });
 
-  // Remove off-screen obstacles
-  obstacles = obstacles.filter((o) => { return o.x > -120; });
+  // OPT-5: remove off-screen obstacles in-place — avoids allocating a new
+  // array on every frame (60/s) which would create steady GC pressure.
+  for (let i = obstacles.length - 1; i >= 0; i--) {
+    if (obstacles[i].x <= -120) obstacles.splice(i, 1);
+  }
 
   // ── HUD update ─────────────────────────────────────────
-  let sc = Math.floor(score);
-  document.getElementById('hdr-score').textContent =
-    String(sc).padStart(5, '0');
-  document.getElementById('hdr-hi').textContent =
-    String(Math.max(sc, hiScore)).padStart(5, '0');
-  document.getElementById('speed-fill').style.width =
-    Math.min(((speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)) * 100, 100) + '%';
+  // OPT-4: only write textContent when the displayed string actually changes.
+  // Assigning textContent triggers browser style recalculation even when the
+  // value is identical — skipping redundant writes cuts that overhead at speed.
+  let sc    = Math.floor(score);
+  let scStr = String(sc).padStart(5, '0');
+  if (scStr !== _lastHdrScore) { DOM.hdrScore.textContent = scStr; _lastHdrScore = scStr; }
+  let hiStr = String(Math.max(sc, hiScore)).padStart(5, '0');
+  if (hiStr !== _lastHdrHi)    { DOM.hdrHi.textContent = hiStr;   _lastHdrHi    = hiStr; }
+  // FIX-7: dedup speed bar width — style.width write every frame was unnecessary.
+  // Speed changes continuously but the % value only meaningfully changes ~every other frame.
+  let newSpeedPct = Math.min(
+    ((speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)) * 100, 100
+  ) | 0;   // integer percent — 101 distinct values max
+  if (newSpeedPct !== _lastSpeedPct) {
+    DOM.speedFill.style.width = newSpeedPct + '%';
+    // FIX-11: keep aria-valuenow in sync for screen readers using the progressbar role
+    DOM.speedFill.parentElement.parentElement.setAttribute('aria-valuenow', newSpeedPct);
+    _lastSpeedPct = newSpeedPct;
+  }
 
   // updateStatUI() intentionally removed from here — stats only change on
   // game events (gameOver, clear), not every frame. See those handlers below.
@@ -614,11 +838,21 @@ function update(dt) {
 function draw() {
   ctx.clearRect(0, 0, W, H);
 
-  // ── Chrome dino palette: lerp day(white/#535353) ↔ night(#404040/#f0f0f0)
-  let bgC    = lerpRGB('#ffffff', '#404040', dayPhase);
-  let fgC    = lerpRGB('#535353', '#f0f0f0', dayPhase);
-  let fgDark = lerpRGB('#404040', '#d0d0d0', dayPhase);
-  let dimC   = lerpRGB('#d4d4d4', '#606060', dayPhase);
+  // ── OPT-2: palette cache — only rebuild lerpRGB strings when dayPhase changes.
+  // lerpRGB() parses hex and does float arithmetic; 4 calls × 60 fps = 240/s.
+  // dayPhase is unchanged during the 350-frame day and night pause windows,
+  // and may repeat when dt lands on the same float value across frames.
+  if (dayPhase !== _lastDayPhase) {
+    _lastDayPhase   = dayPhase;
+    _pal.bgC    = lerpRGB('#ffffff', '#404040', dayPhase);
+    _pal.fgC    = lerpRGB('#535353', '#f0f0f0', dayPhase);
+    _pal.fgDark = lerpRGB('#404040', '#d0d0d0', dayPhase);
+    _pal.dimC   = lerpRGB('#d4d4d4', '#606060', dayPhase);
+  }
+  let bgC    = _pal.bgC;
+  let fgC    = _pal.fgC;
+  let fgDark = _pal.fgDark;
+  let dimC   = _pal.dimC;
 
   // Push to shared palette used by all draw helpers
   C.dino    = fgC;
@@ -629,16 +863,18 @@ function draw() {
   C.eye     = bgC;   // eye == bg → hollow cutout illusion
 
   // Background (Chrome uses flat colour, no gradient)
-  ctx.fillStyle = bgC;
+  setFill(bgC);
   ctx.fillRect(0, 0, W, H);
 
   // Ground horizon line
-  ctx.fillStyle = fgC;
+  setFill(fgC);
   ctx.fillRect(0, GY, W, 2);
 
   // Ground texture dots (scrolling)
-  ctx.fillStyle = dimC;
-  for (let gx = ((frameCount * speed * 0.3) % 30) | 0; gx < W; gx += 30) {
+  // FIX-2: use groundScrollX (accumulated in update via speed*dt) instead of
+  // frameCount*speed*0.3 which scrolled at 2× speed at 120Hz.
+  setFill(dimC);
+  for (let gx = groundScrollX | 0; gx < W; gx += 30) {
     ctx.fillRect(gx,      GY + 8,  2, 1);
     ctx.fillRect(gx + 14, GY + 14, 3, 1);
   }
@@ -646,8 +882,22 @@ function draw() {
   // Stars (only visible during night phase)
   if (dayPhase > 0.1) {
     ctx.globalAlpha = dayPhase * 0.6;
-    ctx.fillStyle   = fgDark;
+    setFill(fgDark);
     stars.forEach((s) => { ctx.fillRect(s.x, s.y, s.r, s.r); });
+    ctx.globalAlpha = 1;
+  }
+
+  // Moon — crescent shape, fades in with dayPhase like the stars
+  if (dayPhase > 0.05) {
+    ctx.globalAlpha = Math.min(dayPhase * 1.8, 1);
+    let my = 40;
+    let mr = 14;
+    // Filled disc
+    setFill(fgC);
+    ctx.beginPath(); ctx.arc(moonX | 0, my, mr, 0, Math.PI * 2); ctx.fill();
+    // Cutout offset to the left → crescent pointing right
+    setFill(bgC);
+    ctx.beginPath(); ctx.arc((moonX - 5) | 0, my - 2, mr - 3, 0, Math.PI * 2); ctx.fill();
     ctx.globalAlpha = 1;
   }
 
@@ -656,8 +906,17 @@ function draw() {
 
   // Obstacles
   obstacles.forEach((o) => {
-    if (o.type === 'cactus') drawCactus(o.x, o.y, o.w, o.h);
-    else                     drawPtera(o.x, o.y, o.frame);
+    if (o.type === 'cactus') {
+      // Draw each cactus in the cluster individually so players can count them.
+      // singleW / count added in v5.0.0; fall back to old-format entries (w, no count).
+      let n  = o.count   || 1;
+      let sw = o.singleW || o.w;
+      for (let k = 0; k < n; k++) {
+        drawCactus(o.x + k * (sw + 6), o.y, sw, o.h);
+      }
+    } else {
+      drawPtera(o.x, o.y, o.frame);
+    }
   });
 
   // Dino
@@ -666,20 +925,35 @@ function draw() {
   // ── Canvas HUD score (FIX-07: explicit textBaseline) ──
   ctx.textBaseline = 'top';
   ctx.font         = '12px "Press Start 2P", monospace';
-  ctx.fillStyle    = fgDark;
+  setFill(fgDark);
   ctx.fillText(String(Math.floor(score)).padStart(5, '0'), W - 130, 10);
-  ctx.fillStyle = dimC;
+  setFill(dimC);
   ctx.fillText('HI ' + String(hiScore).padStart(5, '0'), W - 232, 10);
   ctx.textBaseline = 'alphabetic';
 
   // ── Milestone flash overlay (every 100 pts) ────────────
   if (flashFrames > 0) {
     ctx.globalAlpha = (flashFrames / 8) * 0.4;
-    ctx.fillStyle   = fgC;
+    setFill(fgC);
     ctx.fillRect(0, 0, W, H);
     ctx.globalAlpha = 1;
     flashFrames--;
   }
+
+  // ── Canvas speed bar — bottom-edge strip ───────────────
+  // Always visible, including in fullscreen (where the DOM
+  // stats panel is hidden). Colour shifts blue → orange → red.
+  let speedPct = Math.min(
+    (speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN), 1
+  );
+  let barPx = (speedPct * W) | 0;
+  let barCol = speedPct < 0.5
+    ? lerpRGB('#1a73e8', '#e67e22', speedPct * 2)
+    : lerpRGB('#e67e22', '#c0392b', (speedPct - 0.5) * 2);
+  setFill(barCol);
+  ctx.fillRect(0, H - 4, barPx, 4);
+  setFill(dimC);
+  ctx.fillRect(barPx, H - 4, W - barPx, 4);
 }
 
 /* ───────────────────────────────────────────────────────────
@@ -825,7 +1099,7 @@ function drawPtera(x, y, frame) {
 }
 
 function drawCloud(x, y, w) {
-  ctx.fillStyle = C.cloud;
+  setFill(C.cloud);
   ctx.fillRect( x        | 0,  y        | 0,  w,       10);
   ctx.fillRect((x + 10)  | 0, (y - 8)   | 0,  w * 0.5, 10);
   ctx.fillRect((x + w * 0.4) | 0, (y - 6) | 0, w * 0.4,  8);
@@ -851,6 +1125,9 @@ function loop(timestamp) {
 }
 
 function idleLoop() {
+  // Advance walk animation so the dino moves its legs on the start screen
+  dino.ft += 1;
+  if (dino.ft > 8) { dino.ft = 0; dino.frame = (dino.frame + 1) % 2; }
   draw();
   if (state === 'idle') animFrame = requestAnimationFrame(idleLoop);
 }
@@ -863,12 +1140,14 @@ function idleLoop() {
  * Only called on game-over and leaderboard-clear events (not every frame).
  */
 function updateStatUI() {
-  document.getElementById('stat-games').textContent  = sessionStats.games;
-  document.getElementById('stat-best').textContent   =
-    Math.max(sessionStats.bestScore, dbStats.bestScore);
-  document.getElementById('stat-obs').textContent    = sessionStats.obstacles;
-  document.getElementById('stat-deaths').textContent = sessionStats.deaths;
-  document.getElementById('stat-dist').textContent   = sessionStats.totalDist;
+  DOM.statGames.textContent  = sessionStats.games;
+  DOM.statBest.textContent   = Math.max(sessionStats.bestScore, dbStats.bestScore);
+  DOM.statObs.textContent    = sessionStats.obstacles;
+  DOM.statDeaths.textContent = sessionStats.deaths;
+  DOM.statDist.textContent   = sessionStats.totalDist;
+  let bt = Math.max(sessionStats.bestTime, dbStats.bestTime || 0);
+  DOM.statTime.textContent   =
+    bt ? (Math.floor(bt / 60) + 'm ' + (bt % 60) + 's') : '0s';
 }
 
 /* Safe DOM-only leaderboard render — shows local top-10 with timestamp */
@@ -877,7 +1156,7 @@ function updateStatUI() {
  * @param {Array<{name:string, score:number, when:string}>} lb - Top-10 entries
  */
 function renderLeaderboard(lb) {
-  let tbody = document.getElementById('lbBody');
+  let tbody = DOM.lbBody;
 
   while (tbody.firstChild) tbody.removeChild(tbody.firstChild);
 
@@ -944,9 +1223,10 @@ document.addEventListener('keydown', function (e) {
     e.preventDefault();
     soundMuted = !soundMuted;
     initAudio();
-    let muteBtn = document.getElementById('muteBtn');
+    let muteBtn = DOM.muteBtn;
     muteBtn.textContent = soundMuted ? '\uD83D\uDD07' : '\uD83D\uDD06';
     muteBtn.classList.toggle('active', soundMuted);
+    muteBtn.setAttribute('aria-pressed', String(soundMuted));  // FIX-11: sync aria state
   }
   if (e.code === 'KeyF') {
     e.preventDefault(); toggleFullscreen();
@@ -958,41 +1238,41 @@ document.addEventListener('keyup', function (e) {
 });
 
 // Game frame — click / touch
-document.getElementById('gameFrame').addEventListener('click', function () {
+DOM.gameFrame.addEventListener('click', function () {
   jump();
 });
-document.getElementById('gameFrame').addEventListener('touchstart', function (e) {
+DOM.gameFrame.addEventListener('touchstart', function (e) {
   e.preventDefault(); jump();
 }, { passive: false });
 
 // Restart button
-document.getElementById('restartBtn').addEventListener('click', function (e) {
+DOM.restartBtn.addEventListener('click', function (e) {
   e.stopPropagation(); restart();
 });
 // FIX-3: without this, a tap fires touchstart → bubbles to #gameFrame →
 // calls jump() → restart(), then the synthesised click fires restart() again.
 // stopPropagation + preventDefault break both paths of the double-call.
-document.getElementById('restartBtn').addEventListener('touchstart', function (e) {
+DOM.restartBtn.addEventListener('touchstart', function (e) {
   e.stopPropagation();
   e.preventDefault();
   restart();
 }, { passive: false });
 
 // Jump button
-document.getElementById('jumpBtn').addEventListener('click', jump);
-document.getElementById('jumpBtn').addEventListener('touchstart', function (e) {
+DOM.jumpBtn.addEventListener('click', jump);
+DOM.jumpBtn.addEventListener('touchstart', function (e) {
   e.preventDefault(); jump();
 }, { passive: false });
 
 // Duck button
-document.getElementById('duckBtn').addEventListener('mousedown', startDuck);
-document.getElementById('duckBtn').addEventListener('touchstart', function (e) {
+DOM.duckBtn.addEventListener('mousedown', startDuck);
+DOM.duckBtn.addEventListener('touchstart', function (e) {
   e.preventDefault(); startDuck();
 }, { passive: false });
-document.getElementById('duckBtn').addEventListener('touchend', function (e) {
+DOM.duckBtn.addEventListener('touchend', function (e) {
   e.preventDefault(); endDuck();
 }, { passive: false });
-document.getElementById('duckBtn').addEventListener('touchcancel', function (e) {
+DOM.duckBtn.addEventListener('touchcancel', function (e) {
   e.preventDefault(); endDuck();
 }, { passive: false });
 
@@ -1001,56 +1281,87 @@ document.addEventListener('mouseup', endDuck);
 window.addEventListener('blur', endDuck);
 
 // Player name save
-document.getElementById('nameSaveBtn').addEventListener('click', function () {
-  let raw = (document.getElementById('nameInput').value || '')
-    .toUpperCase().trim() || 'ANON';
+DOM.nameSaveBtn.addEventListener('click', function () {
+  let raw = (DOM.nameInput.value || '').toUpperCase().trim() || 'ANON';
   playerName = raw.slice(0, 10);
   DB.savePlayerName(playerName);
-  document.getElementById('currentName').textContent = '\u25B6 ' + playerName;
-  document.getElementById('nameInput').value = '';
+  DOM.currentName.textContent = '\u25B6 ' + playerName;
+  DOM.nameInput.value = '';
 });
 // FIX-5: pressing Enter while typing a name should submit, just like a real
 // form. The input is not inside a <form> tag so the default submit event never
 // fires — we wire it up manually here.
-document.getElementById('nameInput').addEventListener('keydown', function (e) {
-  if (e.key === 'Enter') document.getElementById('nameSaveBtn').click();
+DOM.nameInput.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') DOM.nameSaveBtn.click();
 });
 
 /* ───────────────────────────────────────────────────────────
    CLEAR LEADERBOARD WIRING
    ─────────────────────────────────────────────────────────── */
-document.getElementById('clearLbBtn').addEventListener('click', function() {
+DOM.clearLbBtn.addEventListener('click', function() {
   if (!confirm('Clear all leaderboard records?')) return;
   DB.clearLeaderboard();
   // BUG-1/2 FIX: also reset the persisted best score so the stats panel
   // stays in sync with the leaderboard, then refresh the UI immediately.
+  // BUG-3 FIX: also reset bestTime — it was left stale after clearing,
+  // showing a ghost time value tied to no remaining leaderboard records.
   dbStats.bestScore = 0;
+  dbStats.bestTime  = 0;
   DB.saveStats(dbStats);
+  // FIX-4: also zero the session bests so the stat panel is consistent with
+  // the header HI display after clearing. Without this, Math.max(sessionStats
+  // .bestScore, 0) would show the old session high in the stat panel even
+  // though the header correctly shows 00000.
+  sessionStats.bestScore = 0;
+  sessionStats.bestTime  = 0;
   renderLeaderboard([]);
   hiScore = 0;
-  document.getElementById('hdr-hi').textContent = '00000';
+  _lastHdrHi = '';   // OPT-4: invalidate cache so '00000' write goes through
+  DOM.hdrHi.textContent = '00000';
+  updateStatUI();
+});
+
+/* ───────────────────────────────────────────────────────────
+   RESET TOP SCORE WIRING
+   Resets only the displayed HI score and the persisted bestScore
+   stat. The full leaderboard records are left intact — players
+   can still see their history. Use CLEAR in the leaderboard
+   panel to wipe everything.
+   ─────────────────────────────────────────────────────────── */
+DOM.resetHiBtn.addEventListener('click', function (e) {
+  e.stopPropagation();   // don't bubble to gameFrame click → jump()
+  if (!confirm('Reset top score to 00000?')) return;
+  hiScore = 0;
+  dbStats.bestScore = 0;
+  DB.saveStats(dbStats);
+  // FIX-4: zero session best score so stat panel stays consistent with header HI.
+  // bestTime is intentionally NOT reset — the ✕ button is score-only.
+  sessionStats.bestScore = 0;
+  _lastHdrHi = '';       // invalidate OPT-4 cache so the write goes through
+  DOM.hdrHi.textContent = '00000';
   updateStatUI();
 });
 
 /* ───────────────────────────────────────────────────────────
    MUTE / PAUSE BUTTON WIRING
    ─────────────────────────────────────────────────────────── */
-document.getElementById('pauseBtn').addEventListener('click', function(e) {
+DOM.pauseBtn.addEventListener('click', function(e) {
   e.stopPropagation(); togglePause();
 });
-document.getElementById('pauseBtn').addEventListener('touchstart', function(e) {
+DOM.pauseBtn.addEventListener('touchstart', function(e) {
   e.stopPropagation(); e.preventDefault(); togglePause();
 }, { passive: false });
 
-document.getElementById('muteBtn').addEventListener('click', function(e) {
+DOM.muteBtn.addEventListener('click', function(e) {
   e.stopPropagation();
   soundMuted = !soundMuted;
   initAudio();
   this.textContent = soundMuted ? '\uD83D\uDD07' : '\uD83D\uDD06';
   this.classList.toggle('active', soundMuted);
+  this.setAttribute('aria-pressed', String(soundMuted));  // FIX-11
 });
 
-document.getElementById('fullscreenBtn').addEventListener('click', function (e) {
+DOM.fullscreenBtn.addEventListener('click', function (e) {
   e.stopPropagation(); toggleFullscreen();
 });
 
@@ -1072,7 +1383,7 @@ document.addEventListener('visibilitychange', function () {
     // Tab became visible again — resume only if a game is in progress
     if (state === 'running' && !paused) {
       lastTime = 0;   // FIX-1 pattern: reset dt baseline so first frame is safe
-      loop();
+      animFrame = requestAnimationFrame(loop);
     }
   }
 });
@@ -1083,18 +1394,22 @@ document.addEventListener('visibilitychange', function () {
     // Restore player name
     let name = DB.getPlayerName();
     playerName = name;
-    document.getElementById('currentName').textContent = '\u25B6 ' + name;
+    DOM.currentName.textContent = '\u25B6 ' + name;
 
     // Restore leaderboard
     let lb = DB.getLeaderboard();
     renderLeaderboard(lb);
-    if (lb.length) hiScore = lb[0].score;
-    document.getElementById('hdr-hi').textContent =
-      String(hiScore).padStart(5, '0');
-
+    
     // Restore global stats
     dbStats = DB.getStats();
-    document.getElementById('stat-best').textContent = dbStats.bestScore || 0;
+    hiScore = dbStats.bestScore || 0;
+     let hiStr = String(hiScore).padStart(5, '0');
+     DOM.hdrHi.textContent = hiStr;
+     _lastHdrHi = hiStr;   // OPT-4: prime cache so first update() doesn't re-write
+    DOM.statBest.textContent = dbStats.bestScore || 0;
+    let bt = dbStats.bestTime || 0;
+    DOM.statTime.textContent =
+      bt ? (Math.floor(bt / 60) + 'm ' + (bt % 60) + 's') : '0s';
 
   } catch (err) {
     console.warn('Boot DB error (non-fatal):', err);
@@ -1104,6 +1419,10 @@ document.addEventListener('visibilitychange', function () {
   initGame();
   state = 'idle';
 
+  // Issue #3 FIX: update footer year dynamically so it never goes stale
+  let footerYear = document.getElementById('footer-year');
+  if (footerYear) footerYear.textContent = new Date().getFullYear();
+
   // Begin with a 350-frame day pause
   dayPauseAt = 350;
   dayTimer   = 0;
@@ -1111,7 +1430,4 @@ document.addEventListener('visibilitychange', function () {
   draw();
   idleLoop();
 }());
-         
-
-
 

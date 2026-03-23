@@ -40,6 +40,24 @@
   --shadow:   0 1px 4px rgba(0,0,0,0.10);
 }
 
+/* ── ACCESSIBILITY: SCREEN-READER-ONLY ───────────────────── */
+/* FIX-12: Visually hides content while keeping it in the
+   accessibility tree. clip-path is the modern replacement for
+   clip:rect() which is deprecated. The 1px size + overflow:hidden
+   avoids the element collapsing to a zero-size box (which some
+   screen readers skip). Positioned so it doesn't affect layout.  */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* ── RESET ───────────────────────────────────────────────── */
 * {
   margin: 0;
@@ -80,8 +98,39 @@ header {
   font-size: clamp(8px, 2vw, 11px);
   color: var(--muted);
   letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 .score-display .score-val { color: var(--accent); }
+
+/* ── RESET HI BUTTON ─────────────────────────────────────── */
+/* Sits inline with the HI score. Intentionally small and muted
+   so it does not distract during play, but clearly tappable.  */
+.reset-hi-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  vertical-align: middle;
+}
+.reset-hi-btn:hover {
+  opacity: 1;
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
 
 /* ── GAME AREA ───────────────────────────────────────────── */
 .game-area {
@@ -101,6 +150,9 @@ header {
   box-shadow: var(--shadow);
   cursor: pointer;
   touch-action: manipulation;
+  /* OPT-CSS-2: isolate layout/paint inside the frame so the browser does not
+     need to invalidate surrounding page layout on every canvas repaint. */
+  contain: layout style;
 }
 
 /* ── CANVAS ──────────────────────────────────────────────── */
@@ -110,6 +162,10 @@ canvas {
   height: auto;
   image-rendering: crisp-edges;
   image-rendering: pixelated;
+  /* OPT-CSS-2: promote the canvas to its own GPU compositing layer.
+     Repainting the canvas (60×/s) no longer triggers layout invalidation
+     of surrounding elements. */
+  will-change: transform;
 }
 
 /* ── OVERLAYS ────────────────────────────────────────────── */
@@ -204,7 +260,11 @@ canvas {
   font-size: clamp(6px, 1.5vw, 8px);
   cursor: pointer;
   border-radius: 3px;
-  transition: all 0.12s;
+  /* OPT-CSS-3: was `transition: all 0.12s` — transitioning ALL properties
+     causes the browser to watch every CSS property for changes, including
+     ones that are never animated. Scope to only what actually changes on
+     .active toggle so the compositor thread does less work per input event. */
+  transition: background 0.12s, color 0.12s, border-color 0.12s, opacity 0.12s;
   user-select: none;
   box-shadow: var(--shadow);
   letter-spacing: 1px;
@@ -250,7 +310,7 @@ canvas {
    Our minimum (Firefox 93) is well past that threshold.            */
 :fullscreen body,
 :-webkit-full-screen body {
-  background: `#000`;
+  background: #000;
   /* height must be explicit (not just min-height) so the flex column
      has a fixed container height and justify-content: center works   */
   height: 100vh;
@@ -376,7 +436,10 @@ canvas {
   height: 100%;
   background: linear-gradient(90deg, var(--blue), var(--danger));
   border-radius: 2px;
-  transition: width 0.5s ease;
+  /* OPT-CSS-1: removed `transition: width 0.5s ease`. game.js writes style.width
+     every frame at 60fps — a 0.5s CSS transition fights those writes, creates a
+     compositor animation that chases each JS update with 500ms of lag, and adds
+     unnecessary GPU work. JS at 60fps is already smooth; no transition needed. */
   width: 0%;
 }
 
@@ -440,7 +503,7 @@ canvas {
   cursor: pointer;
   border-radius: 2px;
   letter-spacing: 1px;
-  transition: all 0.15s;
+  transition: background 0.15s, color 0.15s;
 }
 .clear-btn:hover { background: var(--danger); color: #fff; }
 
@@ -498,4 +561,14 @@ footer {
   margin-top: auto;
   letter-spacing: 2px;
 }
-                   
+
+/* ── ACCESSIBILITY: REDUCED MOTION ──────────────────────── */
+/* WCAG 2.1 §2.3.3 — respect the operating system's "reduce motion"
+   preference. The blink animation (restart button) and pulse animations
+   (db-dot, go-newbest) are purely decorative and must not play when the
+   user has indicated they experience discomfort from motion.            */
+@media (prefers-reduced-motion: reduce) {
+  .blink    { animation: none; opacity: 1; }
+  .go-newbest { animation: none; }
+  .db-dot   { animation: none; opacity: 1; }
+}

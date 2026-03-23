@@ -4,9 +4,20 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Offline Chrome-style endless runner with chromatic day/night cycle, pterodactyls, and persistent local leaderboard. No tracking, no network calls.">
+  <!-- OPT-HTML-3: theme-color sets the browser UI chrome on Android/iOS to match
+       the game's light-grey palette, preventing a jarring white flash on load. -->
+  <meta name="theme-color" content="#f5f5f5">
   <title>Dino Run — Chromatic Edition</title>
   <!-- BUG-9 FIX: inline favicon — no extra file needed -->
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23ffffff'/><rect x='8' y='1' width='6' height='3' fill='%23535353'/><rect x='6' y='3' width='8' height='4' fill='%23535353'/><rect x='6' y='7' width='3' height='2' fill='%23535353'/><rect x='1' y='5' width='3' height='3' fill='%23535353'/><rect x='3' y='7' width='8' height='3' fill='%23535353'/><rect x='3' y='10' width='6' height='2' fill='%23535353'/><rect x='4' y='12' width='2' height='3' fill='%23535353'/><rect x='7' y='12' width='2' height='3' fill='%23535353'/></svg>">
+  <!-- OPT-HTML-2: preload both fonts so fetching starts during HTML parse rather
+       than waiting for the CSS @font-face rules to be discovered. Without this,
+       the browser parses HTML → downloads CSS → parses CSS → discovers @font-face
+       → starts font fetch. Preloading eliminates those intermediate hops and
+       prevents FOIT (Flash of Invisible Text) where monospace fallback shows
+       briefly before the pixel fonts are ready. -->
+  <link rel="preload" href="fonts/press-start-2p.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="fonts/vt323.woff2"          as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -15,21 +26,29 @@
   <header>
     <div class="logo">&#127990; DINO RUN</div>
     <div class="score-display">
-      <span class="hi-label">HI</span>
-      <span id="hdr-hi">00000</span>
-      &nbsp;
-      <span id="hdr-score" class="score-val">00000</span>
+      <span class="hi-label" aria-hidden="true">HI</span>
+      <!-- FIX-11: aria-label gives screen readers a meaningful name for the
+           numeric spans; aria-hidden on the visual "HI" label avoids double-
+           reading "HI 00000". -->
+      <span id="hdr-hi" aria-label="High score">00000</span>
+      <button class="reset-hi-btn" id="resetHiBtn"
+              aria-label="Reset top score" title="Reset top score">&#10006;</button>
+      <span id="hdr-score" aria-label="Current score" class="score-val">00000</span>
     </div>
   </header>
 
   <!-- ══════════════════════════ GAME AREA ═══════════════════════ -->
   <div class="game-area">
     <div class="game-frame" id="gameFrame">
-      <canvas id="gameCanvas" width="854" height="480"></canvas>
+      <!-- FIX-11: role="application" tells assistive technology this is an
+           interactive app region, not passive content. aria-label names it.
+           Without this, screen readers present it as an unlabelled image. -->
+      <canvas id="gameCanvas" width="854" height="480"
+              role="application" aria-label="Dino Run game canvas. Use Space or Up to jump, Down to duck."></canvas>
 
       <!-- Start overlay -->
-      <div class="overlay" id="startScreen">
-        <div class="dino-404">404</div>
+      <div class="overlay" id="startScreen" role="status" aria-live="polite">
+        <div class="dino-404" aria-hidden="true">404</div>
         <h2 class="overlay-title">PRESS SPACE TO PLAY</h2>
         <p class="overlay-hint">
           SPACE / &#8679; = JUMP &nbsp;&middot;&nbsp;
@@ -39,31 +58,39 @@
       </div>
 
       <!-- Game-over overlay -->
-      <div class="overlay hidden" id="gameOverScreen">
+      <div class="overlay hidden" id="gameOverScreen" role="alertdialog"
+           aria-labelledby="go-score" aria-live="assertive">
         <h2 class="overlay-title danger">GAME OVER</h2>
-        <div class="go-newbest hidden" id="go-newbest">★ NEW BEST ★</div>
+        <div class="go-newbest hidden" id="go-newbest" aria-live="polite">&#9733; NEW BEST &#9733;</div>
         <div class="go-scores">
           <span id="go-score">SCORE 00000</span>
-          <span class="go-sep">&middot;</span>
-          <span id="go-hi" class="go-hi">HI 00000</span>
+          <span class="go-sep" aria-hidden="true">&middot;</span>
+          <span id="go-hi" class="go-hi">HI: 00000</span>
         </div>
         <button class="chrome-btn primary blink" id="restartBtn">&#8635; RESTART</button>
       </div>
 
       <!-- Pause overlay -->
-      <div class="overlay hidden" id="pauseScreen">
+      <div class="overlay hidden" id="pauseScreen" role="status" aria-live="polite">
         <h2 class="overlay-title">PAUSED</h2>
         <p class="overlay-hint">P OR TAP PAUSE TO RESUME</p>
       </div>
     </div>
 
     <!-- Mobile controls -->
-    <div class="controls">
-      <button class="ctrl-btn jump"        id="jumpBtn">&#9650; JUMP</button>
-      <button class="ctrl-btn duck"        id="duckBtn">&#9660; DUCK</button>
-      <button class="ctrl-btn pause-btn"   id="pauseBtn">&#9646;&#9646; PAUSE</button>
-      <button class="ctrl-btn mute-btn"    id="muteBtn">&#128266;</button>
-      <button class="ctrl-btn fullscreen-btn" id="fullscreenBtn">FULL</button>
+    <div class="controls" role="toolbar" aria-label="Game controls">
+      <button class="ctrl-btn jump"        id="jumpBtn"
+              aria-label="Jump">&#9650; JUMP</button>
+      <button class="ctrl-btn duck"        id="duckBtn"
+              aria-label="Duck">&#9660; DUCK</button>
+      <button class="ctrl-btn pause-btn"   id="pauseBtn"
+              aria-label="Pause" aria-pressed="false">&#9646;&#9646; PAUSE</button>
+      <!-- FIX-11: muteBtn and fullscreenBtn are icon-only / text-changes-dynamically.
+           aria-label provides a stable accessible name; aria-pressed reflects state. -->
+      <button class="ctrl-btn mute-btn"    id="muteBtn"
+              aria-label="Toggle mute" aria-pressed="false">&#128266;</button>
+      <button class="ctrl-btn fullscreen-btn" id="fullscreenBtn"
+              aria-label="Toggle fullscreen">FULL</button>
     </div>
   </div>
 
@@ -71,57 +98,71 @@
   <div class="panel-row">
 
     <!-- Stats panel -->
-    <div class="panel">
-      <div class="panel-title">SESSION STATS</div>
+    <div class="panel" role="region" aria-label="Session statistics">
+      <div class="panel-title" aria-hidden="true">SESSION STATS</div>
       <div class="stat-row">
-        <span class="stat-label">GAMES PLAYED</span>
-        <span class="stat-value" id="stat-games">0</span>
+        <span class="stat-label" id="lbl-games">GAMES PLAYED</span>
+        <span class="stat-value" id="stat-games" aria-labelledby="lbl-games">0</span>
       </div>
       <div class="stat-row">
-        <span class="stat-label">BEST SCORE</span>
-        <span class="stat-value gold" id="stat-best">0</span>
+        <span class="stat-label" id="lbl-best">BEST SCORE</span>
+        <span class="stat-value gold" id="stat-best" aria-labelledby="lbl-best">0</span>
       </div>
       <div class="stat-row">
-        <span class="stat-label">OBSTACLES DODGED</span>
-        <span class="stat-value" id="stat-obs">0</span>
+        <span class="stat-label" id="lbl-time">BEST TIME</span>
+        <span class="stat-value green" id="stat-time" aria-labelledby="lbl-time">0s</span>
       </div>
       <div class="stat-row">
-        <span class="stat-label">DEATHS</span>
-        <span class="stat-value danger" id="stat-deaths">0</span>
+        <span class="stat-label" id="lbl-obs">OBSTACLES DODGED</span>
+        <span class="stat-value" id="stat-obs" aria-labelledby="lbl-obs">0</span>
       </div>
       <div class="stat-row">
-        <span class="stat-label">TOTAL DISTANCE</span>
-        <span class="stat-value" id="stat-dist">0</span>
+        <span class="stat-label" id="lbl-deaths">DEATHS</span>
+        <span class="stat-value danger" id="stat-deaths" aria-labelledby="lbl-deaths">0</span>
       </div>
-      <div class="speed-bar-wrap">
-        <div class="speed-label">SPEED</div>
+      <div class="stat-row">
+        <span class="stat-label" id="lbl-dist">TOTAL DISTANCE</span>
+        <span class="stat-value" id="stat-dist" aria-labelledby="lbl-dist">0</span>
+      </div>
+      <div class="speed-bar-wrap" aria-label="Speed indicator" role="progressbar"
+           aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="speed-label" aria-hidden="true">SPEED</div>
         <div class="speed-bar-bg">
           <div class="speed-bar-fill" id="speed-fill"></div>
         </div>
       </div>
-      <div class="db-badge">
-        <div class="db-dot"></div>
-        <span id="db-status">Calculating…</span>
+      <div class="db-badge" aria-live="polite">
+        <div class="db-dot" aria-hidden="true"></div>
+        <span id="db-status">Calculating&#8230;</span>
       </div>
     </div>
 
     <!-- Leaderboard panel -->
-    <div class="panel">
+    <div class="panel" role="region" aria-label="Leaderboard">
       <div class="panel-title">
         <span>LEADERBOARD &middot; TOP 10</span>
-        <button class="clear-btn" id="clearLbBtn">CLEAR</button>
+        <button class="clear-btn" id="clearLbBtn"
+                aria-label="Clear all leaderboard records">CLEAR</button>
       </div>
       <div class="name-section">
         <div class="name-form">
+          <!-- FIX-12: nameInput had no programmatically associated label, failing
+               WCAG 1.3.1. A visually-hidden <label> provides the association
+               without altering the visual design. placeholder alone is not
+               sufficient — it disappears on focus and is not read by all
+               screen readers as a label. -->
+          <label for="nameInput" class="sr-only">Player name (up to 10 characters)</label>
           <input class="name-input" id="nameInput" maxlength="10"
                  placeholder="YOUR NAME" autocomplete="off" spellcheck="false"/>
-          <button class="chrome-btn small" id="nameSaveBtn">SAVE</button>
+          <button class="chrome-btn small" id="nameSaveBtn"
+                  aria-label="Save player name">SAVE</button>
         </div>
-        <div class="player-name-label" id="currentName">&#9656; ANON</div>
+        <div class="player-name-label" id="currentName"
+             aria-live="polite" aria-label="Active player name">&#9656; ANON</div>
       </div>
-      <table class="lb-table">
+      <table class="lb-table" aria-label="Top 10 scores">
         <thead>
-          <tr><th>#</th><th>NAME</th><th>SCORE</th><th>WHEN</th></tr>
+          <tr><th scope="col">#</th><th scope="col">NAME</th><th scope="col">SCORE</th><th scope="col">WHEN</th></tr>
         </thead>
         <tbody id="lbBody">
           <tr><td colspan="4" class="lb-empty">NO RECORDS YET</td></tr>
@@ -133,10 +174,14 @@
 
   <!-- ══════════════════════════ FOOTER ══════════════════════════ -->
   <footer>
-    DINO RUN &middot; CHROMATIC EDITION &middot; 2026
+    DINO RUN &middot; CHROMATIC EDITION &middot; <span id="footer-year">2026</span>
   </footer>
 
-  <script src="db.js"></script>
-  <script src="game.js"></script>
+  <!-- OPT-HTML-1: `defer` lets the HTML parser continue while scripts download,
+       then executes them in order after parsing is complete. Scripts at end of
+       <body> are non-blocking already, but `defer` is the explicit correct signal
+       and allows the browser to begin fetching both files in parallel. -->
+  <script src="db.js" defer></script>
+  <script src="game.js" defer></script>
 </body>
 </html>

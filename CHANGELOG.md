@@ -5,6 +5,545 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [5.2.2] — 2026-03-23
+
+### Fixed
+
+- **`resetHiBtn` handler incorrectly zeroed `sessionStats.bestTime`** (`game.js`)  
+  The README reset table documents the `✕` HI button as score-only — Best Time
+  column is explicitly `—` (not reset). The code had `sessionStats.bestTime = 0`
+  in the handler, silently contradicting this.
+
+  Impact: if a player's session best time exceeded their persisted best time
+  (e.g. session 3m 00s, stored 1m 30s), clicking `✕` would cause `updateStatUI()`
+  to render `Math.max(0, 90) = 90s` instead of the correct `Math.max(180, 90) =
+  180s` — the BEST TIME stat would silently drop with no indication why.
+
+  Removed `sessionStats.bestTime = 0` from the handler. The `✕` button now resets
+  only what the README and UX imply: the HI score display, `dbStats.bestScore`,
+  and `sessionStats.bestScore`. Best time is unaffected.
+
+---
+
+## [5.2.1] — 2026-03-23
+
+### Fixed
+
+- **`db.js` syntax error — `SyntaxError: Unexpected token ';'` on line 364 — game would not start** (`db.js`)  
+  `return (api = {` on line 247 opened a parenthesis that was never closed.
+  The object literal was terminated with `};` instead of `});` — the `)` that
+  closes the `(api = …)` assignment expression was missing before the `;`.
+
+  ```js
+  // BROKEN — missing closing )
+  return (api = {
+    …
+  };          // ← SyntaxError: Unexpected token ';'
+
+  // FIXED
+  return (api = {
+    …
+  });         // ← ) closes (api = …), then ; ends the return statement
+  ```
+
+  Because `db.js` threw a `SyntaxError` during parse, `window.DB` was never
+  assigned. `game.js` executes its DB guard immediately on load —
+  `if (typeof window.DB === 'undefined') throw new Error(…)` — and crashed
+  before `validateDOM`, the DOM cache, or `boot()` had any chance to run.
+  The game produced a blank white page in every browser with no visible error
+  unless DevTools was open. Root cause introduced when the `api` alias variable
+  was added for the BUG-4 `this`-binding fix in v5.0.3.
+
+---
+
+## [5.2.0] — 2026-03-23
+
+### Security
+
+- **No HTTP security headers — clickjacking, MIME sniffing, info-leak** (`server.py`) — **HIGH**  
+  The development server emitted no security-related response headers at all.
+  Added a `end_headers()` override on the `Handler` class so the following
+  headers are injected into every response (static files, errors, redirects):
+
+  | Header | Value |
+  |---|---|
+  | `X-Content-Type-Options` | `nosniff` |
+  | `X-Frame-Options` | `DENY` |
+  | `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; media-src 'none'; object-src 'none'; frame-ancestors 'none'` |
+  | `Referrer-Policy` | `no-referrer` |
+  | `Permissions-Policy` | `camera=(), microphone=(), geolocation=(), payment=()` |
+  | `Strict-Transport-Security` | `max-age=31536000` |
+
+  `img-src data:` is required for the inline SVG favicon. The CSP blocks all
+  `eval`, `unsafe-inline`, and cross-origin resource loading. `frame-ancestors
+  'none'` mirrors `X-Frame-Options: DENY` for CSP-aware browsers. HSTS
+  caches the HTTPS-only requirement for one year.
+
+- **No request timeout — single-threaded server vulnerable to slowloris** (`server.py`) — **HIGH**  
+  `BaseHTTPRequestHandler.timeout` defaults to `None` — no per-request read
+  deadline. A single client sending one byte per minute would hold the only
+  available connection indefinitely, blocking every subsequent request.
+  Set `timeout = 10` on the `Handler` class; the base class enforces it via
+  `socket.settimeout()` at the start of each connection.
+
+- **`_DENIED` credential guard not applied to POST/PUT/DELETE/OPTIONS** (`server.py`) — **MEDIUM**  
+  The cert/key deny list was only wired into `do_GET` and `do_HEAD`. Any future
+  addition of `do_POST` or similar methods (by subclassing or a Python stdlib
+  update) would bypass the guard silently. Added explicit overrides for
+  `do_POST`, `do_PUT`, `do_DELETE`, and `do_OPTIONS` — all check `_is_denied()`
+  first, then return 403 if matched or 405 Method Not Allowed otherwise.
+  `do_OPTIONS` always returns 405 regardless; this server has no CORS use case
+  and should not advertise cross-origin permissions.
+
+- **`setTimeout` IDs not stored — stale audio on fast restart** (`game.js`) — **LOW**  
+  `soundDie()` and `soundMilestone()` used bare `setTimeout` calls with no
+  reference to the returned timer ID. If the player dies and restarts within
+  140 ms (the longest pending delay), the callbacks fire into the new game's
+  audio context producing stale sound bleed. Introduced `_scheduleSound(fn,
+  delay)` which pushes each ID into a `_soundTimers` array, and
+  `_cancelSoundTimers()` which clears them all. `_cancelSoundTimers()` is called
+  at the very top of `initGame()` before any state is reset.
+
+---
+
+## [5.2.0-pre] — 2026-03-23
+
+### Fixed (Enterprise Audit — 13 issues)
+
+- **Best-time calculated from `frameCount / 60` — wrong at 120 Hz / 144 Hz** (`game.js`) — **HIGH**  
+  `frameCount` increments once per `requestAnimationFrame` tick regardless of
+  the monitor's refresh rate. At 120 Hz the counter advances at 120/s, making
+  `frameCount / 60` report elapsed time at 2× real speed — a 90-second run
+  showed as 3 minutes. Replaced with `performance.now()` wall-clock delta:
+  `gameStartWallTime` is set in `startGame()` and `restart()`, and
+  `thisTime = Math.floor((performance.now() - gameStartWallTime) / 1000)` is
+  used in `gameOver()`. Fully Hz-independent.
+
+- **Ground scroll offset `frameCount * speed * 0.3` — Hz-dependent visual drift** (`game.js`) — **HIGH**  
+  Same root cause as the best-time bug. At 120 Hz ground dots scrolled at 2×
+  the correct speed, misaligning the visual speed impression from actual gameplay
+  speed. Replaced with `groundScrollX`, a module-level accumulator updated each
+  `update()` call as `(groundScrollX + speed * dt * 0.3) % 30`. `draw()` reads
+  this value directly. `groundScrollX` resets to `0` in `initGame()`.
+
+- **`canvas.getContext('2d')` result never null-checked** (`game.js`) — **HIGH**  
+  `getContext('2d')` returns `null` when the browser's hardware acceleration is
+  disabled, the canvas limit is exceeded, or a sandboxed context forbids it.
+  Every subsequent `ctx.*` call would throw `TypeError: Cannot read properties
+  of null` with no useful diagnostic. Added an explicit null guard immediately
+  after the `getContext` call with an error message naming the probable cause.
+
+- **`sessionStats.bestScore` / `bestTime` not reset on leaderboard clear or HI reset** (`game.js`) — **HIGH**  
+  The CLEAR leaderboard handler zeroed `dbStats.bestScore` and `dbStats.bestTime`
+  but left `sessionStats.bestScore` and `sessionStats.bestTime` intact. Because
+  `updateStatUI()` renders `Math.max(sessionStats.bestScore, dbStats.bestScore)`,
+  the stat panel continued showing the old session high even though the header
+  correctly displayed `00000`. Same issue in the new reset-HI handler. Both
+  handlers now reset `sessionStats.bestScore = 0` and `sessionStats.bestTime = 0`
+  before calling `updateStatUI()`.
+
+- **Per-frame `{ x, y, w, h }` object allocation in collision loop — GC pressure** (`game.js`) — **MEDIUM**  
+  `update()` allocated two plain objects on every frame — `db` (dino box) and
+  `ob` (obstacle box) — at 60 fps that is 60 dino boxes plus up to 300 obstacle
+  boxes per second of heap objects immediately eligible for collection. Replaced
+  with two module-level reusable objects `_dinoBox` and `_obsBox` whose
+  properties are mutated in-place each frame. Zero allocations per collision
+  check after startup.
+
+- **`jumpBtn` and `gameFrame` in `validateDOM` but not in DOM cache** (`game.js`) — **MEDIUM**  
+  Both IDs were validated at startup (confirming their existence in the HTML) but
+  then looked up again via raw `document.getElementById()` calls during event
+  listener wiring — inconsistent with every other element in the codebase. Added
+  `jumpBtn` and `gameFrame` to the `DOM` cache; event listener setup now uses
+  `DOM.jumpBtn` and `DOM.gameFrame`.
+
+- **`speed-fill` `style.width` written every frame without deduplication** (`game.js`) — **MEDIUM**  
+  `DOM.speedFill.style.width = …` was set unconditionally on every `update()`
+  tick. A CSS style write triggers layout work in the browser even when the value
+  is unchanged. Speed is continuous but the meaningful percentage only changes
+  in integer steps (101 possible values: 0–100%). Added `_lastSpeedPct` dedup
+  using integer-truncated percent; the write is skipped when the integer value
+  matches the previous frame. `aria-valuenow` on the progressbar wrapper is
+  updated alongside the width.
+
+- **`playBeep` error silently swallowed — `catch(e) {}`** (`game.js`) — **MEDIUM**  
+  The empty catch block in `playBeep` made all Web Audio errors invisible to
+  developers. A corrupted audio context, an invalid frequency value, or a
+  suspended context that `resumeAudio()` failed to wake would all silently
+  produce no sound and no diagnostic. Changed to
+  `catch(e) { console.warn('[Audio] playBeep failed:', e); }`.
+
+- **`saveStats`, `savePlayerName`, `clearLeaderboard` ignore `dbSet()` return value** (`db.js`) — **MEDIUM**  
+  All three functions called `dbSet()` but discarded its boolean result — a quota
+  failure was a silent data loss. Changed all three to `return dbSet(…)` so
+  callers can detect and react to write failures consistently with `addScore()`
+  and `saveLeaderboard()`.
+
+- **No `prefers-reduced-motion` support — violates WCAG 2.1 §2.3.3** (`style.css`) — **MEDIUM**  
+  The `blink` animation on the restart button and `pulse` animations on
+  `#go-newbest` and `.db-dot` played unconditionally. Users who have set their
+  OS reduced-motion preference experience discomfort or seizure risk from
+  repetitive motion. Added:
+  ```css
+  @media (prefers-reduced-motion: reduce) {
+    .blink      { animation: none; opacity: 1; }
+    .go-newbest { animation: none; }
+    .db-dot     { animation: none; opacity: 1; }
+  }
+  ```
+
+- **Missing ARIA attributes — screen reader inaccessibility** (`index.html`, `game.js`) — **MEDIUM**  
+  Multiple elements had no accessible name or live-region semantics:
+  - `<canvas>` — added `role="application"` and descriptive `aria-label`
+  - `#hdr-hi`, `#hdr-score` — added `aria-label` ("High score", "Current score"); `aria-hidden="true"` on the visual "HI" label to prevent double-reading
+  - `#resetHiBtn`, `#muteBtn`, `#fullscreenBtn` — added `aria-label` (text changes dynamically; a stable label is needed)
+  - `#pauseBtn`, `#muteBtn` — added `aria-pressed="false"` initial state; `togglePause()` and both mute handlers now call `setAttribute('aria-pressed', …)` on every toggle
+  - Overlays — `#startScreen` and `#pauseScreen` given `role="status" aria-live="polite"`; `#gameOverScreen` given `role="alertdialog" aria-labelledby="go-score" aria-live="assertive"`
+  - `#go-newbest` — added `aria-live="polite"` (toggled from hidden)
+  - Stat rows — each `<span class="stat-value">` given `aria-labelledby` pointing to its label span
+  - Speed bar wrapper — given `role="progressbar"` with `aria-valuemin`, `aria-valuemax`, `aria-valuenow="0"`; `aria-valuenow` updated whenever `_lastSpeedPct` changes
+  - `#clearLbBtn` — added `aria-label="Clear all leaderboard records"`
+  - `#db-status` badge — added `aria-live="polite"` so quota updates are announced
+  - Controls toolbar — wrapped in `role="toolbar" aria-label="Game controls"`
+  - `<th>` elements in leaderboard table — added `scope="col"`
+
+- **`<input id="nameInput">` has no associated `<label>` — violates WCAG 1.3.1** (`index.html`, `style.css`) — **MEDIUM**  
+  The `placeholder` attribute is not a substitute for a label — it disappears on
+  focus and is not consistently announced by screen readers as a field name.
+  Added `<label for="nameInput" class="sr-only">Player name (up to 10
+  characters)</label>`. Added `.sr-only` utility class (visually hidden via
+  `clip-path: inset(50%)`, 1 × 1 px, `position: absolute`) following the
+  modern visually-hidden pattern that keeps content in the accessibility tree
+  without the deprecated `clip: rect()` form.
+
+- **`_DENIED` set hardcoded to `{'cert.pem', 'key.pem'}` — silent bypass if filenames change** (`server.py`) — **LOW**  
+  If the cert or key file were renamed (e.g. to `server.crt` / `server.key`),
+  the deny list would no longer protect them without a manual code edit —
+  easy to miss. Replaced with `Handler._DENIED = {os.path.basename(cert),
+  os.path.basename(key)}` populated after the cert paths are resolved, so the
+  deny set always reflects whatever filenames are actually loaded.
+
+---
+
+## [5.1.2] — 2026-03-23
+
+### Fixed
+
+- **`&nbsp;` text node became an anonymous flex item after score-display flexbox conversion** (`index.html`)  
+  When `.score-display` was changed to `display: flex; gap: 4px` to seat the
+  new reset button inline, the legacy `&nbsp;` spacer between the button and
+  the current-score span was left in the markup. In a flex container, raw text
+  nodes become anonymous flex items — the layout was therefore:
+  `HI [gap] 00000 [gap] ✕ [gap-item(&nbsp;)] [gap] 00000`, giving the current
+  score a visibly wider gap than the other items. Removed the `&nbsp;`; `gap:
+  4px` now handles all spacing uniformly.
+
+---
+
+## [5.1.1] — 2026-03-23
+
+### Added
+
+- **Reset top score button** (`index.html`, `style.css`, `game.js`)  
+  A small `✕` button (`#resetHiBtn`) placed inline with the HI score display
+  in the header. Clicking it prompts for confirmation then:
+  - Zeros `hiScore` (in-memory session variable)
+  - Zeros `dbStats.bestScore` and `sessionStats.bestScore`
+  - Persists via `DB.saveStats()`
+  - Writes `'00000'` to `#hdr-hi` (invalidating the OPT-4 cache first)
+  - Calls `updateStatUI()` to sync the stats panel
+
+  The full leaderboard table is left intact — individual run records are
+  preserved. Use the CLEAR button to wipe everything.
+
+  The button is styled at 14 × 14 px, muted-border at 55% opacity at rest,
+  flipping to red (`var(--danger)`) on hover to communicate the destructive
+  action. `e.stopPropagation()` prevents the click bubbling to `#gameFrame`
+  (which would trigger `jump()`). Added to `validateDOM` required list and
+  `DOM` element cache.
+
+---
+
+## [5.1.0] — 2026-03-23
+
+### Performance
+
+- **`refreshQuota()` debounced — eliminates async IPC burst on game-over** (`db.js`)  
+  `refreshQuota()` was called after every successful `dbSet()`. A single
+  game-over triggers 2–3 `dbSet` calls in quick succession (leaderboard, stats,
+  player name), each firing `navigator.storage.estimate()` — an async IPC call
+  to the browser process. Added a 2-second debounce via `_quotaTimer`
+  (`setTimeout` / `clearTimeout`): at most one estimate fires per 2-second
+  window regardless of write-burst size. The initial page-load call is exempt
+  (runs eagerly via a separate `refreshQuotaEager` IIFE) so the badge shows real
+  quota information as soon as the page loads.
+
+- **`pruneAndSave` skips redundant `dbGet` / `JSON.parse` when caller has in-memory data** (`db.js`)  
+  `saveLeaderboard` builds a sorted top-10 array from `getLeaderboard()` plus
+  the new entry, then calls `pruneAndSave` on quota overflow. The original
+  `pruneAndSave` immediately re-read from localStorage and parsed the JSON it
+  had just failed to write — a redundant round-trip. Added an optional
+  `knownExisting` parameter; `saveLeaderboard` passes its in-memory `lb` as the
+  hint, eliminating the storage re-read in the common quota-overflow path.
+
+- **`transition: width 0.5s ease` removed from `.speed-bar-fill`** (`style.css`)  
+  `game.js` updates `style.width` on the speed bar up to 60 times per second.
+  A 0.5-second CSS transition fought each update by launching a new compositor
+  animation, producing 500 ms of visible lag and redundant GPU work. The bar
+  looked like it was perpetually chasing the current value. Removed the
+  transition; JS at 60 fps is already smooth.
+
+- **Canvas promoted to dedicated GPU compositing layer; game-frame layout isolated** (`style.css`)  
+  Added `will-change: transform` to `canvas` (hints to the browser to promote
+  the element to its own compositor layer, so 60 fps canvas repaints no longer
+  trigger layout invalidation of surrounding DOM). Added `contain: layout style`
+  to `.game-frame` (scopes layout recalculation and CSS counter/property scope
+  to inside the frame, preventing canvas repaints from propagating to the page).
+
+- **`transition: all` narrowed to specific properties on `.ctrl-btn` and `.clear-btn`** (`style.css`)  
+  `transition: all 0.12s` / `transition: all 0.15s` caused the browser to watch
+  every CSS property for changes during input events, including properties that
+  are never animated. Replaced with explicit property lists:
+  - `.ctrl-btn`: `transition: background 0.12s, color 0.12s, border-color 0.12s, opacity 0.12s`
+  - `.clear-btn`: `transition: background 0.15s, color 0.15s`
+
+- **Font preloads added — eliminates FOIT on first load** (`index.html`)  
+  Without preloads, the browser discovers `@font-face` declarations only after
+  CSS is fully parsed, then begins font fetches. During that gap the page renders
+  in the fallback `monospace` face — visually jarring because `'Press Start 2P'`
+  is substantially different in metrics and appearance. Added two `<link
+  rel="preload" as="font" crossorigin>` tags pointing at the `.woff2` files so
+  fetching begins during HTML parsing.
+
+- **`defer` added to script tags** (`index.html`)  
+  Scripts placed at end-of-`<body>` are already non-blocking, but `defer` is the
+  explicit correct signal: it allows the parser to start fetching both files in
+  parallel during HTML parse and guarantees document-order execution after
+  parsing is complete (preserving the `db.js → game.js` dependency). Changed
+  both `<script>` tags.
+
+- **`theme-color` meta tag added** (`index.html`)  
+  Sets the browser UI chrome (address bar, tab strip) on Android and iOS to
+  `#f5f5f5` (the page background colour), preventing a white flash during
+  initial paint before CSS is applied.
+
+---
+
+## [5.0.4] — 2026-03-23
+
+### Fixed
+
+- **CSS backtick syntax in `:fullscreen body` background rule** (`style.css`)  
+  The rule read `background: \`#000\`` — JavaScript template literal syntax that
+  CSS parsers do not understand. The declaration was silently ignored, leaving
+  the body background as `#f5f5f5` (the default light grey) in fullscreen mode
+  instead of black. Fixed to `background: #000`.
+
+- **`#go-hi` initial HTML content mismatched `gameOver()` write format** (`index.html`)  
+  The HTML initialised the element as `HI 00000` (no colon) but `gameOver()`
+  always wrote `'HI: ' + score` (colon present). On the first game-over the
+  display jumped from one format to the other — visually jarring and
+  inconsistent between page loads and in-session views. Changed the HTML initial
+  value to `HI: 00000` to match what the JS always writes.
+
+- **`clearLbBtn` handler left `dbStats.bestTime` stale after clear** (`game.js`)  
+  The handler correctly reset `dbStats.bestScore = 0` and persisted the change,
+  but left `dbStats.bestTime` at its previous value. After clicking CLEAR, the
+  BEST TIME stat continued displaying the old time associated with records that
+  no longer existed. Added `dbStats.bestTime = 0` alongside `bestScore`.
+
+- **Trailing whitespace at end of `style.css`** (`style.css`)  
+  Several trailing spaces remained on the final line of the file. Removed.
+
+---
+
+## [5.0.3] — 2026-03-23
+
+### Fixed
+
+- **`pruneAndSave` returned `true` / `false` — leaderboard session/reload discrepancy** (`db.js`)  
+  When storage was nearly full and `pruneAndSave` succeeded by falling back to a
+  top-5 list, it returned `true`. `saveLeaderboard` passed `true` to `addScore`,
+  which returned its 10-entry in-memory `lb` to `gameOver`. The game rendered
+  10 rows — correct for the session. On next page load only 5 rows appeared from
+  disk. The return value lied about what was actually persisted.  
+  `pruneAndSave` now returns the array that was actually saved (or `null` on
+  total failure). `saveLeaderboard` propagates it. `addScore` returns it. Callers
+  always render exactly what is on disk. Existing `if (!saved)` checks work
+  unchanged because `null` is falsy and an array is truthy.
+
+- **NaN / Infinity score corrupted `sort()` and persisted garbage to localStorage** (`db.js`)  
+  `addScore(name, score)` stored the raw `score` value with no type check. If
+  game physics produced a non-finite value (e.g. `0/0` or `Infinity` from a
+  degenerate `dt`), JavaScript's comparator returns `false` for all NaN
+  comparisons, making `Array.sort()` output undefined. `JSON.stringify(NaN)`
+  produces `null`, so the value would persist as `null` and render as `'00NaN'`
+  on next load. Added validation at the top of `addScore`:
+  ```js
+  let safeScore = (typeof score === 'number' && isFinite(score) && score >= 0)
+    ? Math.floor(score) : 0;
+  ```
+  Invalid values log a `console.warn` and are stored as `0`.
+
+- **`bestTime` missing from `getStats()` default object** (`db.js`)  
+  The default stats object was `{ games, deaths, obstacles, totalDist,
+  bestScore }` — no `bestTime`. A first-ever run or post-clear load returned
+  this object; every callsite guarded with `|| 0`, which masked the gap. Added
+  `bestTime: 0` to the default so the field is always present and strongly typed.
+
+- **`this` binding fragility in `addScore`** (`db.js`)  
+  `addScore` called `this.getLeaderboard()` and `this.saveLeaderboard()`. In
+  strict mode, if the method is invoked without its object receiver (destructuring
+  assignment, `Function.prototype.call(null, …)`, passing as a callback), `this`
+  is `undefined` and both calls throw. The returned API object is now captured
+  in a local `api` variable via `return (api = { … })`, and `addScore` uses
+  `api.getLeaderboard()` / `api.saveLeaderboard()` directly. No behavioural
+  change for normal call patterns.
+
+---
+
+## [5.0.2] — 2026-03-23
+
+### Performance
+
+- **DOM element cache — eliminates all `getElementById` calls from the hot path** (`game.js`)  
+  Added a `const DOM = { … }` object that caches all 27 required elements once
+  at startup. The original code called `document.getElementById()` three times
+  per frame inside `update()` (score, hi-score, speed bar) and once each inside
+  `startDuck` / `endDuck` on every input event. All 60+ per-second lookups
+  replaced with direct property reads from `DOM`.
+
+- **Palette cache — skips `lerpRGB()` recomputation when `dayPhase` is unchanged** (`game.js`)  
+  `lerpRGB()` is called 4× per frame to produce the day/night colour strings.
+  Each call parses two hex literals with `parseInt(…, 16)` and does six floating-
+  point operations. `dayPhase` is constant during the 350-frame day and night
+  pause windows (over a third of gameplay time) and may repeat across consecutive
+  frames when `dt` produces identical increments. Added `_lastDayPhase` sentinel
+  and `_pal` cache object; `lerpRGB` is only called when `dayPhase !== _lastDayPhase`.
+
+- **`fillStyle` deduplication — halves canvas state writes per frame** (`game.js`)  
+  `ctx.fillStyle = color` is a canvas state write that crosses the JS/WebGL
+  bridge even when the value has not changed. `drawDino()` alone makes 18 `px()`
+  calls, most consecutive ones sharing the same colour (`C.dino` for the entire
+  body). Added `setFill(color)` which guards the assignment with a string
+  comparison against `_lastFill`, cutting canvas state changes per frame by
+  approximately 50%. `px()` delegates to `setFill()`.
+
+- **HUD `textContent` deduplication — eliminates redundant style recalculation** (`game.js`)  
+  `hdr-score` and `hdr-hi` were assigned `textContent` unconditionally every
+  frame. Assigning `textContent` triggers browser style recalculation even when
+  the string is identical to the current value — 120 style recalcs per second.
+  Added `_lastHdrScore` and `_lastHdrHi` cache strings; writes are skipped when
+  the padded string has not changed.
+
+- **In-place obstacle cleanup — eliminates per-frame array allocation** (`game.js`)  
+  `obstacles = obstacles.filter(…)` allocated a new array on every frame at 60
+  Hz — steady minor GC pressure with 2–5 elements. Replaced with a reverse-index
+  `splice` loop that mutates the existing array in-place. Zero allocations per
+  frame in the common case where no obstacle has gone off-screen.
+
+---
+
+## [5.0.1] — 2026-03-23
+
+### Fixed
+
+- **No DOM validation at startup — `getElementById` failures produced cryptic TypeErrors** (`game.js`)  
+  If any required DOM element was missing (renamed ID, missing HTML, failed
+  partial load), the first `getElementById` call that returned `null` would
+  produce a `TypeError: Cannot read properties of null` at an arbitrary line deep
+  in the game engine with no indication of which element was missing. Added a
+  `validateDOM()` IIFE immediately after the DB guard that checks all 27 required
+  IDs in a single pass and throws a descriptive error listing every missing ID
+  before the game touches the DOM.
+
+- **localStorage quota exhaustion produced no user-facing feedback** (`game.js`, `db.js`)  
+  When `pruneAndSave` exhausted all fallbacks (top-10 and top-5) and returned
+  `null`, the only indication was a small badge update that was easy to miss.
+  Added a `db:criticalFailure` custom event dispatched by `pruneAndSave` on
+  total failure. A `window.addEventListener('db:criticalFailure', …)` handler in
+  `game.js` updates the badge and displays a blocking `alert()` with the specific
+  cause and three actionable recovery steps.
+
+- **Footer year hardcoded as `2026`** (`index.html`, `game.js`)  
+  The footer displayed a static year that would become stale. Wrapped the year
+  in `<span id="footer-year">2026</span>` and added one line to `boot()`:
+  `document.getElementById('footer-year').textContent = new Date().getFullYear()`.
+  The static `2026` fallback remains for the no-JS case.
+
+- **Trailing whitespace (4 blank lines) at end of `game.js`** (`game.js`)  
+  Lines 1184–1187 were empty. Removed.
+
+---
+
+## [5.0.0] — 2026-03-22
+
+
+### Added
+
+- **Moon in the night sky** (`game.js`)  
+  A crescent moon now scrolls slowly from right to left during night phase,
+  fading in and out with `dayPhase` alongside the stars. Rendered with two
+  `arc()` calls — a filled disc minus an offset cutout to produce the crescent
+  shape. Moon X position is randomised at each `initGame()` so it doesn't
+  always appear at the same spot. Scroll speed is `0.28 px/frame` (independent
+  of game speed).
+
+- **Triple-cactus clusters** (`game.js`)  
+  `CONFIG.CACTUS_TRIPLE: 0.12` added. Spawn logic now rolls triple first
+  (12% chance), then double (35% of the remainder), then single. This matches
+  the original Chromium spawn variety and raises the skill ceiling at high speed.
+
+- **Visually distinct multi-cactus clusters** (`game.js`, `spawn()`, `draw()`)  
+  The previous implementation set `w = singleW * count + gap * (count - 1)` and
+  passed the full span to a single `drawCactus()` call, producing one fat cactus
+  with no visible separation. Players could not tell how many obstacles were in a
+  cluster. Each cactus in a cluster is now drawn individually with a 6 px gap
+  between them via a loop in `draw()`. The `obstacle` object now stores `count`
+  and `singleW`; the total hitbox `w` covers the full span as before, so
+  collision detection is unchanged.
+
+- **Canvas speed bar** (`game.js`, `draw()`)  
+  A 4 px strip along the very bottom edge of the canvas shows current speed as a
+  fraction of `SPEED_MIN → SPEED_MAX`. Colour interpolates blue → orange → red.
+  This is the only speed indicator visible in fullscreen mode (the DOM stats
+  panel is hidden there). Replaces the DOM-only `#speed-fill` bar as the primary
+  indicator; the DOM bar remains for the non-fullscreen stats panel.
+
+- **Idle dino walk animation** (`game.js`, `idleLoop()`)  
+  The dino previously stood frozen on the start screen because `idleLoop()`
+  only called `draw()` without advancing the walk cycle. `dino.ft` and
+  `dino.frame` are now incremented each idle frame at the same cadence used
+  during gameplay.
+
+- **BEST TIME stat** (`game.js`, `index.html`)  
+  Tracks the longest run in seconds (derived from `frameCount / 60`). Stored
+  in both `sessionStats.bestTime` and `dbStats.bestTime` so it persists across
+  page reloads. Displayed in the stats panel as `Xm Ys` (e.g. `1m 42s`).
+  `updateStatUI()` and the `boot()` IIFE both read and display the value.
+
+### Fixed
+
+- **`loop()` called without a timestamp** (`game.js`)  
+  `startGame()`, `restart()`, `togglePause()`, and the `visibilitychange`
+  handler all previously called `loop()` directly with no argument, making
+  `timestamp` undefined. The `lastTime = 0` guard meant the first frame always
+  used `dt = 1` (correct), but then set `lastTime = undefined`, making it
+  falsy and causing the second frame to also use `dt = 1` — effectively losing
+  one frame of delta-time tracking on every game start and resume. All four
+  sites changed to `animFrame = requestAnimationFrame(loop)` so the browser
+  always provides a proper `DOMHighResTimeStamp`.
+
+- **Obstacle burst after large dt spike** (`game.js`)  
+  If the tab was backgrounded long enough for `obsCooldown` to go deeply
+  negative, `spawn()` would be called once per frame for several consecutive
+  frames, flooding the screen with obstacles. Added an `obstacles.length < 5`
+  guard before `spawn()` so at most 5 obstacles exist simultaneously regardless
+  of how stale the cooldown is.
+
+---
+
+
 ## [4.0.0] — 2026-03-22
 
 ### Fixed
