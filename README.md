@@ -112,7 +112,7 @@ Dino-Run-Chromatic-Edition/
 ├── style.css           # Retro pixel aesthetic + accessibility + reduced-motion
 ├── db.js               # Storage layer — localStorage / in-memory fallback
 ├── game.js             # Game engine — physics, rendering, input, audio, UI
-├── server.py           # HTTPS dev server with security headers (Python 3.6+)
+├── server.py           # HTTPS dev server with security headers (Python 3.7+)
 ├── fonts/
 │   ├── press-start-2p.woff2   # Pixel heading font
 │   └── vt323.woff2            # Monospace stats / leaderboard font
