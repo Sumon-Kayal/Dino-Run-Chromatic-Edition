@@ -11,10 +11,15 @@ class Handler(SimpleHTTPRequestHandler):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIR, **kwargs)
 
-    # Block TLS credential files from being served even though they sit in DIR.
-    # Both GET and HEAD are intercepted; any other method falls through to the
-    # default 501 handler so no new attack surface is added.
-    _DENIED = {'cert.pem', 'key.pem'}
+    # SEC-2: Set a per-request read timeout so a slow/stalled client cannot
+    # hold the single-threaded server's connection open indefinitely (slowloris).
+    # 10 s is generous for a local game page — all assets are small.
+    timeout = 10
+
+    # Populated after cert/key paths are resolved (see bottom of file).
+    # FIX-13: derived from actual cert/key basenames so the deny list stays
+    # correct if filenames are ever changed — no second edit required.
+    _DENIED: set = set()
 
     def _is_denied(self):
         # BUG-4 FIX: iteratively URL-decode the path before extracting the
@@ -29,6 +34,38 @@ class Handler(SimpleHTTPRequestHandler):
             path = decoded
         return os.path.basename(decoded) in self._DENIED
 
+    # SEC-1: Inject security headers into every response.
+    # Called by SimpleHTTPRequestHandler.send_response() before body headers.
+    def end_headers(self):
+        # Prevent MIME-type sniffing (CVE class: content-type confusion attacks)
+        self.send_header('X-Content-Type-Options', 'nosniff')
+        # Prevent framing from any origin — blocks clickjacking
+        self.send_header('X-Frame-Options', 'DENY')
+        # Strict CSP: only same-origin scripts/styles/fonts; no eval or inline
+        # scripts other than what the page already uses (none — all external files)
+        self.send_header(
+            'Content-Security-Policy',
+            "default-src 'self'; "
+            "script-src 'self'; "
+            "style-src 'self'; "
+            "font-src 'self'; "
+            "img-src 'self' data:; "   # data: needed for inline SVG favicon
+            "media-src 'none'; "
+            "object-src 'none'; "
+            "frame-ancestors 'none'"   # belt-and-suspenders with X-Frame-Options
+        )
+        # Do not send the Referer header when navigating away
+        self.send_header('Referrer-Policy', 'no-referrer')
+        # Disable browser features not used by the game
+        self.send_header(
+            'Permissions-Policy',
+            'camera=(), microphone=(), geolocation=(), payment=()'
+        )
+        # HSTS: tell browsers to always use HTTPS for this origin (1 year)
+        # max-age=31536000; includeSubDomains is omitted — localhost only
+        self.send_header('Strict-Transport-Security', 'max-age=31536000')
+        super().end_headers()
+
     def do_GET(self):
         if self._is_denied():
             self.send_error(403, 'Forbidden')
@@ -40,6 +77,33 @@ class Handler(SimpleHTTPRequestHandler):
             self.send_error(403, 'Forbidden')
             return
         super().do_HEAD()
+
+    # SEC-3: SimpleHTTPRequestHandler does not implement POST/PUT/DELETE/OPTIONS
+    # (they return 501 via the base class). Explicitly gate them here so that
+    # if a future Python version or subclass ever adds those methods, the deny
+    # list is still enforced before the body is read or files are touched.
+    def do_POST(self):
+        if self._is_denied():
+            self.send_error(403, 'Forbidden')
+            return
+        self.send_error(405, 'Method Not Allowed')
+
+    def do_PUT(self):
+        if self._is_denied():
+            self.send_error(403, 'Forbidden')
+            return
+        self.send_error(405, 'Method Not Allowed')
+
+    def do_DELETE(self):
+        if self._is_denied():
+            self.send_error(403, 'Forbidden')
+            return
+        self.send_error(405, 'Method Not Allowed')
+
+    def do_OPTIONS(self):
+        # OPTIONS is used by CORS preflight — reject it; this server is not a
+        # CORS endpoint and should not advertise any cross-origin permissions.
+        self.send_error(405, 'Method Not Allowed')
 
     # Correct MIME types — Firefox silently rejects fonts without them
     extensions_map = {
@@ -70,6 +134,10 @@ if not os.path.exists(cert) or not os.path.exists(key):
     print("  openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem \\")
     print("    -days 365 -nodes -subj '/CN=localhost'")
     sys.exit(1)
+
+# FIX-13: derive the deny set from the actual cert/key basenames so it stays
+# correct if either filename is ever changed — no second edit required.
+Handler._DENIED = {os.path.basename(cert), os.path.basename(key)}
 
 ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
 ctx.load_cert_chain(certfile=cert, keyfile=key)
