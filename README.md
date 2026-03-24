@@ -335,7 +335,6 @@ Additional hardening:
 ## 📋 Changelog
 
 Full release history with per-fix root-cause analysis in [CHANGELOG.md](CHANGELOG.md)
-(v0.9.0-rc through v5.2.3, 18 releases).
 
 ---
 
