@@ -29,8 +29,12 @@ def find_ssl_files(directory):
 
     Each candidate pair is validated with ssl.SSLContext.load_cert_chain
     before being returned. Pairs that fail (mismatched cert/key, wrong
-    format, etc.) are skipped silently. Returns (None, None) when no valid
-    pair is found.
+    format, etc.) are skipped silently.
+
+     Returns:
+         (cert_path, key_path, had_pair_candidates): On success, paths to
+             the validated cert and key files. On failure, (None, None, bool)
+             where the bool indicates whether any candidate pairs existed.
     """
     certs = []
     keys  = []
@@ -193,7 +197,7 @@ PORT = 1999
 
 httpd = ThreadingHTTPServer((HOST, PORT), Handler)
 
-cert, key = find_ssl_files(DIR)
+cert, key had_pair_candidates = find_ssl_files(DIR)
 
 # Finding 1 fix: collect ALL TLS-related filenames in DIR into _DENIED,
 # not just the chosen pair. Any *.pem / *.crt / *.key file sitting next
