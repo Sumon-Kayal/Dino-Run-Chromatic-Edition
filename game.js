@@ -134,12 +134,6 @@ window.addEventListener('db:criticalFailure', function () {
    ─────────────────────────────────────────────────────────── */
 const canvas = DOM.gameCanvas;
 const ctx    = canvas.getContext('2d');
-/* OPT-4: Sky layer optimisation — OffscreenCanvas bakes the static sky
-   (background fill + horizon line + stars) once per dayPhase change instead
-   of redrawing them every frame. Especially effective during the 350-frame
-   day/night pause where dayPhase is constant. */
-let skyCanvas = null;
-let skyCtx    = null;
 // FIX: getContext returns null when hardware acceleration is disabled or the
 // browser is in a restricted context. Every downstream ctx.* call would throw
 // a TypeError with no useful message — fail loudly here with a clear cause.
@@ -269,32 +263,6 @@ function setFill(color) {
   if (color !== _lastFill) { ctx.fillStyle = color; _lastFill = color; }
 }
 
-/**
- * Bake the static sky layer onto skyCanvas.
- * Called once per dayPhase change (via the palette cache block in draw())
- * and once at initGame() to set the initial state.
- * During the 350-frame day/night pauses dayPhase never changes, so this
- * function is never called — the stars/horizon loop disappears entirely.
- */
-function redrawSkyLayer() {
-  if (!skyCtx) return;
-  skyCtx.clearRect(0, 0, W, H);
-  // Sky background
-  skyCtx.fillStyle = _pal.bgC;
-  skyCtx.fillRect(0, 0, W, H);
-  // Horizon line
-  skyCtx.fillStyle = _pal.fgC;
-  skyCtx.fillRect(0, GY, W, 2);
-  // Stars — baked once, no per-frame forEach loop during pauses
-  if (dayPhase > 0.1) {
-    skyCtx.globalAlpha = dayPhase * 0.6;
-    skyCtx.fillStyle   = _pal.fgDark;
-    stars.forEach(function (s) { skyCtx.fillRect(s.x, s.y, s.r, s.r); });
-    skyCtx.globalAlpha = 1;
-  }
-}
-
-
 /* ───────────────────────────────────────────────────────────
    FIX-5: REUSABLE HITBOX OBJECTS
    Allocating { x, y, w, h } inside update() creates ~60 dino-box
@@ -338,8 +306,7 @@ let playerName = 'ANON';
 let moonX      = W * 0.72;
 
 // ── Pause ──────────────────────────────────────────────────
-let paused         = false;
-let pauseStartTime = 0;   // FIX: wall-clock ms when the current pause began
+let paused = false;
 
 // ── Score milestone flash (every 100 pts) ─────────────────
 let flashFrames   = 0;
@@ -463,18 +430,6 @@ function initGame() {
     });
   }
 
-  // OPT-4: (re)create the sky OffscreenCanvas on each new game so star
-  // positions — regenerated above — are baked in on the first draw call.
-  // The canvas is created here rather than at module scope so it is always
-  // sized correctly and tied to the current star layout.
-  skyCanvas = document.createElement('canvas');
-  skyCanvas.width  = W;
-  skyCanvas.height = H;
-  skyCtx = skyCanvas.getContext('2d', { alpha: false });
-  // _pal may not be populated yet on the very first initGame() call (before
-  // any draw()); redrawSkyLayer() guards on skyCtx and _pal.bgC being truthy.
-  redrawSkyLayer();
-
 }
 
 /* ───────────────────────────────────────────────────────────
@@ -514,7 +469,6 @@ function togglePause() {
   if (!paused) {
     paused = true;
     state  = 'paused';
-    pauseStartTime = performance.now();   // FIX: record when pause started
     cancelAnimationFrame(animFrame);
     DOM.pauseScreen.classList.remove('hidden');
     DOM.pauseBtn.classList.add('active');
@@ -522,9 +476,6 @@ function togglePause() {
   } else {
     paused = false;
     state  = 'running';
-    // FIX: offset the wall-clock start time by the duration spent paused so
-    // gameOver() doesn't count pause time toward the run's elapsed seconds.
-    gameStartWallTime += (performance.now() - pauseStartTime);
     lastTime = 0;
     DOM.pauseScreen.classList.add('hidden');
     DOM.pauseBtn.classList.remove('active');
@@ -887,20 +838,6 @@ function update(dt) {
 function draw() {
   ctx.clearRect(0, 0, W, H);
 
-  // OPT-4 debug overlay — enable from DevTools: window.showDebug = true
-  if (window.showDebug) {
-    ctx.fillStyle   = _pal.bgC || '#fff';
-    ctx.fillRect(0, 0, W, H);
-    ctx.fillStyle   = '#000';
-    ctx.font        = '12px monospace';
-    ctx.textBaseline = 'top';
-    ctx.fillText('FPS: ' + Math.round(1000 / (performance.now() - (draw._lastT || performance.now()))) +
-                 ' | Phase: ' + dayPhase.toFixed(2) +
-                 ' | skyCtx: ' + (skyCtx ? 'ready' : 'null'), 10, 20);
-    ctx.textBaseline = 'alphabetic';
-  }
-  draw._lastT = performance.now();
-
   // ── OPT-2: palette cache — only rebuild lerpRGB strings when dayPhase changes.
   // lerpRGB() parses hex and does float arithmetic; 4 calls × 60 fps = 240/s.
   // dayPhase is unchanged during the 350-frame day and night pause windows,
@@ -911,7 +848,6 @@ function draw() {
     _pal.fgC    = lerpRGB('#535353', '#f0f0f0', dayPhase);
     _pal.fgDark = lerpRGB('#404040', '#d0d0d0', dayPhase);
     _pal.dimC   = lerpRGB('#d4d4d4', '#606060', dayPhase);
-    redrawSkyLayer();   // OPT-4: bake updated sky — skipped every frame dayPhase is unchanged
   }
   let bgC    = _pal.bgC;
   let fgC    = _pal.fgC;
@@ -926,19 +862,29 @@ function draw() {
   C.cloud   = dimC;
   C.eye     = bgC;   // eye == bg → hollow cutout illusion
 
-  // OPT-4: blit the pre-baked sky layer (background fill + horizon line + stars).
-  // redrawSkyLayer() already painted these onto skyCanvas whenever dayPhase
-  // changed; stamping it here replaces the per-frame fillRect + stars.forEach.
-  ctx.drawImage(skyCanvas, 0, 0);
+  // Background (Chrome uses flat colour, no gradient)
+  setFill(bgC);
+  ctx.fillRect(0, 0, W, H);
+
+  // Ground horizon line
+  setFill(fgC);
+  ctx.fillRect(0, GY, W, 2);
 
   // Ground texture dots (scrolling)
   // FIX-2: use groundScrollX (accumulated in update via speed*dt) instead of
   // frameCount*speed*0.3 which scrolled at 2× speed at 120Hz.
-  // FIX-3: negate offset so dots shift left (matching obstacle scroll direction).
   setFill(dimC);
-  for (let gx = -(groundScrollX | 0); gx < W; gx += 30) {
+  for (let gx = groundScrollX | 0; gx < W; gx += 30) {
     ctx.fillRect(gx,      GY + 8,  2, 1);
     ctx.fillRect(gx + 14, GY + 14, 3, 1);
+  }
+
+  // Stars (only visible during night phase)
+  if (dayPhase > 0.1) {
+    ctx.globalAlpha = dayPhase * 0.6;
+    setFill(fgDark);
+    stars.forEach((s) => { ctx.fillRect(s.x, s.y, s.r, s.r); });
+    ctx.globalAlpha = 1;
   }
 
   // Moon — crescent shape, fades in with dayPhase like the stars
@@ -1434,14 +1380,10 @@ document.addEventListener('visibilitychange', function () {
     cancelAnimationFrame(animFrame);
     animFrame = null;
   } else {
-    // Tab became visible again — resume the appropriate loop for the current state
+    // Tab became visible again — resume only if a game is in progress
     if (state === 'running' && !paused) {
       lastTime = 0;   // FIX-1 pattern: reset dt baseline so first frame is safe
       animFrame = requestAnimationFrame(loop);
-    } else if (state === 'idle') {
-      // FIX: idleLoop was unconditionally cancelled above; restart it so the
-      // dino walk animation doesn't freeze on the start screen after a tab switch.
-      animFrame = requestAnimationFrame(idleLoop);
     }
   }
 });
