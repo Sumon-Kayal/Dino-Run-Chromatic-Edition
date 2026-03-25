@@ -10,17 +10,27 @@ from typing import ClassVar
 # ── Serve from this script's folder, not wherever you ran it from ──
 DIR = os.path.dirname(os.path.abspath(__file__))
 
+# Set ALLOW_HTTP_FALLBACK=1 (or 'true'/'yes') in the environment to let the
+# server start in plain HTTP when SSL setup fails. Off by default — a broken
+# TLS config should be an explicit, visible decision, not a silent downgrade.
+ALLOW_HTTP_FALLBACK = os.environ.get('ALLOW_HTTP_FALLBACK', '').lower() in ('1', 'true', 'yes')
+
 
 # ─────────────────────────────────────────────
 # 🔍 Auto-detect SSL files (any name/ext)
 # ─────────────────────────────────────────────
 def find_ssl_files(directory):
-    """Scan directory for the first matching cert+key pair.
+    """Scan directory for the first cert+key pair that actually loads cleanly.
 
     Cert candidates : *.pem, *.crt
     Key  candidates : *.key, *.pem
     A file is never paired with itself (e.g. a combined .pem is skipped
     unless a separate key file is also present).
+
+    Each candidate pair is validated with ssl.SSLContext.load_cert_chain
+    before being returned. Pairs that fail (mismatched cert/key, wrong
+    format, etc.) are skipped silently. Returns (None, None) when no valid
+    pair is found.
     """
     certs = []
     keys  = []
@@ -34,8 +44,18 @@ def find_ssl_files(directory):
 
     for c in certs:
         for k in keys:
-            if c != k:
-                return os.path.join(directory, c), os.path.join(directory, k)
+            if c == k:
+                continue
+            c_path = os.path.join(directory, c)
+            k_path = os.path.join(directory, k)
+            try:
+                # Validate the pair is a real, matching cert+key before
+                # committing to it — catches mismatches early.
+                ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+                ctx.load_cert_chain(certfile=c_path, keyfile=k_path)
+                return c_path, k_path
+            except ssl.SSLError:
+                continue  # try next pair
 
     return None, None
 
@@ -173,17 +193,22 @@ httpd = ThreadingHTTPServer((HOST, PORT), Handler)
 
 cert, key = find_ssl_files(DIR)
 
+# Finding 1 fix: collect ALL TLS-related filenames in DIR into _DENIED,
+# not just the chosen pair. Any *.pem / *.crt / *.key file sitting next
+# to the script could contain private key material and must be blocked
+# from HTTP responses regardless of which pair was selected for TLS.
+_TLS_EXTS = ('.pem', '.crt', '.key')
+Handler._DENIED = frozenset(
+    f for f in os.listdir(DIR)
+    if f.lower().endswith(_TLS_EXTS)
+)
+
 if cert and key:
     try:
-        # FIX-13: derive deny set from actual cert/key basenames so it stays
-        # correct if filenames are ever changed — no second edit required.
-        Handler._DENIED = frozenset({
-            os.path.basename(cert),
-            os.path.basename(key),
-        })
-
         # ssl.wrap_socket() was removed in Python 3.12.
         # SSLContext is the correct API (works Python 3.4 → 3.12+).
+        # Note: load_cert_chain was already validated inside find_ssl_files;
+        # we re-wrap the socket here with the same context.
         ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
         ctx.load_cert_chain(certfile=cert, keyfile=key)
         httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
@@ -191,15 +216,28 @@ if cert and key:
         print("🔐 HTTPS ENABLED")
         print(f"   Cert : {os.path.basename(cert)}")
         print(f"   Key  : {os.path.basename(key)}")
+        print(f"   Denied TLS files ({len(Handler._DENIED)}): {', '.join(sorted(Handler._DENIED))}")
         print(f"➡  https://localhost:{PORT}")
 
-    except Exception as e:
-        print("⚠  SSL setup failed → falling back to HTTP")
-        print(f"   Reason: {e}")
-        print(f"➡  http://localhost:{PORT}")
+    except (ssl.SSLError, OSError) as e:
+        # ssl.SSLError  — bad cert/key material or mismatch
+        # OSError       — socket wrap failure, missing file (FileNotFoundError
+        #                 is a subclass), or other I/O error at bind time
+        # Finding 3 fix: do NOT silently fall back to plaintext HTTP.
+        # A broken TLS config is an error, not a recoverable condition.
+        # Set ALLOW_HTTP_FALLBACK=1 in the environment to override.
+        if ALLOW_HTTP_FALLBACK:
+            print("⚠  SSL setup failed → falling back to HTTP  (ALLOW_HTTP_FALLBACK is set)")
+            print(f"   Reason: {e}")
+            print(f"➡  http://localhost:{PORT}")
+        else:
+            print("✖  SSL setup failed. Refusing to start in plaintext HTTP.")
+            print(f"   Reason: {e}")
+            print("   To allow HTTP fallback, set:  ALLOW_HTTP_FALLBACK=1")
+            sys.exit(1)
 
 else:
-    print("🌐 No SSL cert/key found → HTTP mode")
+    print("🌐 No valid SSL cert/key pair found → HTTP mode")
     print("   To enable HTTPS, place any *.pem/*.crt + *.key/*.pem pair")
     print("   in the same folder as this script, then restart.")
     print(f"➡  http://localhost:{PORT}")

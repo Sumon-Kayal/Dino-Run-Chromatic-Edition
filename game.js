@@ -277,7 +277,7 @@ function setFill(color) {
  * function is never called — the stars/horizon loop disappears entirely.
  */
 function redrawSkyLayer() {
-  if (!skyCtx) return;
+  if (!skyCtx || !_pal.bgC) return;
   skyCtx.clearRect(0, 0, W, H);
   // Sky background
   skyCtx.fillStyle = _pal.bgC;
@@ -894,7 +894,8 @@ function draw() {
     ctx.fillStyle   = '#000';
     ctx.font        = '12px monospace';
     ctx.textBaseline = 'top';
-    ctx.fillText('FPS: ' + Math.round(1000 / (performance.now() - (draw._lastT || performance.now()))) +
+    let elapsed = draw._lastT ? performance.now() - draw._lastT : 16.67;
+    ctx.fillText('FPS: ' + Math.round(1000 / elapsed) +
                  ' | Phase: ' + dayPhase.toFixed(2) +
                  ' | skyCtx: ' + (skyCtx ? 'ready' : 'null'), 10, 20);
     ctx.textBaseline = 'alphabetic';
