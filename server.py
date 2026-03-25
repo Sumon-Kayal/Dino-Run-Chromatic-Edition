@@ -197,7 +197,7 @@ PORT = 1999
 
 httpd = ThreadingHTTPServer((HOST, PORT), Handler)
 
-cert, key had_pair_candidates = find_ssl_files(DIR)
+cert, key, had_pair_candidates = find_ssl_files(DIR)
 
 # Finding 1 fix: collect ALL TLS-related filenames in DIR into _DENIED,
 # not just the chosen pair. Any *.pem / *.crt / *.key file sitting next
@@ -242,11 +242,20 @@ if cert and key:
             print("   To allow HTTP fallback, set:  ALLOW_HTTP_FALLBACK=1")
             sys.exit(1)
 
-else:
-    print("🌐 No valid SSL cert/key pair found → HTTP mode")
-    print("   To enable HTTPS, place any *.pem/*.crt + *.key/*.pem pair")
-    print("   in the same folder as this script, then restart.")
-    print(f"➡  http://localhost:{PORT}")
+elif had_pair_candidates:
+     if ALLOW_HTTP_FALLBACK:
+         print("⚠  TLS files were found, but no valid cert/key pair could be loaded → HTTP mode")
+         print("   To require HTTPS, fix or remove the broken TLS files.")
+         print(f"➡  http://localhost:{PORT}")
+     else:
+         print("✖  TLS files were found, but no valid cert/key pair could be loaded.")
+         print("   To allow HTTP fallback, set:  ALLOW_HTTP_FALLBACK=1")
+         sys.exit(1)
+ else:
+     print("🌐 No valid SSL cert/key pair found → HTTP mode")
+     print("   To enable HTTPS, place any *.pem/*.crt + *.key/*.pem pair")
+     print("   in the same folder as this script, then restart.")
+     print(f"➡  http://localhost:{PORT}")
 
 
 # ─────────────────────────────────────────────
