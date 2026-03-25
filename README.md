@@ -4,7 +4,7 @@ A fully offline Chrome-style endless runner with day/night cycle,
 pterodactyls, persistent local leaderboard, and session stats.  
 No network calls · No tracking · No image assets.
 
-**Current version: 5.2.2**
+**Current version: 0.6.4-beta**
 
 ---
 
@@ -263,8 +263,8 @@ blocking alert with recovery steps. Quota usage is read via
 ### Physics & timing
 
 - **Delta-time physics**: all movement scaled by `dt` (normalised to 1.0 = one 60 Hz frame)
-- Ground scroll uses accumulated `groundScrollX` (not `frameCount`) — Hz-independent
-- Best-time tracking uses `performance.now()` wall-clock delta — Hz-independent
+- Ground scroll uses accumulated `groundScrollX` (not `frameCount`) — Hz-independent; offset negated so texture scrolls left
+- Best-time tracking uses `performance.now()` wall-clock delta — Hz-independent; pause duration is subtracted via `pauseStartTime` offset so only active play time counts
 - Hitbox collision uses reusable `_dinoBox` / `_obsBox` objects — zero allocations per frame
 
 ### Performance summary
@@ -273,6 +273,7 @@ blocking alert with recovery steps. Quota usage is read via
 |---|---|
 | DOM element cache (`const DOM`) | Zero `getElementById` calls at runtime |
 | Palette cache (`_pal`) | `lerpRGB` skipped when `dayPhase` unchanged |
+| Sky layer blit (`skyCanvas`) | Background + horizon + stars drawn once per `dayPhase` change; stamped with a single `drawImage` every frame |
 | `setFill()` dedup | ~50% fewer `ctx.fillStyle` writes per frame |
 | HUD `textContent` dedup | Eliminates style recalcs when score hasn't changed |
 | Speed bar integer dedup | `style.width` only written when `%` actually changes |
@@ -334,7 +335,6 @@ Additional hardening:
 ## 📋 Changelog
 
 Full release history with per-fix root-cause analysis in [CHANGELOG.md](CHANGELOG.md)
-(v0.9.0-rc through v5.2.0, 17 releases).
 
 ---
 

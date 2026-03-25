@@ -5,7 +5,68 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [5.2.2] — 2026-03-23
+## [0.6.4-beta] — 2026-03-24
+
+### Fixed
+
+- **OPT-4 `skyCanvas` blit missing — sky/stars optimisation was entirely dead code** (`game.js`) — **HIGH**  
+  `redrawSkyLayer()` correctly bakes the static sky background, horizon line,
+  and stars onto an `OffscreenCanvas` (`skyCanvas`) on every `dayPhase` change.
+  However, `draw()` never consumed the result: instead of stamping the baked
+  canvas with `ctx.drawImage(skyCanvas, 0, 0)`, the loop fell straight through
+  to re-executing the original `ctx.fillRect` background, `ctx.fillRect`
+  horizon, and `stars.forEach` pixel loop on the main canvas every single frame.
+  The optimisation advertised in the OPT-4 comment produced zero benefit.
+
+  Removed the three redundant drawing blocks from `draw()` and replaced them
+  with a single `ctx.drawImage(skyCanvas, 0, 0)` call. The sky layer now
+  renders from the pre-baked surface as intended — saving the full
+  background fill + horizon fill + up to 60-star forEach loop on every frame
+  where `dayPhase` is unchanged (which includes the entire 350-frame day and
+  night pause windows).
+
+- **`gameStartWallTime` not offset for pause duration — Best Time inflated by time spent paused** (`game.js`) — **HIGH**  
+  `gameStartWallTime` was set once via `performance.now()` at game start and
+  never adjusted. `gameOver()` computed elapsed time as
+  `performance.now() - gameStartWallTime`, which counts wall-clock milliseconds
+  continuously — including any time the game was paused. A player who paused for
+  two minutes before dying would have those two minutes silently added to their
+  Best Time, making it trivial to inflate the stat.
+
+  Introduced `pauseStartTime` (module-level, initialised to `0`). When pausing,
+  `togglePause()` captures `pauseStartTime = performance.now()`. When unpausing,
+  it advances the baseline: `gameStartWallTime += (performance.now() -
+  pauseStartTime)`. `gameOver()` is unchanged — the subtraction now always
+  yields true play time only.
+
+- **`groundScrollX` offset applied with wrong sign — ground texture scrolled right instead of left** (`game.js`) — **HIGH**  
+  `groundScrollX` is a monotonically increasing accumulator
+  (`(groundScrollX + speed * dt * 0.3) % 30`). `draw()` used it as the loop
+  start in `for (let gx = groundScrollX | 0; gx < W; gx += 30)`. Because `gx`
+  opens at a positive and growing value, the first dot column shifts rightward
+  each frame — the ground texture visually slides to the right while every other
+  element (obstacles, clouds, moon) scrolls left. The dino appeared to run
+  backwards across the ground.
+
+  Changed the loop initialiser to `for (let gx = -(groundScrollX | 0); gx <
+  W; gx += 30)`. Negating the offset makes the starting column shift left each
+  frame, matching the scroll direction of all other game elements.
+
+- **`visibilitychange` handler permanently killed `idleLoop` on tab switch from start screen** (`game.js`) — **MEDIUM**  
+  The `visibilitychange` listener unconditionally cancelled `animFrame` when the
+  tab was hidden, then restarted only `loop` (the game loop) when the tab became
+  visible again — and only if `state === 'running'`. If a player switched tabs
+  while on the start screen (`state === 'idle'`), `idleLoop` was cancelled and
+  never restarted. The dino's walking animation froze permanently until a new
+  game was started, making the start screen appear broken.
+
+  Added an `else if (state === 'idle')` branch to the tab-visible handler that
+  restarts `idleLoop` via `requestAnimationFrame(idleLoop)`, matching the same
+  conditional pattern used for `loop`.
+
+---
+
+## [0.6.3-beta] — 2026-03-23
 
 ### Fixed
 
@@ -25,7 +86,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [5.2.1] — 2026-03-23
+## [0.6.2-beta] — 2026-03-23
 
 ### Fixed
 
@@ -56,7 +117,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [5.2.0] — 2026-03-23
+## [0.6.1-beta] — 2026-03-23
 
 ### Security
 
@@ -106,7 +167,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [5.2.0-pre] — 2026-03-23
+## [0.5.9-beta] — 2026-03-23
 
 ### Fixed (Enterprise Audit — 13 issues)
 
@@ -225,7 +286,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [5.1.2] — 2026-03-23
+## [0.5.8-beta] — 2026-03-23
 
 ### Fixed
 
@@ -240,7 +301,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [5.1.1] — 2026-03-23
+## [0.5.7-beta] — 2026-03-23
 
 ### Added
 
@@ -264,7 +325,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [5.1.0] — 2026-03-23
+## [0.5.6-beta] — 2026-03-23
 
 ### Performance
 
@@ -329,7 +390,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [5.0.4] — 2026-03-23
+## [0.5.4-beta] — 2026-03-23
 
 ### Fixed
 
@@ -357,7 +418,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [5.0.3] — 2026-03-23
+## [0.5.3-beta] — 2026-03-23
 
 ### Fixed
 
@@ -402,7 +463,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [5.0.2] — 2026-03-23
+## [0.5.0-beta] — 2026-03-23
 
 ### Performance
 
@@ -444,7 +505,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [5.0.1] — 2026-03-23
+## [0.4.5-beta] — 2026-03-23
 
 ### Fixed
 
@@ -476,7 +537,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [5.0.0] — 2026-03-22
+## [0.4.0-beta] — 2026-03-22
 
 
 ### Added
@@ -544,7 +605,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ---
 
 
-## [4.0.0] — 2026-03-22
+## [0.3.5-beta] — 2026-03-22
 
 ### Fixed
 
@@ -643,7 +704,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [3.5.0] — 2026-03-22
+## [0.3.0-beta] — 2026-03-22
 
 ### Fixed
 
@@ -699,7 +760,7 @@ expected browser behaviour, not a code defect.
 
 ---
 
-## [3.0.0] — 2026-03-21
+## [0.2.5-beta] — 2026-03-21
 
 ### Fixed
 
@@ -789,7 +850,7 @@ expected browser behaviour, not a code defect.
 
 ---
 
-## [2.0.0] — 2026-03-21
+## [0.2.0-beta] — 2026-03-21
 
 ### Fixed
 
@@ -832,7 +893,7 @@ expected browser behaviour, not a code defect.
 
 ---
 
-## [1.5.0] — 2026-03-21
+## [0.1.5-beta] — 2026-03-21
 
 ### Fixed
 
@@ -898,7 +959,7 @@ expected browser behaviour, not a code defect.
   
 ---
 
-## [1.0.0] — 2026-03-20
+## [0.1.0-beta] — 2026-03-20
 
 ### Fixed
 
@@ -950,22 +1011,50 @@ expected browser behaviour, not a code defect.
 
 ---
 
-## [0.9.0-rc] — Testing Period: 2026-03-15 to 2026-03-19
+## [0.0.1.0-rc] — Initial Testing Period: 2026-03-15 to 2026-03-19
 
 ### Testing Summary
 
-Pre-release testing across browsers, platforms, and storage conditions
-prior to the 1.0.0 public release on 2026-03-20.
+---
+
+### 2026-03-19 — Final Verification Pass
+
+- All five reported issues confirmed reproducible and logged.
+- Code review flagged unused `val` parameter in `pruneAndRetry` as
+  a lint violation (`no-unused-vars`). Noted for cleanup alongside
+  the `pruneAndSave` rewrite.
+- Safari/iOS 13: no storage or rendering issues found.
+- Samsung Internet 12: confirmed functional.
+- **Go/no-go decision: proceed to 1.0.0 with all fixes applied.**
 
 ---
 
-### 2026-03-15 — Initial Distribution
+### 2026-03-18 — Server & Environment Testing
 
-- Builds distributed to testers on Chrome 88+ (Windows, macOS, Linux),
-  Firefox 93+ (Linux), Cromite 142+ (Android), and Safari 13+ (iOS).
-- Termux/Android test environment verified: `server.py` HTTPS and HTTP
-  fallback confirmed functional on Android 12 and 13.
-- No blockers found on first load across all platforms.
+**Reported (Termux — tester IN-01):**
+- Launching `server.py` from a directory other than the project root
+  caused TLS cert loading to fail silently, falling back to HTTP even
+  when `cert.pem` / `key.pem` were present next to the script.
+  → `load_cert_chain` was using bare relative paths instead of
+    `os.path.join(DIR, ...)`. Logged for fix.
+
+**No new gameplay issues reported.** Physics, pterodactyl spawning,
+day/night cycle, and audio confirmed stable across all platforms.
+
+---
+
+### 2026-03-17 — Game-Over Flow & Rendering
+
+**Reported (Chrome/macOS — tester US-01):**
+- After a quota-overflow failure, the leaderboard rendered the new
+  (unsaved) score instead of the last persisted board. Players were
+  misled into thinking their score was recorded.
+  → Tied to the `addScore` null-return issue. Logged for fix.
+
+**Reported (Edge/Windows — tester EU-02):**
+- `STORAGE FULL` warning badge never appeared during overflow
+  conditions. The game continued as if storage succeeded.
+  → Same root cause as above. Confirmed on Edge Chromium 88+.
 
 ---
 
@@ -992,41 +1081,10 @@ prior to the 1.0.0 public release on 2026-03-20.
 
 ---
 
-### 2026-03-17 — Game-Over Flow & Rendering
+### 2026-03-15 — Initial Distribution
 
-**Reported (Chrome/macOS — tester US-01):**
-- After a quota-overflow failure, the leaderboard rendered the new
-  (unsaved) score instead of the last persisted board. Players were
-  misled into thinking their score was recorded.
-  → Tied to the `addScore` null-return issue. Logged for fix.
-
-**Reported (Edge/Windows — tester EU-02):**
-- `STORAGE FULL` warning badge never appeared during overflow
-  conditions. The game continued as if storage succeeded.
-  → Same root cause as above. Confirmed on Edge Chromium 88+.
-
----
-
-### 2026-03-18 — Server & Environment Testing
-
-**Reported (Termux — tester IN-01):**
-- Launching `server.py` from a directory other than the project root
-  caused TLS cert loading to fail silently, falling back to HTTP even
-  when `cert.pem` / `key.pem` were present next to the script.
-  → `load_cert_chain` was using bare relative paths instead of
-    `os.path.join(DIR, ...)`. Logged for fix.
-
-**No new gameplay issues reported.** Physics, pterodactyl spawning,
-day/night cycle, and audio confirmed stable across all platforms.
-
----
-
-### 2026-03-19 — Final Verification Pass
-
-- All five reported issues confirmed reproducible and logged.
-- Code review flagged unused `val` parameter in `pruneAndRetry` as
-  a lint violation (`no-unused-vars`). Noted for cleanup alongside
-  the `pruneAndSave` rewrite.
-- Safari/iOS 13: no storage or rendering issues found.
-- Samsung Internet 12: confirmed functional.
-- **Go/no-go decision: proceed to 1.0.0 with all fixes applied.**
+- Builds distributed to testers on Chrome 88+ (Windows, macOS, Linux),
+  Firefox 93+ (Linux), Cromite 142+ (Android), and Safari 13+ (iOS).
+- Termux/Android test environment verified: `server.py` HTTPS and HTTP
+  fallback confirmed functional on Android 12 and 13.
+- No blockers found on first load across all platforms.
