@@ -251,11 +251,11 @@ elif had_pair_candidates:
         print("✖  TLS files were found, but no valid cert/key pair could be loaded.")
         print("   To allow HTTP fallback, set:  ALLOW_HTTP_FALLBACK=1")
         sys.exit(1)
- else:
-     print("🌐 No valid SSL cert/key pair found → HTTP mode")
-     print("   To enable HTTPS, place any *.pem/*.crt + *.key/*.pem pair")
-     print("   in the same folder as this script, then restart.")
-     print(f"➡  http://localhost:{PORT}")
+else:
+    print("🌐 No valid SSL cert/key pair found → HTTP mode")
+    print("   To enable HTTPS, place any *.pem/*.crt + *.key/*.pem pair")
+    print("   in the same folder as this script, then restart.")
+    print(f"➡  http://localhost:{PORT}")
 
 
 # ─────────────────────────────────────────────
