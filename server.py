@@ -1,19 +1,52 @@
-from http.server import HTTPServer, SimpleHTTPRequestHandler
-from typing import ClassVar
-import ssl
+#!/usr/bin/env python3
+
 import os
+import ssl
 import sys
 import urllib.parse
+from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
+from typing import ClassVar
 
 # ── Serve from this script's folder, not wherever you ran it from ──
 DIR = os.path.dirname(os.path.abspath(__file__))
 
+
+# ─────────────────────────────────────────────
+# 🔍 Auto-detect SSL files (any name/ext)
+# ─────────────────────────────────────────────
+def find_ssl_files(directory):
+    """Scan directory for the first matching cert+key pair.
+
+    Cert candidates : *.pem, *.crt
+    Key  candidates : *.key, *.pem
+    A file is never paired with itself (e.g. a combined .pem is skipped
+    unless a separate key file is also present).
+    """
+    certs = []
+    keys  = []
+
+    for f in os.listdir(directory):
+        name = f.lower()
+        if name.endswith(('.pem', '.crt')):
+            certs.append(f)
+        if name.endswith(('.key', '.pem')):
+            keys.append(f)
+
+    for c in certs:
+        for k in keys:
+            if c != k:
+                return os.path.join(directory, c), os.path.join(directory, k)
+
+    return None, None
+
+
+# ─────────────────────────────────────────────
+# 🛡️ Secure Handler
+# ─────────────────────────────────────────────
 class Handler(SimpleHTTPRequestHandler):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, directory=DIR, **kwargs)
 
     # SEC-2: Set a per-request read timeout so a slow/stalled client cannot
-    # hold the single-threaded server's connection open indefinitely (slowloris).
+    # hold a thread open indefinitely (slowloris mitigation).
     # 10 s is generous for a local game page — all assets are small.
     timeout = 10
 
@@ -21,6 +54,9 @@ class Handler(SimpleHTTPRequestHandler):
     # FIX-13: derived from actual cert/key basenames so the deny list stays
     # correct if filenames are ever changed — no second edit required.
     _DENIED: ClassVar[frozenset[str]] = frozenset()
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, directory=DIR, **kwargs)
 
     def _is_denied(self):
         # BUG-4 FIX: iteratively URL-decode the path before extracting the
@@ -36,7 +72,7 @@ class Handler(SimpleHTTPRequestHandler):
         return os.path.basename(decoded) in self._DENIED
 
     # SEC-1: Inject security headers into every response.
-    # Called by SimpleHTTPRequestHandler.send_response() before body headers.
+    # Called by SimpleHTTPRequestHandler before body headers are flushed.
     def end_headers(self):
         # Prevent MIME-type sniffing (CVE class: content-type confusion attacks)
         self.send_header('X-Content-Type-Options', 'nosniff')
@@ -57,13 +93,13 @@ class Handler(SimpleHTTPRequestHandler):
         )
         # Do not send the Referer header when navigating away
         self.send_header('Referrer-Policy', 'no-referrer')
-        # Disable browser features not used by the game
+        # Disable browser features not used by the app
         self.send_header(
             'Permissions-Policy',
             'camera=(), microphone=(), geolocation=(), payment=()'
         )
-        # HSTS: tell browsers to always use HTTPS for this origin (1 year)
-        # max-age=31536000; includeSubDomains is omitted — localhost only
+        # HSTS: tell browsers to always use HTTPS for this origin (1 year).
+        # includeSubDomains is omitted — localhost only.
         self.send_header('Strict-Transport-Security', 'max-age=31536000')
         super().end_headers()
 
@@ -121,31 +157,58 @@ class Handler(SimpleHTTPRequestHandler):
         '.json':  'application/json',
     }
 
-httpd = HTTPServer(('0.0.0.0', 1999), Handler)
+
+# ─────────────────────────────────────────────
+# 🚀 Server Init
+# ─────────────────────────────────────────────
+HOST = '0.0.0.0'
 # Binds to all interfaces (not just 127.0.0.1) so Cromite on Android can
 # reach the server via localhost when running in Termux. On a desktop this
-# also makes the game reachable from other devices on the LAN at your
-# machine's local IP (e.g. https://192.168.x.x:1999). If you want loopback
-# only, change '0.0.0.0' to '127.0.0.1'.
+# also makes the app reachable from other LAN devices at your machine's
+# local IP (e.g. https://192.168.x.x:1999). Change to '127.0.0.1' for
+# loopback-only.
+PORT = 1999
 
-# ssl.wrap_socket() was removed in Python 3.12.
-# SSLContext is the correct API (works Python 3.4 → 3.12+).
-cert = os.path.join(DIR, 'cert.pem')
-key  = os.path.join(DIR, 'key.pem')
-if not os.path.exists(cert) or not os.path.exists(key):
-    print("ERROR: cert.pem / key.pem not found.")
-    print("Generate them with:")
-    print("  openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem \\")
-    print("    -days 365 -nodes -subj '/CN=localhost'")
-    sys.exit(1)
+httpd = ThreadingHTTPServer((HOST, PORT), Handler)
 
-# FIX-13: derive the deny set from the actual cert/key basenames so it stays
-# correct if either filename is ever changed — no second edit required.
-Handler._DENIED = frozenset({os.path.basename(cert), os.path.basename(key)})
+cert, key = find_ssl_files(DIR)
 
-ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-ctx.load_cert_chain(certfile=cert, keyfile=key)
-httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
-print("HTTPS running on https://localhost:1999")
+if cert and key:
+    try:
+        # FIX-13: derive deny set from actual cert/key basenames so it stays
+        # correct if filenames are ever changed — no second edit required.
+        Handler._DENIED = frozenset({
+            os.path.basename(cert),
+            os.path.basename(key),
+        })
 
-httpd.serve_forever()
+        # ssl.wrap_socket() was removed in Python 3.12.
+        # SSLContext is the correct API (works Python 3.4 → 3.12+).
+        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        ctx.load_cert_chain(certfile=cert, keyfile=key)
+        httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
+
+        print("🔐 HTTPS ENABLED")
+        print(f"   Cert : {os.path.basename(cert)}")
+        print(f"   Key  : {os.path.basename(key)}")
+        print(f"➡  https://localhost:{PORT}")
+
+    except Exception as e:
+        print("⚠  SSL setup failed → falling back to HTTP")
+        print(f"   Reason: {e}")
+        print(f"➡  http://localhost:{PORT}")
+
+else:
+    print("🌐 No SSL cert/key found → HTTP mode")
+    print("   To enable HTTPS, place any *.pem/*.crt + *.key/*.pem pair")
+    print("   in the same folder as this script, then restart.")
+    print(f"➡  http://localhost:{PORT}")
+
+
+# ─────────────────────────────────────────────
+# ▶ Run
+# ─────────────────────────────────────────────
+try:
+    httpd.serve_forever()
+except KeyboardInterrupt:
+    print("\n🛑 Server stopped")
