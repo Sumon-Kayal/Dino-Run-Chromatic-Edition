@@ -42,6 +42,8 @@ def find_ssl_files(directory):
         if name.endswith(('.key', '.pem')):
             keys.append(f)
 
+    had_pair_candidates = bool(certs) and bool(keys)
+
     for c in certs:
         for k in keys:
             if c == k:
@@ -53,11 +55,11 @@ def find_ssl_files(directory):
                 # committing to it — catches mismatches early.
                 ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
                 ctx.load_cert_chain(certfile=c_path, keyfile=k_path)
-                return c_path, k_path
+                return c_path, k_path, had_pair_candidates
             except ssl.SSLError:
                 continue  # try next pair
 
-    return None, None
+    return None, None, had_pair_candidates
 
 
 # ─────────────────────────────────────────────
@@ -89,7 +91,7 @@ class Handler(SimpleHTTPRequestHandler):
             if decoded == path:
                 break
             path = decoded
-        return os.path.basename(decoded) in self._DENIED
+        return os.path.basename(decoded).lower() in self._DENIED
 
     # SEC-1: Inject security headers into every response.
     # Called by SimpleHTTPRequestHandler before body headers are flushed.
@@ -199,7 +201,7 @@ cert, key = find_ssl_files(DIR)
 # from HTTP responses regardless of which pair was selected for TLS.
 _TLS_EXTS = ('.pem', '.crt', '.key')
 Handler._DENIED = frozenset(
-    f for f in os.listdir(DIR)
+    f.lower() for f in os.listdir(DIR)
     if f.lower().endswith(_TLS_EXTS)
 )
 
