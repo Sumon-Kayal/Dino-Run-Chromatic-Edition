@@ -665,10 +665,10 @@ function spawn() {
     //                                > GY-22 → also hits ducking dino,
     //   so player must JUMP over this one.  Ducking is finally required
     //   vs the GY-120 variant, making it a meaningful mechanic.
-    // GY-68  (low):  bottom = GY-44  > GY-46 → hits standing dino ✓
-    //                         GY-44  < GY-22 → clears ducking dino ✓
+    // GY-69  (low):  bottom = GY-45  > GY-46 → hits standing dino ✓
+    //                         GY-45  < GY-22 → clears ducking dino ✓
     //   Player may either jump over or duck under.
-    let hs = [GY - 40, GY - 120, GY - 68];
+    let hs = [GY - 40, GY - 120, GY - 69];
     obstacles.push({
       type: 'ptera',
       x: W + 10,
@@ -930,7 +930,7 @@ function draw() {
   // Always visible, including in fullscreen (where the DOM
   // stats panel is hidden). Colour shifts blue → orange → red.
   let speedPct = Math.min(
-    (speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN), 1
+    (speed - 6) / (13 - 6), 1
   );
   let barPx = (speedPct * W) | 0;
   let barCol = speedPct < 0.5
