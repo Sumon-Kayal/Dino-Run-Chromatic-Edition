@@ -24,6 +24,7 @@
 const { test, describe } = require('node:test');
 const assert = require('node:assert/strict');
 const fs     = require('node:fs');
+const path   = require('node:path');
 
 /* ─────────────────────────────────────────────────────────────────────
    EXTRACT RELEVANT CONSTANTS FROM game.js SOURCE
@@ -31,7 +32,7 @@ const fs     = require('node:fs');
    removed the expected properties, without running any DOM code.
    ───────────────────────────────────────────────────────────────────── */
 
-const gameSrc = fs.readFileSync('/home/jailuser/git/game.js', 'utf8');
+const gameSrc = fs.readFileSync(path.resolve(process.cwd(), 'game.js'), 'utf8');
 
 /* Pull the CONFIG object text out of the source */
 function extractConfigSource(src) {
@@ -156,7 +157,7 @@ describe('calcSpeedPctInt — integer speed percentage [0-100]', () => {
     assert.equal(calcSpeedPctInt(9.5), 50);
   });
 
-  test('returns 0 at speeds below minimum (below 6)', () => {
+  test('returns deterministic value for speeds below minimum (below 6)', () => {
     // Negative percentage is floored to 0 by the formula (negative / positive = negative | 0 = 0 NOT guaranteed)
     // The formula: ((speed-6)/7)*100 yields negative for speed<6; bitwise OR truncates toward zero.
     // At speed=5: ((5-6)/7)*100 = -14.28... ; -14.28 | 0 = -14  — NOT capped at 0 by the formula itself.
