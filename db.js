@@ -217,10 +217,14 @@ window.DB = (function () {
     if (combined.length > 5) {
       combined = combined.slice(0, 5);
       /* Attempt to save the pruned top-5 array */
-      if (dbSet(key, JSON.stringify(combined))) {
-        console.warn('[DB] Storage critical: pruned to top 5 to fit quota');
-        return combined;
-      }
+          
+     /* Attempt to write the (possibly pruned) combined array */
+     if (dbSet(key, JSON.stringify(combined))) {
+       if (combined.length <= 5 && knownExisting) {
+         console.warn('[DB] Storage critical: pruned to top 5 to fit quota');
+       }
+       return combined;
+     }
     }
 
     /* Complete failure */
