@@ -162,8 +162,8 @@ const DINO_X = 80;   // fixed horizontal position
    ─────────────────────────────────────────────────────────── */
 const CONFIG = {
   // Speed values derived from original Chrome Dino (Chromium source)
-  SPEED_MIN:    8.5,   // starting speed
-  SPEED_MAX:    18.5,  // terminal speed
+  SPEED_MIN:    6,     // starting speed
+  SPEED_MAX:    13,    // terminal speed
   PTERA_CHANCE: 0.28,  // probability of pterodactyl vs cactus
   PTERA_SCORE:  900,   // score before pteras appear
   CACTUS_H_MIN: 40,    // cactus minimum height (px)
@@ -407,7 +407,7 @@ let gameObstacles = 0;
 function initGame() {
   _cancelSoundTimers();
   score      = 0;
-  speed      = 6;
+  speed      = CONFIG.SPEED_MIN;
 
   // Chrome-like day start
   dayPhase = 0;
@@ -743,7 +743,7 @@ function update(dt) {
 
   // Chrome-like linear speed
   speed += 0.002 * dt;
-  if (speed > 13) speed = 13;
+  if (speed > CONFIG.SPEED_MAX) speed = CONFIG.SPEED_MAX;
 
   // ── Milestone flash (every 100 pts) ───────────────────
   let ms = Math.floor(score / 100);
@@ -857,7 +857,7 @@ function update(dt) {
   
   // Dedup speed bar width
   let newSpeedPct = Math.min(
-  ((speed - 6) / (13 - 6)) * 100,
+  ((speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)) * 100,
   100
   ) | 0;   // integer percent — 101 distinct values max
   if (newSpeedPct !== _lastSpeedPct) {
@@ -987,7 +987,7 @@ function draw() {
   // Always visible, including in fullscreen (where the DOM
   // stats panel is hidden). Colour shifts blue → orange → red.
   let speedPct = Math.min(
-    (speed - 6) / (13 - 6), 1
+    (speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN), 1
   );
   let barPx = (speedPct * W) | 0;
   let barCol = speedPct < 0.5
