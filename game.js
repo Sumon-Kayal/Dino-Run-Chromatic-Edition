@@ -173,10 +173,6 @@ const CONFIG = {
   CACTUS_TRIPLE: 0.12, // probability of triple-cactus cluster
   CACTUS_DBL:   0.35,  // probability of double-cactus cluster
   OBS_CD_INIT:  60,    // initial obstacle cooldown (frames)
-  OBS_CD_MIN:   30,    // minimum cooldown (frames) — hard floor
-  OBS_CD_BASE:  55,    // base cooldown for random calculation
-  OBS_CD_RNG:   70,    // random range added to base
-  OBS_CD_SPEED: 1.5    // speed scaling subtracted from cooldown
 };
 
 // Draw colour palette — recalculated each frame in draw()
@@ -304,9 +300,6 @@ let stars       = [];
 let obsCooldown = 0;
 
 let dayPhase   = 0;    // 0 = full day, 1 = full night
-let dayDir     = 1;    // direction of transition
-let dayTimer   = 0;
-let dayPauseAt = -1;   // frame number at which pause ends (-1 = not pausing)
 
 let duckHeld   = false;
 let playerName = 'ANON';
@@ -410,13 +403,10 @@ let gameObstacles = 0;
 function initGame() {
   _cancelSoundTimers();
   score      = 0;
-  speed      = CONFIG.SPEED_MIN;
+  speed      = 6;
 
   // Chrome-like day start
   dayPhase = 0;
-  dayDir = 1;
-  dayTimer = 0;
-  dayPauseAt = 300;
   frameCount = 0;
   obstacles  = [];
   obsCooldown = CONFIG.OBS_CD_INIT;
@@ -706,10 +696,10 @@ function spawn() {
     });
   } else {
     // Pterodactyl — three possible flight heights.
-    // Collision math (shrunk hitboxes, 4px each side):
-    //   Ptera bottom edge  = ptera.y + 4 + (28-8) = ptera.y + 24
-    //   Standing dino top  = (GY-52)  + 6         = GY - 46
-    //   Ducking  dino top  = (GY-28)  + 6         = GY - 22
+    // Collision math (shrunk hitboxes, 5px each side):
+    //   Ptera bottom edge  = ptera.y + 5 + (28-10) = ptera.y + 23
+    //   Standing dino top  = (GY-52)  + 7         = GY - 45
+    //   Ducking  dino top  = (GY-28)  + 7         = GY - 21
     //
     // GY-120 (high): bottom = GY-96  < GY-46 → misses standing dino;
     //   mid-air dino CAN enter that band → player must duck, not jump.
@@ -749,7 +739,7 @@ function update(dt) {
 
   // Chrome-like linear speed
   speed += 0.002 * dt;
-  if (speed > CONFIG.SPEED_MAX) speed = CONFIG.SPEED_MAX;
+  if (speed > 13) speed = 13;
 
   // ── Milestone flash (every 100 pts) ───────────────────
   let ms = Math.floor(score / 100);
@@ -827,7 +817,7 @@ function update(dt) {
       if (o.ft > 10) { o.ft = 0; o.frame = (o.frame + 1) % 2; }
     }
 
-    // AABB hit test (shrunk by 4px each side for leniency)
+    // AABB hit test (shrunk by 5px each side for leniency)
     _obsBox.x = o.x + 5;
     _obsBox.y = o.y + 5;
     _obsBox.w = o.w - 10;
@@ -863,7 +853,7 @@ function update(dt) {
   
   // Dedup speed bar width
   let newSpeedPct = Math.min(
-  ((speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)) * 100,
+  ((speed - 6) / (13 - 6)) * 100,
   100
   ) | 0;   // integer percent — 101 distinct values max
   if (newSpeedPct !== _lastSpeedPct) {
@@ -993,7 +983,7 @@ function draw() {
   // Always visible, including in fullscreen (where the DOM
   // stats panel is hidden). Colour shifts blue → orange → red.
   let speedPct = Math.min(
-    (speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN), 1
+    (speed - 6) / (13 - 6), 1
   );
   let barPx = (speedPct * W) | 0;
   let barCol = speedPct < 0.5
@@ -1479,10 +1469,6 @@ document.addEventListener('visibilitychange', function () {
   // Update footer year dynamically
   let footerYear = document.getElementById('footer-year');
   if (footerYear) footerYear.textContent = new Date().getFullYear();
-
-  // Begin with a 350-frame day pause
-  dayPauseAt = 350;
-  dayTimer   = 0;
 
   draw();
   idleLoop();

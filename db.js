@@ -37,6 +37,11 @@ window.DB = (function () {
   /* ─── In-memory fallback ────────────────────────────────── */
   const memStore = {};
 
+  let quotaUsed  = 0;               // bytes used  (from estimate())
+  let quotaTotal = 5 * 1024 * 1024; // default assume 5 MB
+  let quotaError = false;           // true when last write hit quota limit
+  let _quotaTimer = null;
+
   /* ─── Schema versioning ─────────────────────────────────── */
   // Bump DB_VERSION whenever the stored JSON schema changes.
   // The migration block below runs once on first load of the new version
@@ -68,10 +73,6 @@ window.DB = (function () {
   }());
 
 
-  let quotaUsed  = 0;     // bytes used  (from estimate())
-  let quotaTotal = 5 * 1024 * 1024;  // default assume 5 MB
-  let quotaError = false; // true when last write hit quota limit
-
   /* Request persistent storage so the browser won't evict us */
   if (navigator.storage && navigator.storage.persist) {
     navigator.storage.persist().catch(() => {});
@@ -81,7 +82,6 @@ window.DB = (function () {
   /* refreshQuota() is called after every successful dbSet().
      Debouncing ensures at most one storage estimate IPC call fires 
      per 2-second window regardless of write burst size. */
-  let _quotaTimer = null;
   function refreshQuota() {
     if (!navigator.storage || !navigator.storage.estimate) return;
     if (_quotaTimer !== null) return;
