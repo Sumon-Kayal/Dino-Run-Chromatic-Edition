@@ -407,7 +407,7 @@ let gameObstacles = 0;
 function initGame() {
   _cancelSoundTimers();
   score      = 0;
-  speed      = CONFIG.SPEED_MIN;
+  speed      = 6;
 
   // Chrome-like day start
   dayPhase = 0;
@@ -743,7 +743,7 @@ function update(dt) {
 
   // Chrome-like linear speed
   speed += 0.002 * dt;
-  if (speed > CONFIG.SPEED_MAX) speed = CONFIG.SPEED_MAX;
+  if (speed > 13) speed = 13;
 
   // ── Milestone flash (every 100 pts) ───────────────────
   let ms = Math.floor(score / 100);
@@ -857,8 +857,8 @@ function update(dt) {
   
   // Dedup speed bar width
   let newSpeedPct = Math.min(
-  ((CONFIG.SPEED_MAX - CONFIG.SPEED_MIN) > 0
-    ? ((speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)) * 100
+  ((13 - 6) > 0
+    ? ((speed - 6) / (13 - 6)) * 100
     : 0),
   100
   ) | 0;   // integer percent — 101 distinct values max
@@ -989,8 +989,8 @@ function draw() {
   // Always visible, including in fullscreen (where the DOM
   // stats panel is hidden). Colour shifts blue → orange → red.
   let speedPct = Math.min(
-    (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN) > 0
-      ? (speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)
+    (13 - 6) > 0
+      ? (speed - 6) / (13 - 6)
       : 0,
     1
   );

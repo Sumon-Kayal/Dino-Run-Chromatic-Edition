@@ -241,8 +241,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   Covers:
   - `CONFIG` structure: asserts `OBS_CD_MIN/BASE/RNG/SPEED` removed,
     `OBS_CD_INIT` retained
-  - `initGame` speed literal: asserts `speed = 6` present and
-    `speed = CONFIG.SPEED_MIN` assignment absent
+  - `initGame` speed assignment: asserts `speed = CONFIG.SPEED_MIN` present
   - Speed bar integer percentage (`update()` dedup): boundary values, cap at
     100, monotonicity across valid range
   - Speed bar float percentage (`draw()` bar width): boundary, cap, range [0,1]
