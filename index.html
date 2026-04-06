@@ -4,18 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="description" content="Offline Chrome-style endless runner with chromatic day/night cycle, pterodactyls, and persistent local leaderboard. No tracking, no network calls.">
-  <!-- OPT-HTML-3: theme-color sets the browser UI chrome on Android/iOS to match
-       the game's light-grey palette, preventing a jarring white flash on load. -->
+  
+  <!-- Sets browser UI chrome on Android/iOS to match the game's light-grey palette -->
   <meta name="theme-color" content="#f5f5f5">
   <title>Dino Run — Chromatic Edition</title>
-  <!-- BUG-9 FIX: inline favicon — no extra file needed -->
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' fill='%23ffffff'/><rect x='8' y='1' width='6' height='3' fill='%23535353'/><rect x='6' y='3' width='8' height='4' fill='%23535353'/><rect x='6' y='7' width='3' height='2' fill='%23535353'/><rect x='1' y='5' width='3' height='3' fill='%23535353'/><rect x='3' y='7' width='8' height='3' fill='%23535353'/><rect x='3' y='10' width='6' height='2' fill='%23535353'/><rect x='4' y='12' width='2' height='3' fill='%23535353'/><rect x='7' y='12' width='2' height='3' fill='%23535353'/></svg>">
-  <!-- OPT-HTML-2: preload both fonts so fetching starts during HTML parse rather
-       than waiting for the CSS @font-face rules to be discovered. Without this,
-       the browser parses HTML → downloads CSS → parses CSS → discovers @font-face
-       → starts font fetch. Preloading eliminates those intermediate hops and
-       prevents FOIT (Flash of Invisible Text) where monospace fallback shows
-       briefly before the pixel fonts are ready. -->
+  
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23ffffff'/%3E%3Crect x='8' y='1' width='6' height='3' fill='%23535353'/%3E%3Crect x='6' y='3' width='8' height='4' fill='%23535353'/%3E%3Crect x='6' y='7' width='3' height='2' fill='%23535353'/%3E%3Crect x='1' y='5' width='3' height='3' fill='%23535353'/%3E%3Crect x='3' y='7' width='8' height='3' fill='%23535353'/%3E%3Crect x='3' y='10' width='6' height='2' fill='%23535353'/%3E%3Crect x='4' y='12' width='2' height='3' fill='%23535353'/%3E%3Crect x='7' y='12' width='2' height='3' fill='%23535353'/%3E%3C/svg%3E">
+  
+  <!-- Preload fonts to avoid FOIT (Flash of Invisible Text) -->
   <link rel="preload" href="fonts/press-start-2p.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="fonts/vt323.woff2"          as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="style.css">
@@ -27,9 +23,7 @@
     <div class="logo">&#127990; DINO RUN</div>
     <div class="score-display">
       <span class="hi-label" aria-hidden="true">HI</span>
-      <!-- FIX-11: aria-label gives screen readers a meaningful name for the
-           numeric spans; aria-hidden on the visual "HI" label avoids double-
-           reading "HI 00000". -->
+      <!-- Accessible labels for screen readers -->
       <span id="hdr-hi" aria-label="High score">00000</span>
       <button class="reset-hi-btn" id="resetHiBtn"
               aria-label="Reset top score" title="Reset top score">&#10006;</button>
@@ -40,9 +34,7 @@
   <!-- ══════════════════════════ GAME AREA ═══════════════════════ -->
   <div class="game-area">
     <div class="game-frame" id="gameFrame">
-      <!-- FIX-11: role="application" tells assistive technology this is an
-           interactive app region, not passive content. aria-label names it.
-           Without this, screen readers present it as an unlabelled image. -->
+      <!-- App region designation for assistive technologies -->
       <canvas id="gameCanvas" width="854" height="480"
               role="application" aria-label="Dino Run game canvas. Use Space or Up to jump, Down to duck."></canvas>
 
@@ -85,8 +77,7 @@
               aria-label="Duck">&#9660; DUCK</button>
       <button class="ctrl-btn pause-btn"   id="pauseBtn"
               aria-label="Pause" aria-pressed="false">&#9646;&#9646; PAUSE</button>
-      <!-- FIX-11: muteBtn and fullscreenBtn are icon-only / text-changes-dynamically.
-           aria-label provides a stable accessible name; aria-pressed reflects state. -->
+      <!-- Dynamic aria-labels for icon buttons -->
       <button class="ctrl-btn mute-btn"    id="muteBtn"
               aria-label="Toggle mute" aria-pressed="false">&#128266;</button>
       <button class="ctrl-btn fullscreen-btn" id="fullscreenBtn"
@@ -146,11 +137,7 @@
       </div>
       <div class="name-section">
         <div class="name-form">
-          <!-- FIX-12: nameInput had no programmatically associated label, failing
-               WCAG 1.3.1. A visually-hidden <label> provides the association
-               without altering the visual design. placeholder alone is not
-               sufficient — it disappears on focus and is not read by all
-               screen readers as a label. -->
+          <!-- Visually hidden label for WCAG compliance -->
           <label for="nameInput" class="sr-only">Player name (up to 10 characters)</label>
           <input class="name-input" id="nameInput" maxlength="10"
                  placeholder="YOUR NAME" autocomplete="off" spellcheck="false"/>
@@ -177,10 +164,7 @@
     DINO RUN &middot; CHROMATIC EDITION &middot; <span id="footer-year">2026</span>
   </footer>
 
-  <!-- OPT-HTML-1: `defer` lets the HTML parser continue while scripts download,
-       then executes them in order after parsing is complete. Scripts at end of
-       <body> are non-blocking already, but `defer` is the explicit correct signal
-       and allows the browser to begin fetching both files in parallel. -->
+  <!-- Non-blocking script execution -->
   <script src="db.js" defer></script>
   <script src="game.js" defer></script>
 </body>
