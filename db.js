@@ -214,18 +214,19 @@ window.DB = (function () {
     }
 
     /* Still too large (or skipped 10-item retry) — fall back to top 5 */
-    if (combined.length > 5) {
-      combined = combined.slice(0, 5);
-      /* Attempt to save the pruned top-5 array */
-          
-     /* Attempt to write the (possibly pruned) combined array */
+     let prunedToFive = false;
+     if (combined.length > 5) {
+       combined = combined.slice(0, 5);
+       prunedToFive = true;
+     }
+ 
+     /* Always attempt final write of current combined array */
      if (dbSet(key, JSON.stringify(combined))) {
-       if (combined.length <= 5 && knownExisting) {
+       if (prunedToFive) {
          console.warn('[DB] Storage critical: pruned to top 5 to fit quota');
        }
        return combined;
      }
-    }
 
     /* Complete failure */
     window.dispatchEvent(new CustomEvent('db:criticalFailure', {
