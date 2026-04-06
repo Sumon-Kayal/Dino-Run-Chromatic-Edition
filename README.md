@@ -2,7 +2,7 @@
 
 A faithful, offline-first Chrome Dino clone with a chromatic day/night cycle,
 pterodactyls, persistent local leaderboard, and a full Web Audio sound engine.
-No network calls. No tracking. No dependencies.
+Completely offline — no network calls, tracking, or dependencies.
 
 > **Current version:** `0.7.0-beta`  
 > See [CHANGELOG.md](CHANGELOG.md) for the full history.
