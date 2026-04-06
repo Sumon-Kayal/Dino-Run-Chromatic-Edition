@@ -18,19 +18,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   to score rather than elapsed time. At low scores this produced speed values
   well below `SPEED_MIN`, undermining the Chrome-accurate starting pace.
 
-  Removed the score-based formula. The single remaining expression uses a
-  reduced coefficient: `speed += 0.002 * dt` (was `0.0025`), capped at `13`.
+  Replaced with a single linear ramp:
+  ```js
+  speed += 0.002 * dt;
+  if (speed > CONFIG.SPEED_MAX) speed = CONFIG.SPEED_MAX;
+  ```
   Speed now ramps continuously from game start at a rate that matches observed
-  Chrome Dino pacing more closely. The `CONFIG.SPEED_MIN` / `CONFIG.SPEED_MAX`
-  constants are retained for the speed bar display calculation.
+  Chrome Dino pacing more closely.
+
+- **`CONFIG.SPEED_MIN` / `CONFIG.SPEED_MAX` corrected to actual runtime values** (`game.js`)  
+  `SPEED_MIN` was `8.5` and `SPEED_MAX` was `18.5` — the 854px-canvas-scaled
+  equivalents of the original Chromium values. Both were used as the speed bar
+  display range, but the actual gameplay cap was the hardcoded literal `13` and
+  the actual start speed was the literal `6`. The constants were therefore
+  documentation that disagreed with runtime behaviour.
+
+  Updated to `SPEED_MIN: 6` and `SPEED_MAX: 13` so they match the actual start
+  and cap values. `initGame()` now sets `speed = CONFIG.SPEED_MIN` and
+  `update()` caps at `CONFIG.SPEED_MAX` throughout — one authoritative source
+  for both values. The speed bar formulas in `update()` and `draw()` both use
+  `CONFIG.SPEED_MIN` / `CONFIG.SPEED_MAX` with a division-by-zero guard.
 
 - **Day/Night cycle — looping timer replaced with score-triggered one-way fade** (`game.js`)  
   The previous cycle used `dayTimer`, `dayDir`, and `dayPauseAt` to oscillate
   indefinitely between day and night with a 350-frame pause at each extreme.
   Direction reversed on every peak/trough, producing a full loop approximately
   every 1400 frames (~23 s at 60 Hz). This made the night phase feel arbitrary
-  and repetitive — players experienced multiple full day/night oscillations
-  within a single short run.
+  and repetitive.
 
   Replaced the entire timer block with a single score gate:
   ```js
@@ -41,83 +55,205 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `dayPhase` starts at `0` (full day) and transitions smoothly to `1` (full
   night) once the player crosses score 700, then stays there for the remainder
   of the run. The transition takes approximately 500 frames (~8 s) to complete.
-  `dayTimer`, `dayDir`, and `dayPauseAt` are no longer used in the update loop;
-  their declarations and `initGame()` assignments are retained as dead-state
-  cleanup but have no runtime effect.
+  `dayTimer`, `dayDir`, and `dayPauseAt` are fully removed — declarations,
+  `initGame()` assignments, and `boot()` assignments all deleted.
 
 - **Jump physics — softer arc, lower gravity** (`game.js`)  
   `GRAVITY` reduced from `0.65` to `0.55` and `JUMP_V` from `-14` to `-11.5`.
-  The previous values produced a tight, punishing arc that felt mismatched
-  against the slower obstacle spawn rate. The new values give the dino a
-  noticeably more floaty trajectory — hang time increases by approximately 15%
-  and peak height decreases slightly, making close-call jumps over tall cacti
-  more readable and rewarding.
+  The previous values produced a tight, punishing arc mismatched against the
+  slower obstacle spawn rate. The new values give the dino a noticeably floatier
+  trajectory — hang time increases by approximately 15%, making close-call jumps
+  over tall cacti more readable.
 
 - **Mid-air fast-fall — duck multiplier increased** (`game.js`)  
-  The downward velocity bonus applied while holding duck during a jump was
-  increased from `2.5 * dt` to `3.8 * dt`. The previous value was too subtle
-  at the new lower gravity — the fast-fall felt nearly identical to a normal
-  descent. At `3.8` the dino snaps down perceptibly when duck is held mid-air,
-  making the mechanic feel intentional and useful again.
+  The downward velocity bonus applied while holding duck during a jump increased
+  from `2.5 * dt` to `3.8 * dt`. At the new lower gravity the old value was too
+  subtle — fast-fall felt nearly identical to a normal descent. At `3.8` the
+  dino snaps down perceptibly when duck is held mid-air.
 
 - **Obstacle cooldown formula — CONFIG constants replaced with direct expression** (`game.js`)  
   The spawn cooldown was derived from four `CONFIG` fields (`OBS_CD_MIN`,
   `OBS_CD_BASE`, `OBS_CD_RNG`, `OBS_CD_SPEED`) which combined to
   `Math.max(30, Math.floor(55 + random * 70 - speed * 1.5))`. The random range
-  of `70` frames produced excessive spacing variance — consecutive obstacles
-  could spawn anywhere from ~30 to ~110 frames apart at minimum speed.
+  of `70` frames produced excessive spacing variance.
 
   Replaced with a tighter expression:
   ```js
   obsCooldown = Math.max(20, (80 - speed * 3.2) + Math.random() * 25);
   ```
-  The base shrinks faster with speed (`3.2` vs `1.5` coefficient), the random
-  spread is narrowed to `25` frames, and the hard floor drops to `20`. At
-  starting speed (`6`) the cooldown is approximately `60–85` frames; at cap
-  (`13`) it is approximately `20–45` frames. Obstacle density now scales more
-  aggressively with speed, sharpening the mid-to-late game difficulty curve.
+  The base shrinks faster with speed (`3.2` vs `1.5` coefficient), random
+  spread narrows to `25` frames, and the hard floor drops to `20`. The four
+  now-unused `OBS_CD_*` keys have been removed from `CONFIG`; `OBS_CD_INIT`
+  is retained.
 
 - **Collision hitboxes — both dino and obstacle boxes tightened by 1 px per side** (`game.js`)  
   Dino box inset changed from `x+8 / y+6 / h-10` to `x+9 / y+7 / h-12`.
   Obstacle box inset changed from `+4 / +4 / w-8 / h-8` to `+5 / +5 / w-10 /
-  h-10`. Each side gains 1 px of additional leniency — reducing the effective
-  collision area by ~2 px on every axis. Combined with the updated jump physics,
-  this eliminates the class of kills where the dino appeared to clear an
-  obstacle visually but died due to invisible hitbox overlap on the sprite's
-  transparent border pixels.
+  h-10`. Each side gains 1 px of additional leniency, eliminating the class of
+  kills where the dino appeared to clear an obstacle visually but died due to
+  invisible hitbox overlap on the sprite's transparent border pixels. Hitbox
+  comments updated from `4px each side` to `5px each side`; ptera collision math
+  recalculated to reflect new insets.
 
-- **Game start speed — `CONFIG.SPEED_MIN` replaced with literal `6`** (`game.js`)  
-  `initGame()` now sets `speed = 6` directly (was `speed = CONFIG.SPEED_MIN`,
-  i.e. `8.5`). Starting at `8.5` — the 854px-canvas-scaled equivalent of the
-  original Chromium speed — proved too fast for new players given the other
-  physics changes. `6` matches the raw Chromium source value and gives players
-  roughly two additional seconds at a comfortable pace before the speed ramp
-  becomes meaningful. `CONFIG.SPEED_MIN` is unchanged and continues to anchor
-  the speed bar display.
+- **Pterodactyl flight heights corrected** (`game.js`)  
+  The mid-height pterodactyl was spawned at `GY - 60`. At that Y position,
+  the shrunken hitbox bottom edge (`GY - 36`) sits 10 px above the standing
+  dino's hitbox top (`GY - 46`) — the two boxes never overlap, so the mid ptera
+  was uncollidable. Corrected to `GY - 40` so the bottom edge (`GY - 16`)
+  properly intersects the standing hitbox. The low ptera adjusted from `GY - 68`
+  to `GY - 69` for a cleaner 1 px margin against the ducking hitbox. Heights
+  are now `[GY - 40, GY - 120, GY - 69]`.
 
-- **Speed bar formula — updated to match new start speed** (`game.js`)  
-  The `speed-fill` width calculation used `(speed - CONFIG.SPEED_MIN) /
-  (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)`, which would show the bar at a negative
-  percentage during the new `6 → 8.5` range. Updated to use the literal range
-  boundaries `(speed - 6) / (13 - 6)` so the bar starts at `0%` and fills
-  linearly to `100%` at the cap.
+- **`gameOver()` rollback uses pre-write snapshot** (`game.js`)  
+  When `DB.addScore()` failed due to a full quota, `dbStats.bestScore` was
+  rolled back to `existingLb[0].score` — the leader of the current on-disk
+  leaderboard. If the current run's score was higher than any stored score, this
+  discarded the legitimate new high. The fix captures `prevSessionBest =
+  dbStats.bestScore` before any writes are attempted and uses that snapshot for
+  rollback, preserving the player's actual previous best regardless of run order.
 
 - **`visibilitychange` handler — auto-pause captures `pauseStartTime`** (`game.js`)  
   The previous hidden-tab handler unconditionally called
-  `cancelAnimationFrame(animFrame)` without going through `togglePause()`.
-  This meant `pauseStartTime` was never set, so when the tab became visible
-  again and the player unpaused, `gameStartWallTime` was not offset by the
-  hidden duration — all time spent with the tab backgrounded was counted
-  toward the run's Best Time. The handler now calls `togglePause()` when
-  `state === 'running' && !paused`, ensuring the pause infrastructure runs
-  through a single, consistent code path.
+  `cancelAnimationFrame(animFrame)` without going through `togglePause()`,
+  meaning `pauseStartTime` was never set. When the tab became visible and the
+  player resumed, `gameStartWallTime` was not offset by the hidden duration —
+  all backgrounded time counted toward Best Time. The handler now calls
+  `togglePause()` when `state === 'running' && !paused`, routing through a
+  single consistent code path.
 
-- **Inline annotation comments stripped** (`game.js`)  
-  All `BUG-#N FIX:`, `OPT-N:`, `FIX-N:`, `SEC-N:`, and `ISSUE-N FIX:` prefixes
-  were removed from inline comments throughout the file. The annotations were
-  added during the bug-fix and audit passes to cross-reference issues; they are
-  no longer necessary now that the issues are resolved and documented here.
-  Comment text was preserved or condensed; no logic was changed.
+- **Annotation comments stripped** (`game.js`, `db.js`, `server.py`, `index.html`, `style.css`)  
+  All internal tracking prefixes (`BUG-#N FIX:`, `OPT-N:`, `FIX-N:`, `SEC-N:`,
+  `ISSUE-N FIX:`, `Finding N fix:`) were removed from inline comments across all
+  five files. Explanatory comment text was preserved or condensed; no logic was
+  changed.
+
+### Fixed
+
+- **`db.js` TDZ crash on first-ever page load** (`db.js`) — **HIGH**  
+  `let quotaUsed`, `let quotaTotal`, `let quotaError`, and `let _quotaTimer`
+  were declared on lines 71–84, after the `migrate()` IIFE on line 46.
+  On a fresh device (no `dino:version` stored), `migrate()` calls `dbSet()`,
+  which calls `refreshQuota()`, which reads `_quotaTimer`. All four bindings
+  were in the Temporal Dead Zone at that point — `ReferenceError: Cannot access
+  '_quotaTimer' before initialization` was thrown, crashing `db.js` before
+  `window.DB` was ever assigned. `game.js` guards on `window.DB` and would
+  throw a second error immediately after, leaving the game broken on first load
+  in any browser with the Storage API available.
+
+  Moved all four `let` declarations to immediately before the `migrate()` IIFE
+  so they are fully initialised when `migrate()` runs.
+
+- **`pruneAndSave` redundant top-10 retry when caller already knows it failed** (`db.js`) — **MEDIUM**  
+  `saveLeaderboard` calls `dbSet('dino:lb', json)` first. On quota failure it
+  calls `pruneAndSave('dino:lb', lb, lb)` — passing `lb` as both the new data
+  and the `knownExisting` hint. The old `pruneAndSave` then unconditionally
+  attempted another `dbSet` with the same 10-item array that had just failed,
+  burning a write attempt that was guaranteed to fail again before reaching the
+  top-5 fallback.
+
+  Added a guard: when `knownExisting` is provided by the caller, the top-10
+  retry write is skipped — the caller already knows 10 items failed. The first
+  fallback attempt is immediately the top-5 slice. This reduces the worst-case
+  write count from 3 to 2 under full-quota conditions.
+
+- **`server.py` `find_ssl_files` only caught `ssl.SSLError`, not `OSError`** (`server.py`) — **HIGH**  
+  `load_cert_chain` raises `OSError` (specifically `FileNotFoundError`) for
+  missing or unreadable files. Between `os.listdir()` and the `load_cert_chain`
+  call, a cert file could be deleted or become permission-denied. The uncaught
+  `OSError` would propagate out of `find_ssl_files` and crash the entire server
+  startup with an unhelpful traceback instead of gracefully skipping the pair.
+
+  Changed `except ssl.SSLError:` to `except (ssl.SSLError, OSError):`.
+
+- **`server.py` socket listened on plain TCP before TLS wrap** (`server.py`) — **HIGH**  
+  `ThreadingHTTPServer((HOST, PORT), Handler)` uses `bind_and_activate=True` by
+  default, calling `socket.listen()` immediately at construction. The socket was
+  actively accepting TCP connections before `ctx.wrap_socket()` was called. A
+  client connecting during that window received a raw TCP socket — the TLS
+  handshake would fail or the connection would be silently served without
+  encryption.
+
+  Changed to `bind_and_activate=False`. The `SSLContext` wraps the socket
+  first, then `server_bind()` + `server_activate()` are called manually — TLS
+  is in place before the socket ever enters the listen queue.
+
+- **`server.py` validated `SSLContext` thrown away, rebuilt from scratch** (`server.py`) — **MEDIUM**  
+  `find_ssl_files` built a complete `SSLContext`, proved the cert/key pair was
+  valid via `load_cert_chain`, then returned only the file paths and discarded
+  the context. The startup block then created a second `SSLContext` and called
+  `load_cert_chain` again on the same files — redundant I/O and a TOCTOU window
+  where the files could change between validation and actual use.
+
+  `find_ssl_files` now returns the validated context as the first element of its
+  4-tuple: `(ctx, cert_path, key_path, had_pair_candidates)`. The startup block
+  calls `ctx.wrap_socket()` directly — no second context, no second file read.
+
+- **`server.py` HSTS header sent over plain HTTP connections** (`server.py`) — **MEDIUM**  
+  `end_headers()` unconditionally emitted `Strict-Transport-Security:
+  max-age=31536000` on every response. When the server fell back to HTTP (no
+  certs found, or `ALLOW_HTTP_FALLBACK=1`), browsers would cache the HSTS
+  policy for a year, making the origin unreachable over HTTP on the same browser
+  after any future plain-HTTP fallback session. Added `Handler.tls_enabled:
+  ClassVar[bool] = False` and set it to `True` after `httpd.server_activate()`
+  in the successful TLS path. The HSTS header is only sent when
+  `self.tls_enabled` is `True`.
+
+- **`server.py` socket bound before `ALLOW_HTTP_FALLBACK` checked in `had_pair_candidates` branch** (`server.py`) — **LOW**  
+  In the `elif had_pair_candidates:` block, `ThreadingHTTPServer((HOST, PORT),
+  Handler)` was created unconditionally, binding and listening on the port,
+  before the `if ALLOW_HTTP_FALLBACK` check ran. If `ALLOW_HTTP_FALLBACK` was
+  false, `sys.exit(1)` fired on the next line — but the socket was already
+  bound. Inverted the check: `ALLOW_HTTP_FALLBACK` is evaluated first; the
+  server is only instantiated inside the `if ALLOW_HTTP_FALLBACK:` branch.
+
+- **`index.html` inline favicon used unencoded SVG in `data:` URI** (`index.html`) — **LOW**  
+  The `<link rel="icon">` `href` contained a raw `<svg …>` string inline in the
+  `data:image/svg+xml,` URI without percent-encoding. Unencoded `<`, `>`, and
+  `#` in `data:` URIs are handled inconsistently across browsers — Chromite on
+  Android and some versions of Firefox may reject or display a broken icon.
+  Replaced with a fully `%xx`-encoded URI (`%3Csvg`, `%3E`, `%3Crect`, etc.)
+  which is valid in all environments.
+
+### Added
+
+- **`db.test.js` — unit tests for `db.js`** (new file)  
+  Comprehensive test suite using the Node.js built-in `node:test` runner — no
+  external dependencies. Run with `node db.test.js`. Covers:
+  - `pruneAndSave`: write-count assertions proving the conditional top-10 skip,
+    top-5 fallback success, `db:criticalFailure` dispatch on total failure
+  - `saveLeaderboard`: direct write, quota-exceeded path, `null` return
+  - `addScore`: score validation (NaN, Infinity, negative, string, float floor),
+    sort correctness, 10-entry cap, required field shape
+  - `getStats`: default object always includes `bestTime: 0`, missing-field
+    backfill from partial stored data, corrupt JSON recovery, round-trip
+  - `migrate`: `recordId` backfill on legacy entries, existing-id preservation,
+    corrupt JSON handling, version-current skip, `dino:version` bump
+  - `clearLeaderboard` / `saveStats` / `savePlayerName`: return values under
+    success and full-quota conditions
+  - Quota events: `db:quotaFull` and `db:criticalFailure` dispatch
+  - TDZ regression suite: five tests confirming the `migrate()` declaration
+    order fix, including `doesNotThrow` guards and initial value assertions
+
+- **`game.test.js` — unit tests for changed game logic** (new file)  
+  Isolated pure-function test suite using the Node.js built-in `node:test`
+  runner. Extracts `CONFIG` from the source file directly to validate structural
+  changes; mirrors the changed computation formulas as standalone functions.
+  Covers:
+  - `CONFIG` structure: asserts `OBS_CD_MIN/BASE/RNG/SPEED` removed,
+    `OBS_CD_INIT` retained
+  - `initGame` speed assignment: asserts `speed = CONFIG.SPEED_MIN` present
+  - Speed bar integer percentage (`update()` dedup): boundary values, cap at
+    100, monotonicity across valid range
+  - Speed bar float percentage (`draw()` bar width): boundary, cap, range [0,1]
+  - Speed colour threshold: confirms transition at speed 9.5
+  - Speed cap at 13: exact, above, below
+  - AABB hitbox shrink: all four dimensions at 5 px per side
+  - Removed globals: regex assertions that `dayDir`, `dayTimer`, `dayPauseAt`
+    `let` declarations are gone from source
+  - Speed bar source literals: confirms `(speed - 6) / (13 - 6)` appears twice
+    and `CONFIG.SPEED_MIN/MAX` are not used in the bar calculation
+
+---
 
 ---
 
