@@ -410,7 +410,7 @@ const SPEED_CAP   = 13;
 function initGame() {
   _cancelSoundTimers();
   score      = 0;
-  speed      = SPEED_START;
+  speed      = 6;
 
   // Chrome-like day start
   dayPhase = 0;
@@ -746,7 +746,7 @@ function update(dt) {
 
   // Chrome-like linear speed
   speed += 0.002 * dt;
-  if (speed > SPEED_CAP) speed = SPEED_CAP;
+  if (speed > 13) speed = 13;
 
   // ── Milestone flash (every 100 pts) ───────────────────
   let ms = Math.floor(score / 100);
