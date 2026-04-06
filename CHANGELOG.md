@@ -241,7 +241,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   Covers:
   - `CONFIG` structure: asserts `OBS_CD_MIN/BASE/RNG/SPEED` removed,
     `OBS_CD_INIT` retained
-  - `initGame` speed assignment: asserts `speed = CONFIG.SPEED_MIN` present
+  - `initGame` speed literal: asserts `speed = 6` present and
+    `speed = CONFIG.SPEED_MIN` assignment absent
   - Speed bar integer percentage (`update()` dedup): boundary values, cap at
     100, monotonicity across valid range
   - Speed bar float percentage (`draw()` bar width): boundary, cap, range [0,1]
@@ -1338,5 +1339,8 @@ day/night cycle, and audio confirmed stable across all platforms.
 - Builds distributed to testers on Chrome 88+ (Windows, macOS, Linux),
   Firefox 93+ (Linux), Cromite 142+ (Android), and Safari 13+ (iOS).
 - Termux/Android test environment verified: `server.py` HTTPS and HTTP
+  fallback confirmed functional on Android 12 and 13.
+- No blockers found on first load across all platforms.
+oid test environment verified: `server.py` HTTPS and HTTP
   fallback confirmed functional on Android 12 and 13.
 - No blockers found on first load across all platforms.

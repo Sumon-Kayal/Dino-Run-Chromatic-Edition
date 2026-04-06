@@ -404,13 +404,10 @@ let gameObstacles = 0;
  * cancels pending sound timers, randomizes moon and ambient positions, and recreates the offscreen
  * sky canvas so the baked sky (horizon and stars) is regenerated for the new game.
  */
-const SPEED_START = 6;
-const SPEED_CAP   = 13;
-
 function initGame() {
   _cancelSoundTimers();
   score      = 0;
-  speed      = 6;
+  speed      = CONFIG.SPEED_MIN;
 
   // Chrome-like day start
   dayPhase = 0;
@@ -746,7 +743,7 @@ function update(dt) {
 
   // Chrome-like linear speed
   speed += 0.002 * dt;
-  if (speed > 13) speed = 13;
+  if (speed > CONFIG.SPEED_MAX) speed = CONFIG.SPEED_MAX;
 
   // ── Milestone flash (every 100 pts) ───────────────────
   let ms = Math.floor(score / 100);
@@ -860,8 +857,8 @@ function update(dt) {
   
   // Dedup speed bar width
   let newSpeedPct = Math.min(
-  ((13 - 6) > 0
-    ? ((speed - 6) / (13 - 6)) * 100
+  ((CONFIG.SPEED_MAX - CONFIG.SPEED_MIN) > 0
+    ? ((speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)) * 100
     : 0),
   100
   ) | 0;   // integer percent — 101 distinct values max
@@ -992,8 +989,8 @@ function draw() {
   // Always visible, including in fullscreen (where the DOM
   // stats panel is hidden). Colour shifts blue → orange → red.
   let speedPct = Math.min(
-    (13 - 6) > 0
-      ? (speed - 6) / (13 - 6)
+    (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN) > 0
+      ? (speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)
       : 0,
     1
   );

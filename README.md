@@ -2,7 +2,7 @@
 
 A faithful, offline-first Chrome Dino clone with a chromatic day/night cycle,
 pterodactyls, persistent local leaderboard, and a full Web Audio sound engine.
-Completely offline — no network calls, tracking, or dependencies.
+No network calls. No tracking. No dependencies.
 
 > **Current version:** `0.7.0-beta`  
 > See [CHANGELOG.md](CHANGELOG.md) for the full history.
@@ -38,7 +38,7 @@ Completely offline — no network calls, tracking, or dependencies.
 
 ## Project Structure
 
-```text
+```
 dino-run/
 ├── index.html          # Shell, overlays, stats panel, leaderboard UI
 ├── game.js             # Game engine — physics, rendering, input, audio, HUD
@@ -89,7 +89,7 @@ python3 server.py
 
 **3. Open in Cromite:**
 
-```text
+```
 https://localhost:1999
 ```
 
@@ -129,10 +129,9 @@ the project root.
 
 ### Speed
 
-The game starts at **speed 6** (`SPEED_START`) and ramps linearly via
-`speed += 0.002 × dt` each frame, capped at **13** (`SPEED_CAP`). The
-speed bar fills from `0%` at start to `100%` at cap, using the formula
-`(speed - 6) / (13 - 6)` normalized to 0-100%.
+The game starts at **speed 6** (`CONFIG.SPEED_MIN`) and ramps linearly via
+`speed += 0.002 × dt` each frame, capped at **13** (`CONFIG.SPEED_MAX`). The
+speed bar fills from `0%` at start to `100%` at cap.
 
 ### Day / Night
 
@@ -241,14 +240,14 @@ best score and best time.
 | Concern | Approach |
 |---|---|
 | Game loop | `requestAnimationFrame`; `dt` = elapsed ms / 16.667, clamped to 3.0 |
-| Speed | Linear ramp `+= 0.002 × dt`, range `SPEED_START (6)` → `SPEED_CAP (13)` |
+| Speed | Linear ramp `+= 0.002 × dt`, range `CONFIG.SPEED_MIN (6)` → `CONFIG.SPEED_MAX (13)` |
 | Physics | Euler integration; all values scaled by `dt` — Hz-independent |
 | DOM access | All elements cached once in `const DOM = {…}` at startup |
 | Canvas palette | `lerpRGB()` result cached; rebuilt only when `dayPhase` changes |
 | Sky layer | Baked onto `OffscreenCanvas` on each `dayPhase` change; blitted each frame |
 | `fillStyle` | Deduplicated via `setFill()` — only written when colour changes |
 | HUD text | `textContent` deduplicated — skipped when string unchanged |
-| Speed bar | `style.width` deduplicated — skipped when integer `%` unchanged; uses literal `6` and `13` in formula `(speed - 6) / (13 - 6)` with division-by-zero guard |
+| Speed bar | `style.width` deduplicated — skipped when integer `%` unchanged; `CONFIG.SPEED_MIN/MAX` with division-by-zero guard |
 | Collision | Two reusable `_dinoBox` / `_obsBox` objects mutated in-place each frame |
 | Obstacle array | Cleaned in-place with reverse `splice` — no per-frame allocation |
 | Sound timers | `setTimeout` IDs tracked in `_soundTimers`; cancelled on restart |
