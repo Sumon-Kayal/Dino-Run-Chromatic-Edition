@@ -248,9 +248,12 @@ describe('pruneAndSave — knownExisting skips the top-10 retry write', () => {
   });
 
   test('null result when entries <= 5 and storage is full (no top-5 slice attempted)', () => {
-    // pruneAndSave only tries top-5 when combined.length > 5
-    // With 3 entries and knownExisting provided → skips top-10 write → tries top-5 slice
-    // (3 is not > 5) → goes straight to criticalFailure
+    // pruneAndSave only tries top-5 when combined.length > 5.
+    // With 3 entries and knownExisting provided → skips top-10 write →
+    // combined.length=3 is not > 5 so no slice, but pruneAndSave ALWAYS
+    // attempts the final dbSet write regardless — so 2 writes occur:
+    //   write 1: saveLeaderboard initial dbSet → fail
+    //   write 2: pruneAndSave final dbSet (no-slice path) → fail → criticalFailure
     const ls = makeTrackingLS({ 'dino:version': '1' }, Infinity);
     const DB = loadDB({ ls });
 
@@ -258,9 +261,7 @@ describe('pruneAndSave — knownExisting skips the top-10 retry write', () => {
     const result = DB.saveLeaderboard(lb);
 
     assert.equal(result, null, 'should return null');
-    // Only 1 write: the saveLeaderboard initial attempt (pruneAndSave skips top-10
-    // and combined.length <=5 so no top-5 write either)
-    assert.equal(ls.writes, 1, 'only the initial saveLeaderboard write should be attempted');
+    assert.equal(ls.writes, 2, 'exactly 2 writes: initial saveLeaderboard + pruneAndSave final attempt');
   });
 
 });
@@ -743,6 +744,69 @@ describe('getLeaderboard — edge cases', () => {
     const lb = DB.getLeaderboard();
     assert.equal(lb.length, 3);
     assert.equal(lb[0].score, 300);
+  });
+
+});
+
+/* ── variable declaration order — TDZ regression (PR refactor) ───── */
+
+describe('variable declaration order — TDZ regression', () => {
+
+  /* In a previous version quotaUsed/quotaTotal/quotaError/_quotaTimer were
+     declared AFTER the migrate() IIFE.  When migrate() called dbSet(), which
+     called refreshQuota(), which read _quotaTimer, the `let` TDZ would throw
+     a ReferenceError.  The PR moved the four declarations above migrate() to
+     fix this.  The tests below are regression guards for that fix. */
+
+  test('loading db.js from scratch (no stored version) does not throw', () => {
+    // No version stored → migrate() IIFE runs → calls dbSet() → calls
+    // refreshQuota() → accesses _quotaTimer.  Must not throw ReferenceError.
+    assert.doesNotThrow(() => {
+      loadDB();
+    }, 'loading db.js without a stored version must not throw');
+  });
+
+  test('migrate() with legacy leaderboard writes version without TDZ error', () => {
+    // Legacy entries + no stored version → migrate rewrites dino:lb
+    // and writes dino:version.  Both writes go through dbSet/refreshQuota.
+    const legacyLb = [
+      { name: 'TDZ_TEST', score: 77, when: "01 Jan '26 00:00" },
+    ];
+    assert.doesNotThrow(() => {
+      loadDB({
+        preloadKey: 'dino:lb',
+        preloadVal: JSON.stringify(legacyLb),
+      });
+    }, 'migrate() with legacy data must not throw a TDZ ReferenceError');
+  });
+
+  test('quotaError is false by default (initial value accessible before migration)', () => {
+    // quotaError is declared and initialised to false at module load time.
+    // If the TDZ bug were present this access would throw; here we verify the
+    // getter returns the default false value after a normal load.
+    const DB = loadDB();
+    assert.equal(DB.quotaError, false, 'quotaError must start as false');
+  });
+
+  test('quotaUsed is 0 by default (initial value accessible before migration)', () => {
+    const DB = loadDB();
+    assert.equal(DB.quotaUsed, 0, 'quotaUsed must start as 0');
+  });
+
+  test('quotaTotal defaults to 5 MB (initial value accessible before migration)', () => {
+    const DB = loadDB();
+    assert.equal(DB.quotaTotal, 5 * 1024 * 1024, 'quotaTotal must default to 5 MB');
+  });
+
+  test('dbSet called inside migrate() does not throw when storage is available', () => {
+    // Ensures the full code path migrate() → dbSet() → refreshQuota()
+    // completes without any TDZ or undefined reference errors.
+    const ls = makeTrackingLS({}, 0); // 0 = never fail
+    assert.doesNotThrow(() => {
+      loadDB({ ls });
+    });
+    // dino:version must have been written, confirming dbSet() ran successfully
+    assert.equal(ls._store['dino:version'], '1');
   });
 
 });
