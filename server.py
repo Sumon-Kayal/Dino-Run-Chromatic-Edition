@@ -85,6 +85,10 @@ class Handler(SimpleHTTPRequestHandler):
     # if filenames are ever changed — no second edit required.
     _DENIED: ClassVar[frozenset[str]] = frozenset()
 
+    # Set to True at startup when TLS is successfully configured so that
+    # end_headers() only emits HSTS on actual HTTPS responses.
+    tls_enabled: ClassVar[bool] = False
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIR, **kwargs)
 
@@ -130,7 +134,9 @@ class Handler(SimpleHTTPRequestHandler):
         )
         # HSTS: tell browsers to always use HTTPS for this origin (1 year).
         # includeSubDomains is omitted — localhost only.
-        self.send_header('Strict-Transport-Security', 'max-age=31536000')
+        # Only sent when TLS is active — meaningless and misleading over HTTP.
+        if self.tls_enabled:
+            self.send_header('Strict-Transport-Security', 'max-age=31536000')
         super().end_headers()
 
     def do_GET(self):
@@ -222,6 +228,7 @@ if ctx and cert and key:
         httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
         httpd.server_bind()
         httpd.server_activate()
+        Handler.tls_enabled = True
 
         print("🔐 HTTPS ENABLED")
         print(f"   Cert : {os.path.basename(cert)}")
@@ -248,8 +255,8 @@ if ctx and cert and key:
             sys.exit(1)
 
 elif had_pair_candidates:
-    httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     if ALLOW_HTTP_FALLBACK:
+        httpd = ThreadingHTTPServer((HOST, PORT), Handler)
         print("⚠  TLS files were found, but no valid cert/key pair could be loaded → HTTP mode")
         print("   To require HTTPS, fix or remove the broken TLS files.")
         print(f"➡  http://localhost:{PORT}")
@@ -272,3 +279,4 @@ try:
     httpd.serve_forever()
 except KeyboardInterrupt:
     print("\n🛑 Server stopped")
+        
