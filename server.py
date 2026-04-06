@@ -29,12 +29,13 @@ def find_ssl_files(directory):
 
     Each candidate pair is validated with ssl.SSLContext.load_cert_chain
     before being returned. Pairs that fail (mismatched cert/key, wrong
-    format, etc.) are skipped silently.
+    format, missing file, bad permissions, etc.) are skipped silently.
 
-     Returns:
-         (cert_path, key_path, had_pair_candidates): On success, paths to
-             the validated cert and key files. On failure, (None, None, bool)
-             where the bool indicates whether any candidate pairs existed.
+    Returns:
+        (ctx, cert_path, key_path, had_pair_candidates): On success, a
+            ready-to-use SSLContext and paths to the validated cert and key
+            files. On failure, (None, None, None, bool) where the bool
+            indicates whether any candidate pairs existed.
     """
     certs = []
     keys  = []
@@ -56,14 +57,17 @@ def find_ssl_files(directory):
             k_path = os.path.join(directory, k)
             try:
                 # Validate the pair is a real, matching cert+key before
-                # committing to it — catches mismatches early.
+                # committing to it — catches mismatches, missing files,
+                # and permission errors early. The validated context is
+                # returned directly so the caller never needs to reload
+                # the same files a second time.
                 ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
                 ctx.load_cert_chain(certfile=c_path, keyfile=k_path)
-                return c_path, k_path, had_pair_candidates
-            except ssl.SSLError:
+                return ctx, c_path, k_path, had_pair_candidates
+            except (ssl.SSLError, OSError):
                 continue  # try next pair
 
-    return None, None, had_pair_candidates
+    return None, None, None, had_pair_candidates
 
 
 # ─────────────────────────────────────────────
@@ -71,23 +75,27 @@ def find_ssl_files(directory):
 # ─────────────────────────────────────────────
 class Handler(SimpleHTTPRequestHandler):
 
-    # SEC-2: Set a per-request read timeout so a slow/stalled client cannot
+    # Set a per-request read timeout so a slow/stalled client cannot
     # hold a thread open indefinitely (slowloris mitigation).
     # 10 s is generous for a local game page — all assets are small.
     timeout = 10
 
     # Populated after cert/key paths are resolved (see bottom of file).
-    # FIX-13: derived from actual cert/key basenames so the deny list stays
-    # correct if filenames are ever changed — no second edit required.
+    # Derived from actual TLS filenames so the deny list stays correct
+    # if filenames are ever changed — no second edit required.
     _DENIED: ClassVar[frozenset[str]] = frozenset()
+
+    # Set to True at startup when TLS is successfully configured so that
+    # end_headers() only emits HSTS on actual HTTPS responses.
+    tls_enabled: ClassVar[bool] = False
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=DIR, **kwargs)
 
     def _is_denied(self):
-        # BUG-4 FIX: iteratively URL-decode the path before extracting the
-        # basename. A single unquote() pass is insufficient — /%2563ert.pem
-        # decodes once to /%63ert.pem (basename still "%63ert.pem", no match).
+        # Iteratively URL-decode the path before extracting the basename.
+        # A single unquote() pass is insufficient — /%2563ert.pem decodes
+        # once to /%63ert.pem (basename still "%63ert.pem", no match).
         # Loop until the string is stable so all encoding layers are stripped.
         path = self.path.split('?')[0]
         while True:
@@ -97,7 +105,7 @@ class Handler(SimpleHTTPRequestHandler):
             path = decoded
         return os.path.basename(decoded).lower() in self._DENIED
 
-    # SEC-1: Inject security headers into every response.
+    # Inject security headers into every response.
     # Called by SimpleHTTPRequestHandler before body headers are flushed.
     def end_headers(self):
         # Prevent MIME-type sniffing (CVE class: content-type confusion attacks)
@@ -126,7 +134,9 @@ class Handler(SimpleHTTPRequestHandler):
         )
         # HSTS: tell browsers to always use HTTPS for this origin (1 year).
         # includeSubDomains is omitted — localhost only.
-        self.send_header('Strict-Transport-Security', 'max-age=31536000')
+        # Only sent when TLS is active — meaningless and misleading over HTTP.
+        if self.tls_enabled:
+            self.send_header('Strict-Transport-Security', 'max-age=31536000')
         super().end_headers()
 
     def do_GET(self):
@@ -141,7 +151,7 @@ class Handler(SimpleHTTPRequestHandler):
             return
         super().do_HEAD()
 
-    # SEC-3: SimpleHTTPRequestHandler does not implement POST/PUT/DELETE/OPTIONS
+    # SimpleHTTPRequestHandler does not implement POST/PUT/DELETE/OPTIONS
     # (they return 501 via the base class). Explicitly gate them here so that
     # if a future Python version or subclass ever adds those methods, the deny
     # list is still enforced before the body is read or files are touched.
@@ -195,29 +205,30 @@ HOST = '0.0.0.0'
 # loopback-only.
 PORT = 1999
 
-httpd = ThreadingHTTPServer((HOST, PORT), Handler)
-
-cert, key, had_pair_candidates = find_ssl_files(DIR)
-
-# Finding 1 fix: collect ALL TLS-related filenames in DIR into _DENIED,
-# not just the chosen pair. Any *.pem / *.crt / *.key file sitting next
-# to the script could contain private key material and must be blocked
-# from HTTP responses regardless of which pair was selected for TLS.
+# Collect ALL TLS-related filenames in DIR into _DENIED, not just the chosen
+# pair. Any *.pem / *.crt / *.key file sitting next to the script could
+# contain private key material and must be blocked from HTTP responses
+# regardless of which pair was selected for TLS.
 _TLS_EXTS = ('.pem', '.crt', '.key')
 Handler._DENIED = frozenset(
     f.lower() for f in os.listdir(DIR)
     if f.lower().endswith(_TLS_EXTS)
 )
 
-if cert and key:
+ctx, cert, key, had_pair_candidates = find_ssl_files(DIR)
+
+if ctx and cert and key:
     try:
-        # ssl.wrap_socket() was removed in Python 3.12.
-        # SSLContext is the correct API (works Python 3.4 → 3.12+).
-        # Note: load_cert_chain was already validated inside find_ssl_files;
-        # we re-wrap the socket here with the same context.
-        ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
-        ctx.load_cert_chain(certfile=cert, keyfile=key)
+        # Create the server without binding yet so the socket can be
+        # TLS-wrapped before it starts accepting connections. Without this,
+        # the socket enters the listen queue as plain TCP while the wrap
+        # is pending — a client connecting in that window would get a raw
+        # socket instead of a TLS one.
+        httpd = ThreadingHTTPServer((HOST, PORT), Handler, bind_and_activate=False)
         httpd.socket = ctx.wrap_socket(httpd.socket, server_side=True)
+        httpd.server_bind()
+        httpd.server_activate()
+        Handler.tls_enabled = True
 
         print("🔐 HTTPS ENABLED")
         print(f"   Cert : {os.path.basename(cert)}")
@@ -229,10 +240,11 @@ if cert and key:
         # ssl.SSLError  — bad cert/key material or mismatch
         # OSError       — socket wrap failure, missing file (FileNotFoundError
         #                 is a subclass), or other I/O error at bind time
-        # Finding 3 fix: do NOT silently fall back to plaintext HTTP.
-        # A broken TLS config is an error, not a recoverable condition.
+        # Do NOT silently fall back to plaintext HTTP. A broken TLS config is
+        # an error, not a recoverable condition.
         # Set ALLOW_HTTP_FALLBACK=1 in the environment to override.
         if ALLOW_HTTP_FALLBACK:
+            httpd = ThreadingHTTPServer((HOST, PORT), Handler)
             print("⚠  SSL setup failed → falling back to HTTP  (ALLOW_HTTP_FALLBACK is set)")
             print(f"   Reason: {e}")
             print(f"➡  http://localhost:{PORT}")
@@ -244,6 +256,7 @@ if cert and key:
 
 elif had_pair_candidates:
     if ALLOW_HTTP_FALLBACK:
+        httpd = ThreadingHTTPServer((HOST, PORT), Handler)
         print("⚠  TLS files were found, but no valid cert/key pair could be loaded → HTTP mode")
         print("   To require HTTPS, fix or remove the broken TLS files.")
         print(f"➡  http://localhost:{PORT}")
@@ -252,6 +265,7 @@ elif had_pair_candidates:
         print("   To allow HTTP fallback, set:  ALLOW_HTTP_FALLBACK=1")
         sys.exit(1)
 else:
+    httpd = ThreadingHTTPServer((HOST, PORT), Handler)
     print("🌐 No valid SSL cert/key pair found → HTTP mode")
     print("   To enable HTTPS, place any *.pem/*.crt + *.key/*.pem pair")
     print("   in the same folder as this script, then restart.")
@@ -265,3 +279,4 @@ try:
     httpd.serve_forever()
 except KeyboardInterrupt:
     print("\n🛑 Server stopped")
+        
