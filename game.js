@@ -7,17 +7,16 @@
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
-/* BUG-C FIX: guard then alias so all DB.x() calls below are consistent */
+/* Guard then alias so all DB.x() calls below are consistent */
 if (typeof window.DB === 'undefined') {
   throw new Error('game.js: window.DB not found — load db.js before game.js');
 }
 const DB = window.DB;
 
 /* ───────────────────────────────────────────────────────────
-   BUG-#1 FIX: DOM VALIDATION
+   DOM VALIDATION
    Verify all required elements exist before the game touches
-   the DOM. Throws a descriptive error during development instead
-   of a cryptic TypeError at an arbitrary line later on.
+   the DOM. Throws a descriptive error during development.
    ─────────────────────────────────────────────────────────── */
 (function validateDOM() {
   const required = [
@@ -45,10 +44,9 @@ const DB = window.DB;
 }());
 
 /* ───────────────────────────────────────────────────────────
-   OPT-1: DOM ELEMENT CACHE
+   DOM ELEMENT CACHE
    Cache every element touched at runtime once at startup.
-   Eliminates getElementById() from the hot game loop and all
-   event handlers (~60+ lookups/second → 0).
+   Eliminates getElementById() from the hot game loop.
    ─────────────────────────────────────────────────────────── */
 const DOM = {
   /* Canvas */
@@ -93,7 +91,7 @@ const DOM = {
 /* Update the DB status badge */
 DOM.dbStatus.textContent = DB.backendName;
 
-/* BUG-4/5 FIX: Listen for quota updates from db.js and show usage in badge */
+/* Listen for quota updates from db.js and show usage in badge */
 window.addEventListener('db:quota', function (e) {
   let used   = e.detail.used;
   let total  = e.detail.total;
@@ -106,15 +104,10 @@ window.addEventListener('db:quota', function (e) {
 /* Show quota full warning if a write fails */
 window.addEventListener('db:quotaFull', function () {
   DOM.dbStatus.textContent = 'STORAGE FULL \u26A0';
-  // Use setProperty() — the correct CSSOM path for CSS custom property
-  // references. element.style.color = 'var(--x)' may be silently ignored
-  // by some browsers because the shorthand setter expects a resolved value.
   DOM.dbStatus.style.setProperty('color', 'var(--danger)');
 });
 
-/* BUG-#2 FIX: Show a prominent modal when even the top-5 pruning fallback
-   fails (storage completely exhausted). The badge update alone is too easy
-   to miss — players need actionable instructions to fix the situation.    */
+/* Show a prominent modal when pruning fallback fails */
 window.addEventListener('db:criticalFailure', function () {
   DOM.dbStatus.textContent = 'STORAGE FULL \u26A0 \u2014 Score not saved';
   DOM.dbStatus.style.setProperty('color', 'var(--danger)');
@@ -134,15 +127,13 @@ window.addEventListener('db:criticalFailure', function () {
    ─────────────────────────────────────────────────────────── */
 const canvas = DOM.gameCanvas;
 const ctx    = canvas.getContext('2d');
-/* OPT-4: Sky layer optimisation — OffscreenCanvas bakes the static sky
+
+/* Sky layer optimisation — OffscreenCanvas bakes the static sky
    (background fill + horizon line + stars) once per dayPhase change instead
-   of redrawing them every frame. Especially effective during the 350-frame
-   day/night pause where dayPhase is constant. */
+   of redrawing them every frame. */
 let skyCanvas = null;
 let skyCtx    = null;
-// FIX: getContext returns null when hardware acceleration is disabled or the
-// browser is in a restricted context. Every downstream ctx.* call would throw
-// a TypeError with no useful message — fail loudly here with a clear cause.
+
 if (!ctx) {
   throw new Error(
     'game.js: canvas 2D context unavailable. ' +
@@ -156,8 +147,8 @@ const H  = 480;   // canvas height
 const GY = 360;   // ground Y position (75% of H)
 
 // Physics
-const GRAVITY = 0.65;
-const JUMP_V  = -14;
+const GRAVITY = 0.55;
+const JUMP_V  = -11.5;
 
 // Dino dimensions
 const DINO_W = 44;
@@ -170,19 +161,17 @@ const DINO_X = 80;   // fixed horizontal position
    Change values here to adjust difficulty, spawn rates, etc.
    ─────────────────────────────────────────────────────────── */
 const CONFIG = {
-  // Speed values derived from original Chrome Dino (Chromium source):
-  // start=6 px/frame, max=13 px/frame on a 600px-wide canvas.
-  // Our canvas is 854px wide (scale ×1.4233): 6×1.4233≈8.5, 13×1.4233≈18.5.
-  SPEED_MIN:    8.5,   // starting speed  (was 5.5 — original scaled from 6 px/f on 600px canvas)
-  SPEED_MAX:    18.5,  // terminal speed  (was 18  — original scaled from 13 px/f)
+  // Speed values derived from original Chrome Dino (Chromium source)
+  SPEED_MIN:    8.5,   // starting speed
+  SPEED_MAX:    18.5,  // terminal speed
   PTERA_CHANCE: 0.28,  // probability of pterodactyl vs cactus
-  PTERA_SCORE:  900,   // score before pteras appear (was 200; scaled with ramp divisor)
+  PTERA_SCORE:  900,   // score before pteras appear
   CACTUS_H_MIN: 40,    // cactus minimum height (px)
   CACTUS_H_RNG: 38,    // cactus height random range added to min
   CACTUS_W_MIN: 16,    // cactus minimum stem width
   CACTUS_W_RNG: 14,    // cactus width random range
   CACTUS_TRIPLE: 0.12, // probability of triple-cactus cluster
-  CACTUS_DBL:   0.35,  // probability of double-cactus cluster (checked only when not triple)
+  CACTUS_DBL:   0.35,  // probability of double-cactus cluster
   OBS_CD_INIT:  60,    // initial obstacle cooldown (frames)
   OBS_CD_MIN:   30,    // minimum cooldown (frames) — hard floor
   OBS_CD_BASE:  55,    // base cooldown for random calculation
@@ -191,8 +180,8 @@ const CONFIG = {
 };
 
 // Draw colour palette — recalculated each frame in draw()
-// Day:  white bg / #535353 fg  (Chrome default)
-// Night:#404040 bg / #f0f0f0 fg (Chrome inverted)
+// Day:  white bg / #535353 fg
+// Night:#404040 bg / #f0f0f0 fg
 const C = {
   cloud:   '#e0e0e0',
   dino:    '#535353',
@@ -228,11 +217,11 @@ function lerp(a, b, t) { return a + (b - a) * t; }
 
 /* Interpolate between two #rrggbb hex colours */
 /**
- * Interpolate between two #rrggbb hex colours.
- * @param {string} ca - Start colour e.g. "#ffffff"
- * @param {string} cb - End colour
- * @param {number} t  - Blend factor [0..1]
- * @returns {string} CSS rgb() string
+ * Interpolates between two #rrggbb hex colors.
+ * @param {string} ca - Start color (e.g. "#ffffff").
+ * @param {string} cb - End color.
+ * @param {number} t - Blend factor between 0 and 1.
+ * @returns {string} An `rgb(r,g,b)` CSS color string representing the blended color.
  */
 function lerpRGB(ca, cb, t) {
   let pa = parseInt(ca.slice(1), 16);
@@ -244,48 +233,44 @@ function lerpRGB(ca, cb, t) {
 }
 
 /* ───────────────────────────────────────────────────────────
-   OPT-2: PALETTE CACHE
+   PALETTE CACHE & FILL-STYLE DEDUP
    lerpRGB() parses hex and does float arithmetic 4× per frame.
    Cache the results and skip recomputation when dayPhase is
-   the same as last frame (e.g. during the 350-frame day/night
-   pause and any frame where speed/dt lands on the same value).
-
-   OPT-3: FILL-STYLE DEDUP
-   ctx.fillStyle is a canvas state write. Setting it to the same
-   value the GPU already has still costs a JS→WebGL bridge call.
-   setFill() guards against redundant assignments.
+   the same as last frame.
    ─────────────────────────────────────────────────────────── */
 let _lastFill     = '';       // tracks current ctx.fillStyle to skip redundant sets
 let _lastDayPhase = -1;       // sentinel: -1 forces first-frame palette build
 const _pal = { bgC: '', fgC: '', fgDark: '', dimC: '' };
 
 /**
- * Set ctx.fillStyle only when the colour actually changes.
- * Reduces canvas state-change calls per frame by ~50% since many
- * consecutive px() calls share the same colour.
- * @param {string} color
+ * Update the canvas 2D context's fill style only when the provided color differs from the last applied color.
+ * @param {string} color - CSS color string to apply to ctx.fillStyle.
  */
 function setFill(color) {
   if (color !== _lastFill) { ctx.fillStyle = color; _lastFill = color; }
 }
 
 /**
- * Bake the static sky layer onto skyCanvas.
- * Called once per dayPhase change (via the palette cache block in draw())
- * and once at initGame() to set the initial state.
- * During the 350-frame day/night pauses dayPhase never changes, so this
- * function is never called — the stars/horizon loop disappears entirely.
+ * Draws and caches the static sky background onto the offscreen sky canvas.
+ *
+ * Uses the current palette and `dayPhase` to render the sky fill, a horizon line, and stars.
+ * Stars are rendered only when `dayPhase > 0.1` with their alpha scaled by `dayPhase`.
+ *
+ * No-op when the offscreen sky context or palette is not available.
  */
 function redrawSkyLayer() {
   if (!skyCtx || !_pal.bgC) return;
   skyCtx.clearRect(0, 0, W, H);
+  
   // Sky background
   skyCtx.fillStyle = _pal.bgC;
   skyCtx.fillRect(0, 0, W, H);
+  
   // Horizon line
   skyCtx.fillStyle = _pal.fgC;
   skyCtx.fillRect(0, GY, W, 2);
-  // Stars — baked once, no per-frame forEach loop during pauses
+  
+  // Stars
   if (dayPhase > 0.1) {
     skyCtx.globalAlpha = dayPhase * 0.6;
     skyCtx.fillStyle   = _pal.fgDark;
@@ -294,12 +279,9 @@ function redrawSkyLayer() {
   }
 }
 
-
 /* ───────────────────────────────────────────────────────────
-   FIX-5: REUSABLE HITBOX OBJECTS
-   Allocating { x, y, w, h } inside update() creates ~60 dino-box
-   + up to 300 obstacle-box objects per second — steady minor GC
-   pressure. Mutating fixed objects eliminates all those allocations.
+   REUSABLE HITBOX OBJECTS
+   Mutating fixed objects eliminates per-frame allocations.
    ─────────────────────────────────────────────────────────── */
 const _dinoBox = { x: 0, y: 0, w: DINO_W - 14, h: 0 };
 const _obsBox  = { x: 0, y: 0, w: 0, h: 0 };
@@ -313,8 +295,6 @@ let hiScore    = 0;
 let speed      = 0;
 let frameCount = 0;
 let animFrame  = null;
-// FIX-1: delta-time tracking — lastTime is reset to 0 before every new game
-// so the first frame never computes a huge dt from a prior timestamp.
 let lastTime   = 0;
 
 let dino        = {};
@@ -323,7 +303,6 @@ let clouds      = [];
 let stars       = [];
 let obsCooldown = 0;
 
-// FIX-10: symmetric day/night — both peaks get a 350-frame pause
 let dayPhase   = 0;    // 0 = full day, 1 = full night
 let dayDir     = 1;    // direction of transition
 let dayTimer   = 0;
@@ -333,33 +312,28 @@ let duckHeld   = false;
 let playerName = 'ANON';
 
 // ── Moon ───────────────────────────────────────────────────
-// Scrolls slowly from right to left; wraps. Stored so it persists
-// across the day→night transition instead of jumping on first night.
+// Scrolls slowly from right to left; wraps.
 let moonX      = W * 0.72;
 
 // ── Pause ──────────────────────────────────────────────────
 let paused         = false;
-let pauseStartTime = 0;   // FIX: wall-clock ms when the current pause began
+let pauseStartTime = 0;   
 
 // ── Score milestone flash (every 100 pts) ─────────────────
 let flashFrames   = 0;
 let lastMilestone = 0;
 
-// OPT-4: HUD textContent dedup — skip DOM write when displayed string is unchanged
+// HUD textContent dedup — skip DOM write when displayed string is unchanged
 let _lastHdrScore = '';
 let _lastHdrHi    = '';
 
-// FIX-7: speed bar dedup — skip style.width write when percentage hasn't changed
+// Speed bar dedup — skip style.width write when percentage hasn't changed
 let _lastSpeedPct = -1;
 
-// FIX-1: wall-clock game start time for accurate bestTime at any refresh rate.
-// frameCount/60 is wrong at 120/144Hz — frameCount increments once per rAF
-// tick, not once per real second. performance.now() is Hz-independent.
+// Wall-clock game start time for accurate bestTime at any refresh rate.
 let gameStartWallTime = 0;
 
-// FIX-2: accumulated ground scroll offset — replaces frameCount*speed*0.3 which
-// is Hz-dependent. groundScrollX accrues speed*dt each update, producing the
-// same visual scroll speed at 60, 90, 120, and 144Hz.
+// Accumulated ground scroll offset
 let groundScrollX = 0;
 
 // ── Web Audio ─────────────────────────────────────────────
@@ -367,11 +341,15 @@ const AudioCtxCtor = window.AudioContext || window.webkitAudioContext;
 let audioCtx     = null;
 let soundMuted   = false;
 
-// SEC-4: track pending sound setTimeout IDs so they can be cancelled in
-// initGame(). Without this, soundDie/soundMilestone callbacks fire up to
-// 140ms after a fast restart — playing stale sounds over the new game.
+// Track pending sound setTimeout IDs so they can be cancelled 
+// on restart, preventing stale sounds.
 let _soundTimers = [];
 
+/**
+ * Schedule a sound callback to run after the given delay and track its timeout ID for later cancellation.
+ * @param {Function} fn - The callback to invoke when the timer fires.
+ * @param {number} delay - Delay in milliseconds before invoking `fn`.
+ */
 function _scheduleSound(fn, delay) {
   _soundTimers.push(setTimeout(fn, delay));
 }
@@ -408,6 +386,11 @@ function soundDie() {
   playBeep(440, 'square', 0.10, 0.08);
   _scheduleSound(function () { playBeep(220, 'square', 0.18, 0.07); }, 90);
 }
+/**
+ * Play a three-note ascending milestone chime.
+ *
+ * Plays an immediate short beep, then schedules two additional ascending beeps at 70ms intervals.
+ */
 function soundMilestone() {
   playBeep(660, 'square', 0.07, 0.07);
   _scheduleSound(function () { playBeep(880,  'square', 0.07, 0.07); }, 70);
@@ -415,8 +398,8 @@ function soundMilestone() {
 }
 
 const sessionStats = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0, bestTime:0 };
-let dbStats      = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0, bestTime:0 };  // ISSUE-2 FIX: let instead of var
-let gameObstacles = 0;   // BUG-A FIX: per-game counter, reset each initGame()
+let dbStats      = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0, bestTime:0 };  
+let gameObstacles = 0; 
 
 /* ───────────────────────────────────────────────────────────
    INITIALISE / RESET
@@ -425,17 +408,23 @@ let gameObstacles = 0;   // BUG-A FIX: per-game counter, reset each initGame()
  * Reset all game state to initial values. Called before each new game.
  */
 function initGame() {
-  _cancelSoundTimers();   // SEC-4: kill any pending sound callbacks from the last game
+  _cancelSoundTimers();
   score      = 0;
   speed      = CONFIG.SPEED_MIN;
+
+  // Chrome-like day start
+  dayPhase = 0;
+  dayDir = 1;
+  dayTimer = 0;
+  dayPauseAt = 300;
   frameCount = 0;
   obstacles  = [];
   obsCooldown = CONFIG.OBS_CD_INIT;
-  gameObstacles = 0;   // BUG-A FIX: reset per-game obstacle counter
+  gameObstacles = 0;   
   flashFrames   = 0;
   lastMilestone = 0;
-  groundScrollX = 0;   // FIX-2: reset accumulated ground scroll
-  _lastSpeedPct = -1;  // FIX-7: force speed bar redraw on new game
+  groundScrollX = 0;   
+  _lastSpeedPct = -1;  
   moonX = W * 0.72 + Math.random() * W * 0.24;  // randomise start position
 
   dino = {
@@ -463,16 +452,12 @@ function initGame() {
     });
   }
 
-  // OPT-4: (re)create the sky OffscreenCanvas on each new game so star
-  // positions — regenerated above — are baked in on the first draw call.
-  // The canvas is created here rather than at module scope so it is always
-  // sized correctly and tied to the current star layout.
+  // (re)create the sky OffscreenCanvas on each new game so star positions
+  // are baked in on the first draw call.
   skyCanvas = document.createElement('canvas');
   skyCanvas.width  = W;
   skyCanvas.height = H;
   skyCtx = skyCanvas.getContext('2d', { alpha: false });
-  // _pal may not be populated yet on the very first initGame() call (before
-  // any draw()); redrawSkyLayer() guards on skyCtx and _pal.bgC being truthy.
   redrawSkyLayer();
 
 }
@@ -508,38 +493,55 @@ function endDuck() {
   if (b) b.classList.remove('active');
 }
 
+/**
+ * Toggle the game's paused state, updating UI, timers, and the animation loop.
+ *
+ * When called while the game is `'running'`, pauses the run: records pause start time,
+ * cancels the animation frame, displays the pause screen, and updates pause button state.
+ * When called while the game is `'paused'`, resumes the run: adjusts the stored run start
+ * time to exclude the paused duration, hides the pause screen, and restarts the animation loop.
+ * Calling this function has no effect if the global `state` is neither `'running'` nor `'paused'`.
+ *
+ * Also ensures the audio subsystem is initialized before changing pause state.
+ */
 function togglePause() {
   if (state !== 'running' && state !== 'paused') return;
   initAudio();
   if (!paused) {
     paused = true;
     state  = 'paused';
-    pauseStartTime = performance.now();   // FIX: record when pause started
+    pauseStartTime = performance.now();
     cancelAnimationFrame(animFrame);
     DOM.pauseScreen.classList.remove('hidden');
     DOM.pauseBtn.classList.add('active');
-    DOM.pauseBtn.setAttribute('aria-pressed', 'true');   // FIX-11
+    DOM.pauseBtn.setAttribute('aria-pressed', 'true');
   } else {
     paused = false;
     state  = 'running';
-    // FIX: offset the wall-clock start time by the duration spent paused so
+    // Offset the wall-clock start time by the duration spent paused so
     // gameOver() doesn't count pause time toward the run's elapsed seconds.
     gameStartWallTime += (performance.now() - pauseStartTime);
     lastTime = 0;
     DOM.pauseScreen.classList.add('hidden');
     DOM.pauseBtn.classList.remove('active');
-    DOM.pauseBtn.setAttribute('aria-pressed', 'false');  // FIX-11
+    DOM.pauseBtn.setAttribute('aria-pressed', 'false');
     animFrame = requestAnimationFrame(loop);
   }
 }
 
+/**
+ * Toggles the document between fullscreen and normal display.
+ *
+ * If the document is not currently fullscreen, requests fullscreen on the
+ * documentElement; if it is fullscreen, exits fullscreen. Errors from the
+ * fullscreen request are caught and logged to the console when supported.
+ */
 function toggleFullscreen() {
   let el = document.documentElement;
-  // Standard API + webkit prefix for Safari desktop
   let isFs = document.fullscreenElement || document.webkitFullscreenElement;
   if (!isFs) {
     // requestFullscreen() returns a Promise in modern browsers but undefined
-    // in Safari < 16.4 — guard before calling .catch() to avoid TypeError.
+    // in older Webkit — guard before calling .catch().
     let req = el.requestFullscreen
       ? el.requestFullscreen()
       : el.webkitRequestFullscreen
@@ -556,6 +558,11 @@ function toggleFullscreen() {
   }
 }
 
+/**
+ * Sync the fullscreen button's label and active state with the document's fullscreen status.
+ *
+ * Updates the button text to "EXIT FS" when fullscreen is active, otherwise "FULL", and toggles the button's "active" CSS class. Does nothing if the fullscreen button is not present.
+ */
 function onFullscreenChange() {
   let btn = DOM.fullscreenBtn;
   if (!btn) return;
@@ -563,15 +570,22 @@ function onFullscreenChange() {
   btn.textContent = isFs ? 'EXIT FS' : 'FULL';
   btn.classList.toggle('active', isFs);
 }
-// Standard event + webkit prefix for Safari
+
 document.addEventListener('fullscreenchange',       onFullscreenChange);
 document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 
+/**
+ * Start a new game run and enter the running state.
+ *
+ * Resets pause and timing state, records the wall-clock start time, reinitializes
+ * run-specific game state, hides the start and game-over screens, and begins
+ * the main animation loop.
+ */
 function startGame() {
   cancelAnimationFrame(animFrame);
   paused            = false;
   lastTime          = 0;
-  gameStartWallTime = performance.now();   // FIX-1: wall-clock start for accurate bestTime
+  gameStartWallTime = performance.now();
   state             = 'running';
   initGame();
   DOM.startScreen.classList.add('hidden');
@@ -579,11 +593,17 @@ function startGame() {
   animFrame = requestAnimationFrame(loop);
 }
 
+/**
+ * Restart the current run by reinitializing game state and starting the main loop.
+ *
+ * Cancels any pending animation frame, resets pause and timing state, reinitializes runtime
+ * data via initGame(), hides the game-over screen, and schedules the next animation frame.
+ */
 function restart() {
   cancelAnimationFrame(animFrame);
   paused            = false;
   lastTime          = 0;
-  gameStartWallTime = performance.now();   // FIX-1: wall-clock start for accurate bestTime
+  gameStartWallTime = performance.now();
   state             = 'running';
   initGame();
   DOM.gameOverScreen.classList.add('hidden');
@@ -591,21 +611,24 @@ function restart() {
 }
 
 /**
- * Transition to dead state, persist stats/leaderboard, show game-over screen.
+ * End the current run: mark the game as dead, record and persist run statistics, update leaderboard, and show the game-over UI.
+ *
+ * Increments session and persistent counters (games, deaths, distance, obstacles), updates best score/time, attempts to add the score to the leaderboard, and saves stats. If leaderboard insertion fails due to storage quota, restores the previous persisted best-score and updates the DB status indicator. Plays the death sound and reveals the game-over screen (including the "NEW BEST" banner when appropriate) and refreshes on-screen stat displays and leaderboard rendering.
  */
 function gameOver() {
-  if (state === 'dead') return;   // guard against double-call
+  if (state === 'dead') return;
   state = 'dead';
   soundDie();
+
+  // Cache the user's actual previous best in case of quota rollback
+  let prevSessionBest = dbStats.bestScore;
 
   sessionStats.games++;
   sessionStats.deaths++;
   let s = Math.floor(score);
   if (s > sessionStats.bestScore) sessionStats.bestScore = s;
   sessionStats.totalDist += s;
-  // FIX-1: use wall-clock elapsed time instead of frameCount/60.
-  // frameCount increments once per rAF tick — at 120Hz that is 120/s,
-  // making frameCount/60 read 2× fast. performance.now() is Hz-independent.
+  
   let thisTime = Math.floor((performance.now() - gameStartWallTime) / 1000);
   if (thisTime > sessionStats.bestTime) sessionStats.bestTime = thisTime;
 
@@ -613,7 +636,6 @@ function gameOver() {
   let prevBest = Math.max(hiScore, dbStats.bestScore);
   if (s > hiScore) hiScore = s;
 
-  // BUG-A FIX: use gameObstacles (this game only)
   dbStats.games++;
   dbStats.deaths++;
   dbStats.totalDist  += s;
@@ -621,17 +643,16 @@ function gameOver() {
   if (s > dbStats.bestScore) dbStats.bestScore = s;
   if (thisTime > (dbStats.bestTime || 0)) dbStats.bestTime = thisTime;
 
-  // BUG-1 FIX (part 2): write leaderboard BEFORE committing stats.
-  // If addScore() fails (quota full) we roll back dbStats.bestScore so
-  // the two stores never diverge via a failed write.
+  // Write leaderboard BEFORE committing stats.
+  // If addScore() fails (quota full) roll back dbStats.bestScore
   let lb = DB.addScore(playerName, s);
   if (lb) {
     DB.saveStats(dbStats);
     renderLeaderboard(lb);
   } else {
-    // Leaderboard write failed — revert bestScore to existing lb leader
+    // Leaderboard write failed — revert bestScore to the user's actual previous best
     let existingLb = DB.getLeaderboard();
-    dbStats.bestScore = existingLb.length ? existingLb[0].score : 0;
+    dbStats.bestScore = prevSessionBest;
     DB.saveStats(dbStats);
     console.warn('[Game] Score not saved — storage full');
     renderLeaderboard(existingLb);
@@ -687,23 +708,19 @@ function spawn() {
     // Pterodactyl — three possible flight heights.
     // Collision math (shrunk hitboxes, 4px each side):
     //   Ptera bottom edge  = ptera.y + 4 + (28-8) = ptera.y + 24
-    //   Standing dino top  = (GY-52)  + 6          = GY - 46
-    //   Ducking  dino top  = (GY-28)  + 6          = GY - 22
+    //   Standing dino top  = (GY-52)  + 6         = GY - 46
+    //   Ducking  dino top  = (GY-28)  + 6         = GY - 22
     //
     // GY-120 (high): bottom = GY-96  < GY-46 → misses standing dino;
     //   mid-air dino CAN enter that band → player must duck, not jump.
-    // GY-60  (mid):  bottom = GY-36  > GY-46 → hits standing dino ✓
-    //                                  > GY-22 → also hits ducking dino,
+    // GY-40  (mid):  bottom = GY-16  > GY-46 → hits standing dino ✓
+    //                                > GY-22 → also hits ducking dino,
     //   so player must JUMP over this one.  Ducking is finally required
     //   vs the GY-120 variant, making it a meaningful mechanic.
-    // GY-68  (low):  bottom = GY-44  > GY-46 → hits standing dino ✓
+    // GY-69  (low):  bottom = GY-44  > GY-46 → hits standing dino ✓
     //                         GY-44  < GY-22 → clears ducking dino ✓
     //   Player may either jump over or duck under.
-    //
-    // FIX-2: previous mid value was GY-75 (bottom = GY-51), which sits
-    // 5px above the standing dino's top (GY-46) — never a collision.
-    // Corrected to GY-60 so it properly intersects the standing hitbox.
-    let hs = [GY - 60, GY - 120, GY - 68];
+    let hs = [GY - 40, GY - 120, GY - 69];
     obstacles.push({
       type: 'ptera',
       x: W + 10,
@@ -718,17 +735,21 @@ function spawn() {
 /* ───────────────────────────────────────────────────────────
    UPDATE (called every frame)
    ─────────────────────────────────────────────────────────── */
-// FIX-1: dt is a normalised multiplier where 1.0 == one 60 fps frame.
-// Every value that was previously a fixed-per-frame amount is now scaled
-// by dt so the game runs identically on 60 Hz, 90 Hz, 120 Hz, and 144 Hz.
 /**
- * Advance all game state by one logical frame.
- * @param {number} dt - Delta-time multiplier (1.0 = one 60 Hz frame)
+ * Advance the game simulation state by one logical frame.
+ *
+ * Updates score and speed, advances physics and animations, spawns and moves obstacles/clouds/moon,
+ * performs collision detection and obstacle passing bookkeeping, updates ground scrolling, and
+ * refreshes HUD elements based on the provided time step.
+ * @param {number} dt - Delta-time multiplier where 1.0 equals one 60 Hz frame; larger values represent proportionally longer updates.
  */
 function update(dt) {
   frameCount++;
   score += speed * 0.04 * dt;
-  speed  = Math.min(CONFIG.SPEED_MIN + (score / 2660) * (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN), CONFIG.SPEED_MAX);  // 2660 = score at which original reaches max speed
+
+  // Chrome-like linear speed
+  speed += 0.002 * dt;
+  if (speed > CONFIG.SPEED_MAX) speed = CONFIG.SPEED_MAX;
 
   // ── Milestone flash (every 100 pts) ───────────────────
   let ms = Math.floor(score / 100);
@@ -739,33 +760,16 @@ function update(dt) {
   }
 
   // ── Day / Night cycle ──────────────────────────────────
-  // FIX-10: both day-peak and night-peak pause for 350 frames
-  dayTimer += dt;
-  if (dayPauseAt < 0) {
-    // Actively transitioning
-    dayPhase += dayDir * 0.005 * dt;
-    if (dayPhase >= 1) {
-      dayPhase   = 1;
-      dayDir     = -1;
-      dayPauseAt = dayTimer + 350;   // pause at full night
-    }
-    if (dayPhase <= 0) {
-      dayPhase   = 0;
-      dayDir     = 1;
-      dayPauseAt = dayTimer + 350;   // pause at full day
-    }
-  } else if (dayTimer >= dayPauseAt) {
-    dayPauseAt = -1;                 // resume transitioning
+  if (score > 700) {
+    dayPhase = Math.min(dayPhase + 0.002 * dt, 1);
   }
 
   // ── Dino physics ───────────────────────────────────────
   dino.ducking = duckHeld && !dino.jumping;
 
   if (dino.jumping) {
-    // FIX-5: mid-air fast-fall — holding duck while airborne slams the dino
-    // down quickly, matching the original Chrome Dino mechanic. Without this,
-    // dino.ducking is false during a jump so pressing duck did nothing.
-    if (duckHeld) dino.vy += 2.5 * dt;
+    // Mid-air fast-fall — holding duck while airborne slams the dino down quickly
+    if (duckHeld) dino.vy += 3.8 * dt;
     dino.vy += GRAVITY * dt;
     dino.y  += dino.vy * dt;
     let land = GY - DINO_H;   // always land at standing height
@@ -797,22 +801,21 @@ function update(dt) {
   if (obsCooldown <= 0) {
     if (obstacles.length < 5) spawn();   // cap: prevent burst after long dt spike
     obsCooldown = Math.max(
-      CONFIG.OBS_CD_MIN,
-      Math.floor(CONFIG.OBS_CD_BASE + Math.random() * CONFIG.OBS_CD_RNG - speed * CONFIG.OBS_CD_SPEED)
+      20,
+      (80 - speed * 3.2) + Math.random() * 25
     );
   }
 
-  // FIX-2: accumulate ground scroll distance — Hz-independent replacement for
-  // frameCount * speed * 0.3. draw() reads groundScrollX directly.
+  // Accumulate ground scroll distance
   groundScrollX = (groundScrollX + speed * dt * 0.3) % 30;
 
   // ── Collision detection ────────────────────────────────
   let dh = dino.ducking ? DUCK_H : DINO_H;
-  // FIX-5: mutate reusable hitbox objects instead of allocating new ones each frame
-  _dinoBox.x = dino.x + 8;
-  _dinoBox.y = dino.y + 6;
-  _dinoBox.h = dh - 10;
-  // _dinoBox.w is constant (DINO_W - 14) — set once in declaration
+  // Mutate reusable hitbox objects
+  _dinoBox.x = dino.x + 9;
+  _dinoBox.y = dino.y + 7;
+  _dinoBox.h = dh - 12;
+  // _dinoBox.w is constant (DINO_W - 14)
 
   for (let i = 0; i < obstacles.length; i++) {
     let o = obstacles[i];
@@ -825,11 +828,10 @@ function update(dt) {
     }
 
     // AABB hit test (shrunk by 4px each side for leniency)
-    // FIX-5: reuse _obsBox instead of allocating per obstacle per frame
-    _obsBox.x = o.x + 4;
-    _obsBox.y = o.y + 4;
-    _obsBox.w = o.w - 8;
-    _obsBox.h = o.h - 8;
+    _obsBox.x = o.x + 5;
+    _obsBox.y = o.y + 5;
+    _obsBox.w = o.w - 10;
+    _obsBox.h = o.h - 10;
     if (_dinoBox.x < _obsBox.x + _obsBox.w && _dinoBox.x + _dinoBox.w > _obsBox.x &&
         _dinoBox.y < _obsBox.y + _obsBox.h && _dinoBox.y + _dinoBox.h > _obsBox.y) {
       gameOver();
@@ -841,53 +843,54 @@ function update(dt) {
   obstacles.forEach((o) => {
     if (!o.passed && o.x + o.w < DINO_X) {
       o.passed = true;
-      sessionStats.obstacles++;   // session total (shown in UI)
-      gameObstacles++;            // per-game count (saved to DB)
+      sessionStats.obstacles++;   
+      gameObstacles++;            
     }
   });
 
-  // OPT-5: remove off-screen obstacles in-place — avoids allocating a new
-  // array on every frame (60/s) which would create steady GC pressure.
+  // Remove off-screen obstacles in-place
   for (let i = obstacles.length - 1; i >= 0; i--) {
     if (obstacles[i].x <= -120) obstacles.splice(i, 1);
   }
 
   // ── HUD update ─────────────────────────────────────────
-  // OPT-4: only write textContent when the displayed string actually changes.
-  // Assigning textContent triggers browser style recalculation even when the
-  // value is identical — skipping redundant writes cuts that overhead at speed.
+  // Only write textContent when the displayed string actually changes.
   let sc    = Math.floor(score);
   let scStr = String(sc).padStart(5, '0');
   if (scStr !== _lastHdrScore) { DOM.hdrScore.textContent = scStr; _lastHdrScore = scStr; }
   let hiStr = String(Math.max(sc, hiScore)).padStart(5, '0');
   if (hiStr !== _lastHdrHi)    { DOM.hdrHi.textContent = hiStr;   _lastHdrHi    = hiStr; }
-  // FIX-7: dedup speed bar width — style.width write every frame was unnecessary.
-  // Speed changes continuously but the % value only meaningfully changes ~every other frame.
+  
+  // Dedup speed bar width
   let newSpeedPct = Math.min(
-    ((speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)) * 100, 100
+  ((speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)) * 100,
+  100
   ) | 0;   // integer percent — 101 distinct values max
   if (newSpeedPct !== _lastSpeedPct) {
     DOM.speedFill.style.width = newSpeedPct + '%';
-    // FIX-11: keep aria-valuenow in sync for screen readers using the progressbar role
     DOM.speedFill.parentElement.parentElement.setAttribute('aria-valuenow', newSpeedPct);
     _lastSpeedPct = newSpeedPct;
   }
-
-  // updateStatUI() intentionally removed from here — stats only change on
-  // game events (gameOver, clear), not every frame. See those handlers below.
 }
 
 /* ───────────────────────────────────────────────────────────
    DRAW (called every frame)
    ─────────────────────────────────────────────────────────── */
 /**
- * Render the current frame to the canvas.
- * Pure draw — must not modify game state.
+ * Render the current game frame onto the main canvas using the current visual state.
+ *
+ * Draws the baked sky layer (with day/night palette), ground texture, moon, clouds,
+ * obstacles, the dino sprite, on-canvas HUD (score/hi), milestone flash overlay,
+ * and the bottom speed bar. Rebuilds the palette and sky bake only when the day
+ * phase changes to minimize work.
+ *
+ * This function performs pure rendering and must not modify game state. It relies
+ * on externally maintained globals for all input state and drawing helpers.
  */
 function draw() {
   ctx.clearRect(0, 0, W, H);
 
-  // OPT-4 debug overlay — enable from DevTools: window.showDebug = true
+  // Debug overlay — enable from DevTools: window.showDebug = true
   if (window.showDebug) {
     ctx.fillStyle   = _pal.bgC || '#fff';
     ctx.fillRect(0, 0, W, H);
@@ -902,17 +905,14 @@ function draw() {
   }
   draw._lastT = performance.now();
 
-  // ── OPT-2: palette cache — only rebuild lerpRGB strings when dayPhase changes.
-  // lerpRGB() parses hex and does float arithmetic; 4 calls × 60 fps = 240/s.
-  // dayPhase is unchanged during the 350-frame day and night pause windows,
-  // and may repeat when dt lands on the same float value across frames.
+  // Palette cache — only rebuild lerpRGB strings when dayPhase changes.
   if (dayPhase !== _lastDayPhase) {
     _lastDayPhase   = dayPhase;
     _pal.bgC    = lerpRGB('#ffffff', '#404040', dayPhase);
     _pal.fgC    = lerpRGB('#535353', '#f0f0f0', dayPhase);
     _pal.fgDark = lerpRGB('#404040', '#d0d0d0', dayPhase);
     _pal.dimC   = lerpRGB('#d4d4d4', '#606060', dayPhase);
-    redrawSkyLayer();   // OPT-4: bake updated sky — skipped every frame dayPhase is unchanged
+    redrawSkyLayer();
   }
   let bgC    = _pal.bgC;
   let fgC    = _pal.fgC;
@@ -927,15 +927,10 @@ function draw() {
   C.cloud   = dimC;
   C.eye     = bgC;   // eye == bg → hollow cutout illusion
 
-  // OPT-4: blit the pre-baked sky layer (background fill + horizon line + stars).
-  // redrawSkyLayer() already painted these onto skyCanvas whenever dayPhase
-  // changed; stamping it here replaces the per-frame fillRect + stars.forEach.
+  // Blit the pre-baked sky layer
   ctx.drawImage(skyCanvas, 0, 0);
 
   // Ground texture dots (scrolling)
-  // FIX-2: use groundScrollX (accumulated in update via speed*dt) instead of
-  // frameCount*speed*0.3 which scrolled at 2× speed at 120Hz.
-  // FIX-3: negate offset so dots shift left (matching obstacle scroll direction).
   setFill(dimC);
   for (let gx = -(groundScrollX | 0); gx < W; gx += 30) {
     ctx.fillRect(gx,      GY + 8,  2, 1);
@@ -962,8 +957,7 @@ function draw() {
   // Obstacles
   obstacles.forEach((o) => {
     if (o.type === 'cactus') {
-      // Draw each cactus in the cluster individually so players can count them.
-      // singleW / count added in v5.0.0; fall back to old-format entries (w, no count).
+      // Draw each cactus in the cluster individually
       let n  = o.count   || 1;
       let sw = o.singleW || o.w;
       for (let k = 0; k < n; k++) {
@@ -977,7 +971,7 @@ function draw() {
   // Dino
   drawDino(dino.x, dino.y, dino.frame, dino.jumping, dino.ducking);
 
-  // ── Canvas HUD score (FIX-07: explicit textBaseline) ──
+  // ── Canvas HUD score ──
   ctx.textBaseline = 'top';
   ctx.font         = '12px "Press Start 2P", monospace';
   setFill(fgDark);
@@ -1011,14 +1005,19 @@ function draw() {
   ctx.fillRect(barPx, H - 4, W - barPx, 4);
 }
 
-/* ───────────────────────────────────────────────────────────
-   PIXEL ART DRAW ROUTINES
-   ─────────────────────────────────────────────────────────── */
+/**
+ * Draws the pixel-art dinosaur sprite at the specified canvas coordinates using the current palette and pose.
+ * @param {number} x - X coordinate of the sprite's top-left corner.
+ * @param {number} y - Y coordinate of the sprite's top-left corner.
+ * @param {number} frame - Animation frame index (0 or 1) selecting walk-leg positions.
+ * @param {boolean} jumping - When true, render the jumping (tucked legs) pose.
+ * @param {boolean} ducking - When true, render the ducking/crouched pose (overrides standing/jumping pose).
+ */
 
 function drawDino(x, y, frame, jumping, ducking) {
   let c  = C.dino;
   let ca = C.dinoAcc;
-  let ey = C.eye;   // eye == bg colour => hollow-cutout illusion
+  let ey = C.eye;   
 
   /* ── DUCKING (bounding box 44 × 28) ────────────────────── */
   if (ducking) {
@@ -1088,11 +1087,23 @@ function drawDino(x, y, frame, jumping, ducking) {
     px(c,  x+26, y+44, 12, 4);
   }
 }
+
+/**
+ * Draws a pixel-art cactus at the given position and size using the current cactus color.
+ *
+ * The cactus is composed of a central stem and two arms (left and right), scaled to the
+ * provided width and height to preserve the intended pixel-art silhouette.
+ *
+ * @param {number} x - Leftmost x-coordinate of the cactus cluster.
+ * @param {number} y - Topmost y-coordinate of the cactus (smaller y is higher on screen).
+ * @param {number} w - Total width of the cactus cluster in pixels.
+ * @param {number} h - Total height of the cactus in pixels.
+ */
 function drawCactus(x, y, w, h) {
   let c   = C.cactus;
-  let sw  = 6;                             // stem width (Chrome uses ~6px)
+  let sw  = 6;                             // stem width
   let aw  = 6;                             // arm width
-  let cx  = x + Math.floor(w / 2) - 3;   // stem left edge
+  let cx  = x + Math.floor(w / 2) - 3;     // stem left edge
 
   // ── Main stem ───────────────────────────────────────────
   px(c, cx, y, sw, h);
@@ -1107,7 +1118,7 @@ function drawCactus(x, y, w, h) {
   // ── Right arm ───────────────────────────────────────────
   let rjy = y + Math.floor(h * 0.46);
   let rup = Math.floor(h * 0.20);
-  let rx  = cx + sw;                               // right of stem
+  let rx  = cx + sw;                              // right of stem
   px(c, rx,        rjy,  w - (rx - x), aw);       // horizontal bar
   px(c, x + w - aw, rjy - rup, aw, rup + aw);     // vertical rise
 }
@@ -1164,14 +1175,17 @@ function drawCloud(x, y, w) {
    GAME LOOPS
    ─────────────────────────────────────────────────────────── */
 /**
- * Main game loop — drives update() and draw() via requestAnimationFrame.
- * @param {DOMHighResTimeStamp} timestamp - Provided by rAF
+ * Advance game state and render frames while the game is in the running state.
+ *
+ * Uses the provided high-resolution timestamp to compute a normalized delta time
+ * (1.0 = one 60 Hz frame) which is clamped to 3.0 to avoid excessively large updates
+ * after pauses or backgrounding.
+ * @param {DOMHighResTimeStamp} timestamp - High-resolution timestamp from requestAnimationFrame used to compute delta time.
  */
 function loop(timestamp) {
   if (state !== 'running' || paused) return;
-  // FIX-1: compute dt normalised to 60 fps (1.0 = one 60 Hz frame).
-  // Clamped to 3.0 to prevent a "spiral of death" if the tab was
-  // backgrounded and returns with a massive timestamp gap.
+  // Compute dt normalised to 60 fps (1.0 = one 60 Hz frame).
+  // Clamped to 3.0 to prevent a "spiral of death" after pausing/backgrounding.
   let dt = lastTime ? Math.min((timestamp - lastTime) / (1000 / 60), 3) : 1;
   lastTime = timestamp;
   update(dt);
@@ -1207,9 +1221,12 @@ function updateStatUI() {
 
 /* Safe DOM-only leaderboard render — shows local top-10 with timestamp */
 /**
- * Rebuild the leaderboard table from a sorted array of entries.
- * @param {Array<{name:string, score:number, when:string}>} lb - Top-10 entries
- */
+ * Populate the leaderboard table body with the provided sorted entries.
+ *
+ * Clears existing rows and inserts one row per entry; if `lb` is empty or falsy,
+ * inserts a single "NO RECORDS YET" row spanning all columns.
+ *
+ * @param {Array<{name?:string, score:number, when?:string}>} lb - Leaderboard entries sorted highest-first. `name` may be omitted (displayed as "ANON"); `when` is an optional timestamp string. */
 function renderLeaderboard(lb) {
   let tbody = DOM.lbBody;
 
@@ -1230,8 +1247,6 @@ function renderLeaderboard(lb) {
   lb.forEach((entry, i) => {
     let tr    = document.createElement('tr');
     let color = medals[i] || null;
-    // 'when' is new field: "19 Mar '26 14:07"
-    // fall back to legacy 'date' field for old saved entries
     let when  = entry.when || entry.date || '--';
     let cols  = [
       String(i + 1),
@@ -1262,7 +1277,7 @@ function renderLeaderboard(lb) {
    INPUT HANDLERS
    ─────────────────────────────────────────────────────────── */
 
-// Keyboard — FIX-04: ignore events when typing in the name input
+// Keyboard
 document.addEventListener('keydown', function (e) {
   if (e.target && e.target.tagName === 'INPUT') return;
   if (e.code === 'Space' || e.code === 'ArrowUp') {
@@ -1281,7 +1296,7 @@ document.addEventListener('keydown', function (e) {
     let muteBtn = DOM.muteBtn;
     muteBtn.textContent = soundMuted ? '\uD83D\uDD07' : '\uD83D\uDD06';
     muteBtn.classList.toggle('active', soundMuted);
-    muteBtn.setAttribute('aria-pressed', String(soundMuted));  // FIX-11: sync aria state
+    muteBtn.setAttribute('aria-pressed', String(soundMuted));
   }
   if (e.code === 'KeyF') {
     e.preventDefault(); toggleFullscreen();
@@ -1304,9 +1319,6 @@ DOM.gameFrame.addEventListener('touchstart', function (e) {
 DOM.restartBtn.addEventListener('click', function (e) {
   e.stopPropagation(); restart();
 });
-// FIX-3: without this, a tap fires touchstart → bubbles to #gameFrame →
-// calls jump() → restart(), then the synthesised click fires restart() again.
-// stopPropagation + preventDefault break both paths of the double-call.
 DOM.restartBtn.addEventListener('touchstart', function (e) {
   e.stopPropagation();
   e.preventDefault();
@@ -1331,7 +1343,7 @@ DOM.duckBtn.addEventListener('touchcancel', function (e) {
   e.preventDefault(); endDuck();
 }, { passive: false });
 
-// FIX-03: release duck if mouse leaves the button or window loses focus
+// Release duck if mouse leaves the button or window loses focus
 document.addEventListener('mouseup', endDuck);
 window.addEventListener('blur', endDuck);
 
@@ -1343,9 +1355,6 @@ DOM.nameSaveBtn.addEventListener('click', function () {
   DOM.currentName.textContent = '\u25B6 ' + playerName;
   DOM.nameInput.value = '';
 });
-// FIX-5: pressing Enter while typing a name should submit, just like a real
-// form. The input is not inside a <form> tag so the default submit event never
-// fires — we wire it up manually here.
 DOM.nameInput.addEventListener('keydown', function (e) {
   if (e.key === 'Enter') DOM.nameSaveBtn.click();
 });
@@ -1356,22 +1365,17 @@ DOM.nameInput.addEventListener('keydown', function (e) {
 DOM.clearLbBtn.addEventListener('click', function() {
   if (!confirm('Clear all leaderboard records?')) return;
   DB.clearLeaderboard();
-  // BUG-1/2 FIX: also reset the persisted best score so the stats panel
-  // stays in sync with the leaderboard, then refresh the UI immediately.
-  // BUG-3 FIX: also reset bestTime — it was left stale after clearing,
-  // showing a ghost time value tied to no remaining leaderboard records.
+  
   dbStats.bestScore = 0;
   dbStats.bestTime  = 0;
   DB.saveStats(dbStats);
-  // FIX-4: also zero the session bests so the stat panel is consistent with
-  // the header HI display after clearing. Without this, Math.max(sessionStats
-  // .bestScore, 0) would show the old session high in the stat panel even
-  // though the header correctly shows 00000.
+  
   sessionStats.bestScore = 0;
   sessionStats.bestTime  = 0;
+  
   renderLeaderboard([]);
   hiScore = 0;
-  _lastHdrHi = '';   // OPT-4: invalidate cache so '00000' write goes through
+  _lastHdrHi = '';
   DOM.hdrHi.textContent = '00000';
   updateStatUI();
 });
@@ -1379,20 +1383,17 @@ DOM.clearLbBtn.addEventListener('click', function() {
 /* ───────────────────────────────────────────────────────────
    RESET TOP SCORE WIRING
    Resets only the displayed HI score and the persisted bestScore
-   stat. The full leaderboard records are left intact — players
-   can still see their history. Use CLEAR in the leaderboard
-   panel to wipe everything.
+   stat. The full leaderboard records are left intact.
    ─────────────────────────────────────────────────────────── */
 DOM.resetHiBtn.addEventListener('click', function (e) {
-  e.stopPropagation();   // don't bubble to gameFrame click → jump()
+  e.stopPropagation();
   if (!confirm('Reset top score to 00000?')) return;
   hiScore = 0;
   dbStats.bestScore = 0;
   DB.saveStats(dbStats);
-  // FIX-4: zero session best score so stat panel stays consistent with header HI.
-  // bestTime is intentionally NOT reset — the ✕ button is score-only.
+  
   sessionStats.bestScore = 0;
-  _lastHdrHi = '';       // invalidate OPT-4 cache so the write goes through
+  _lastHdrHi = '';
   DOM.hdrHi.textContent = '00000';
   updateStatUI();
 });
@@ -1413,7 +1414,7 @@ DOM.muteBtn.addEventListener('click', function(e) {
   initAudio();
   this.textContent = soundMuted ? '\uD83D\uDD07' : '\uD83D\uDD06';
   this.classList.toggle('active', soundMuted);
-  this.setAttribute('aria-pressed', String(soundMuted));  // FIX-11
+  this.setAttribute('aria-pressed', String(soundMuted));
 });
 
 DOM.fullscreenBtn.addEventListener('click', function (e) {
@@ -1423,25 +1424,22 @@ DOM.fullscreenBtn.addEventListener('click', function (e) {
 /* ───────────────────────────────────────────────────────────
    VISIBILITY / FOCUS — pause when the tab is backgrounded
    ─────────────────────────────────────────────────────────── */
-// FIX-4: Without this, browsers throttle requestAnimationFrame to ~1 fps
-// when the tab is hidden. The game would silently tick at a crawl, then
-// resume at full speed — almost certainly killing the player the moment
-// they switch back. We instead pause the loop entirely and restart it
-// cleanly (resetting lastTime so the first resumed frame gets dt=1 rather
-// than a huge stale delta that would teleport obstacles).
 document.addEventListener('visibilitychange', function () {
   if (document.hidden) {
-    // Tab became hidden — stop the loop
-    cancelAnimationFrame(animFrame);
-    animFrame = null;
+    // Auto-trigger the proper pause logic if actively running so 
+    // pauseStartTime is cleanly captured.
+    if (state === 'running' && !paused) {
+      togglePause();
+    } else {
+      cancelAnimationFrame(animFrame);
+      animFrame = null;
+    }
   } else {
     // Tab became visible again — resume the appropriate loop for the current state
     if (state === 'running' && !paused) {
-      lastTime = 0;   // FIX-1 pattern: reset dt baseline so first frame is safe
+      lastTime = 0;
       animFrame = requestAnimationFrame(loop);
     } else if (state === 'idle') {
-      // FIX: idleLoop was unconditionally cancelled above; restart it so the
-      // dino walk animation doesn't freeze on the start screen after a tab switch.
       animFrame = requestAnimationFrame(idleLoop);
     }
   }
@@ -1464,7 +1462,7 @@ document.addEventListener('visibilitychange', function () {
     hiScore = dbStats.bestScore || 0;
      let hiStr = String(hiScore).padStart(5, '0');
      DOM.hdrHi.textContent = hiStr;
-     _lastHdrHi = hiStr;   // OPT-4: prime cache so first update() doesn't re-write
+     _lastHdrHi = hiStr;
     DOM.statBest.textContent = dbStats.bestScore || 0;
     let bt = dbStats.bestTime || 0;
     DOM.statTime.textContent =
@@ -1478,7 +1476,7 @@ document.addEventListener('visibilitychange', function () {
   initGame();
   state = 'idle';
 
-  // Issue #3 FIX: update footer year dynamically so it never goes stale
+  // Update footer year dynamically
   let footerYear = document.getElementById('footer-year');
   if (footerYear) footerYear.textContent = new Date().getFullYear();
 
@@ -1489,4 +1487,3 @@ document.addEventListener('visibilitychange', function () {
   draw();
   idleLoop();
 }());
-
