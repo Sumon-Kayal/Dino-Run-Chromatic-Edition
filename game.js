@@ -404,10 +404,13 @@ let gameObstacles = 0;
  * cancels pending sound timers, randomizes moon and ambient positions, and recreates the offscreen
  * sky canvas so the baked sky (horizon and stars) is regenerated for the new game.
  */
+const SPEED_START = 6;
+const SPEED_CAP   = 13;
+
 function initGame() {
   _cancelSoundTimers();
   score      = 0;
-  speed      = 6;
+  speed      = SPEED_START;
 
   // Chrome-like day start
   dayPhase = 0;
@@ -743,7 +746,7 @@ function update(dt) {
 
   // Chrome-like linear speed
   speed += 0.002 * dt;
-  if (speed > 13) speed = 13;
+  if (speed > SPEED_CAP) speed = SPEED_CAP;
 
   // ── Milestone flash (every 100 pts) ───────────────────
   let ms = Math.floor(score / 100);
