@@ -398,7 +398,11 @@ let gameObstacles = 0;
    INITIALISE / RESET
    ─────────────────────────────────────────────────────────── */
 /**
- * Reset all game state to initial values. Called before each new game.
+ * Initialize and reset all runtime game state to start a new run.
+ *
+ * Resets scores, speed, timers, counters, and simulation entities (dino, obstacles, clouds, stars),
+ * cancels pending sound timers, randomizes moon and ambient positions, and recreates the offscreen
+ * sky canvas so the baked sky (horizon and stars) is regenerated for the new game.
  */
 function initGame() {
   _cancelSoundTimers();
@@ -726,12 +730,12 @@ function spawn() {
    UPDATE (called every frame)
    ─────────────────────────────────────────────────────────── */
 /**
- * Advance the game simulation state by one logical frame.
+ * Advance the game simulation by one logical update step.
  *
- * Updates score and speed, advances physics and animations, spawns and moves obstacles/clouds/moon,
- * performs collision detection and obstacle passing bookkeeping, updates ground scrolling, and
- * refreshes HUD elements based on the provided time step.
- * @param {number} dt - Delta-time multiplier where 1.0 equals one 60 Hz frame; larger values represent proportionally longer updates.
+ * Updates score and speed, advances player physics and animations, moves and spawns obstacles,
+ * clouds, and moon, performs collision detection (calling gameOver on impact), tracks passed
+ * obstacles and removes off-screen ones, accumulates ground scroll, and refreshes HUD elements.
+ * @param {number} dt - Time-step multiplier where 1.0 equals one 60 Hz frame; larger values represent proportionally longer updates.
  */
 function update(dt) {
   frameCount++;

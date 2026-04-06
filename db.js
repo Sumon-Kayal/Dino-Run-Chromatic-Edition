@@ -79,9 +79,16 @@ window.DB = (function () {
   }
 
   /* ─── Quota refresh (debounced) ─────────────────────────── */
-  /* refreshQuota() is called after every successful dbSet().
-     Debouncing ensures at most one storage estimate IPC call fires 
-     per 2-second window regardless of write burst size. */
+  /**
+   * Schedule a debounced storage quota estimate and broadcast the updated values.
+   *
+   * If the StorageManager estimate API is available and no quota estimate is already
+   * pending, requests a storage estimate (debounced to at most once per 2 seconds),
+   * updates the module's cached `quotaUsed`, `quotaTotal`, and clears `quotaError`,
+   * then dispatches a `db:quota` Window event with `{ used, total }`.
+   *
+   * Does nothing if the StorageManager API is unavailable or if a debounce timer is active.
+   */
   function refreshQuota() {
     if (!navigator.storage || !navigator.storage.estimate) return;
     if (_quotaTimer !== null) return;
