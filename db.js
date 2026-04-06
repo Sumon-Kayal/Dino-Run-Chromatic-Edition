@@ -216,12 +216,13 @@ window.DB = (function () {
     /* Still too large (or skipped 10-item retry) — fall back to top 5 */
     if (combined.length > 5) {
       combined = combined.slice(0, 5);
+      /* Attempt to save the pruned top-5 array */
       if (dbSet(key, JSON.stringify(combined))) {
         console.warn('[DB] Storage critical: pruned to top 5 to fit quota');
         return combined;
       }
     }
-    
+
     /* Complete failure */
     window.dispatchEvent(new CustomEvent('db:criticalFailure', {
       detail: { message: 'Storage completely full — even top-5 pruning failed', key: key }
