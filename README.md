@@ -38,7 +38,7 @@ No network calls. No tracking. No dependencies.
 
 ## Project Structure
 
-```
+```text
 dino-run/
 ├── index.html          # Shell, overlays, stats panel, leaderboard UI
 ├── game.js             # Game engine — physics, rendering, input, audio, HUD
@@ -89,7 +89,7 @@ python3 server.py
 
 **3. Open in Cromite:**
 
-```
+```text
 https://localhost:1999
 ```
 
