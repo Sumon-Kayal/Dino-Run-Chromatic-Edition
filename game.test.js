@@ -339,21 +339,21 @@ describe('removed global variables — dayDir, dayTimer, dayPauseAt', () => {
   test('dayDir is no longer declared as a module-level let', () => {
     // The variable was declared as `let dayDir = 1;` — it should be gone.
     assert.ok(
-      !/^\s*let dayDir\b/.test(gameSrc),
+      !/^\s*let dayDir\b/m.test(gameSrc),
       'dayDir top-level let declaration must be removed'
     );
   });
 
   test('dayTimer is no longer declared as a module-level let', () => {
     assert.ok(
-      !/^\s*let dayTimer\b/.test(gameSrc),
+      !/^\s*let dayTimer\b/m.test(gameSrc),
       'dayTimer top-level let declaration must be removed'
     );
   });
 
   test('dayPauseAt is no longer declared as a module-level let', () => {
     assert.ok(
-      !/^\s*let dayPauseAt\b/.test(gameSrc),
+      !/^\s*let dayPauseAt\b/m.test(gameSrc),
       'dayPauseAt top-level let declaration must be removed'
     );
   });
