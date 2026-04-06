@@ -857,7 +857,9 @@ function update(dt) {
   
   // Dedup speed bar width
   let newSpeedPct = Math.min(
-  ((speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)) * 100,
+  ((CONFIG.SPEED_MAX - CONFIG.SPEED_MIN) > 0
+    ? ((speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)) * 100
+    : 0),
   100
   ) | 0;   // integer percent — 101 distinct values max
   if (newSpeedPct !== _lastSpeedPct) {
@@ -987,7 +989,10 @@ function draw() {
   // Always visible, including in fullscreen (where the DOM
   // stats panel is hidden). Colour shifts blue → orange → red.
   let speedPct = Math.min(
-    (speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN), 1
+    (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN) > 0
+      ? (speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)
+      : 0,
+    1
   );
   let barPx = (speedPct * W) | 0;
   let barCol = speedPct < 0.5
