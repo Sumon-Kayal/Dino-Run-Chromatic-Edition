@@ -217,11 +217,11 @@ function lerp(a, b, t) { return a + (b - a) * t; }
 
 /* Interpolate between two #rrggbb hex colours */
 /**
- * Interpolate between two #rrggbb hex colours.
- * @param {string} ca - Start colour e.g. "#ffffff"
- * @param {string} cb - End colour
- * @param {number} t  - Blend factor [0..1]
- * @returns {string} CSS rgb() string
+ * Interpolates between two #rrggbb hex colors.
+ * @param {string} ca - Start color (e.g. "#ffffff").
+ * @param {string} cb - End color.
+ * @param {number} t - Blend factor between 0 and 1.
+ * @returns {string} An `rgb(r,g,b)` CSS color string representing the blended color.
  */
 function lerpRGB(ca, cb, t) {
   let pa = parseInt(ca.slice(1), 16);
@@ -243,16 +243,20 @@ let _lastDayPhase = -1;       // sentinel: -1 forces first-frame palette build
 const _pal = { bgC: '', fgC: '', fgDark: '', dimC: '' };
 
 /**
- * Set ctx.fillStyle only when the colour actually changes.
- * @param {string} color
+ * Update the canvas 2D context's fill style only when the provided color differs from the last applied color.
+ * @param {string} color - CSS color string to apply to ctx.fillStyle.
  */
 function setFill(color) {
   if (color !== _lastFill) { ctx.fillStyle = color; _lastFill = color; }
 }
 
 /**
- * Bake the static sky layer onto skyCanvas.
- * Called once per dayPhase change.
+ * Draws and caches the static sky background onto the offscreen sky canvas.
+ *
+ * Uses the current palette and `dayPhase` to render the sky fill, a horizon line, and stars.
+ * Stars are rendered only when `dayPhase > 0.1` with their alpha scaled by `dayPhase`.
+ *
+ * No-op when the offscreen sky context or palette is not available.
  */
 function redrawSkyLayer() {
   if (!skyCtx || !_pal.bgC) return;
@@ -341,6 +345,11 @@ let soundMuted   = false;
 // on restart, preventing stale sounds.
 let _soundTimers = [];
 
+/**
+ * Schedule a sound callback to run after the given delay and track its timeout ID for later cancellation.
+ * @param {Function} fn - The callback to invoke when the timer fires.
+ * @param {number} delay - Delay in milliseconds before invoking `fn`.
+ */
 function _scheduleSound(fn, delay) {
   _soundTimers.push(setTimeout(fn, delay));
 }
@@ -377,6 +386,11 @@ function soundDie() {
   playBeep(440, 'square', 0.10, 0.08);
   _scheduleSound(function () { playBeep(220, 'square', 0.18, 0.07); }, 90);
 }
+/**
+ * Play a three-note ascending milestone chime.
+ *
+ * Plays an immediate short beep, then schedules two additional ascending beeps at 70ms intervals.
+ */
 function soundMilestone() {
   playBeep(660, 'square', 0.07, 0.07);
   _scheduleSound(function () { playBeep(880,  'square', 0.07, 0.07); }, 70);
@@ -479,6 +493,17 @@ function endDuck() {
   if (b) b.classList.remove('active');
 }
 
+/**
+ * Toggle the game's paused state, updating UI, timers, and the animation loop.
+ *
+ * When called while the game is `'running'`, pauses the run: records pause start time,
+ * cancels the animation frame, displays the pause screen, and updates pause button state.
+ * When called while the game is `'paused'`, resumes the run: adjusts the stored run start
+ * time to exclude the paused duration, hides the pause screen, and restarts the animation loop.
+ * Calling this function has no effect if the global `state` is neither `'running'` nor `'paused'`.
+ *
+ * Also ensures the audio subsystem is initialized before changing pause state.
+ */
 function togglePause() {
   if (state !== 'running' && state !== 'paused') return;
   initAudio();
@@ -504,6 +529,13 @@ function togglePause() {
   }
 }
 
+/**
+ * Toggles the document between fullscreen and normal display.
+ *
+ * If the document is not currently fullscreen, requests fullscreen on the
+ * documentElement; if it is fullscreen, exits fullscreen. Errors from the
+ * fullscreen request are caught and logged to the console when supported.
+ */
 function toggleFullscreen() {
   let el = document.documentElement;
   let isFs = document.fullscreenElement || document.webkitFullscreenElement;
@@ -526,6 +558,11 @@ function toggleFullscreen() {
   }
 }
 
+/**
+ * Sync the fullscreen button's label and active state with the document's fullscreen status.
+ *
+ * Updates the button text to "EXIT FS" when fullscreen is active, otherwise "FULL", and toggles the button's "active" CSS class. Does nothing if the fullscreen button is not present.
+ */
 function onFullscreenChange() {
   let btn = DOM.fullscreenBtn;
   if (!btn) return;
@@ -537,6 +574,13 @@ function onFullscreenChange() {
 document.addEventListener('fullscreenchange',       onFullscreenChange);
 document.addEventListener('webkitfullscreenchange', onFullscreenChange);
 
+/**
+ * Start a new game run and enter the running state.
+ *
+ * Resets pause and timing state, records the wall-clock start time, reinitializes
+ * run-specific game state, hides the start and game-over screens, and begins
+ * the main animation loop.
+ */
 function startGame() {
   cancelAnimationFrame(animFrame);
   paused            = false;
@@ -549,6 +593,12 @@ function startGame() {
   animFrame = requestAnimationFrame(loop);
 }
 
+/**
+ * Restart the current run by reinitializing game state and starting the main loop.
+ *
+ * Cancels any pending animation frame, resets pause and timing state, reinitializes runtime
+ * data via initGame(), hides the game-over screen, and schedules the next animation frame.
+ */
 function restart() {
   cancelAnimationFrame(animFrame);
   paused            = false;
@@ -561,7 +611,9 @@ function restart() {
 }
 
 /**
- * Transition to dead state, persist stats/leaderboard, show game-over screen.
+ * End the current run: mark the game as dead, record and persist run statistics, update leaderboard, and show the game-over UI.
+ *
+ * Increments session and persistent counters (games, deaths, distance, obstacles), updates best score/time, attempts to add the score to the leaderboard, and saves stats. If leaderboard insertion fails due to storage quota, restores the previous persisted best-score and updates the DB status indicator. Plays the death sound and reveals the game-over screen (including the "NEW BEST" banner when appropriate) and refreshes on-screen stat displays and leaderboard rendering.
  */
 function gameOver() {
   if (state === 'dead') return;
@@ -684,8 +736,12 @@ function spawn() {
    UPDATE (called every frame)
    ─────────────────────────────────────────────────────────── */
 /**
- * Advance all game state by one logical frame.
- * @param {number} dt - Delta-time multiplier (1.0 = one 60 Hz frame)
+ * Advance the game simulation state by one logical frame.
+ *
+ * Updates score and speed, advances physics and animations, spawns and moves obstacles/clouds/moon,
+ * performs collision detection and obstacle passing bookkeeping, updates ground scrolling, and
+ * refreshes HUD elements based on the provided time step.
+ * @param {number} dt - Delta-time multiplier where 1.0 equals one 60 Hz frame; larger values represent proportionally longer updates.
  */
 function update(dt) {
   frameCount++;
@@ -821,8 +877,15 @@ function update(dt) {
    DRAW (called every frame)
    ─────────────────────────────────────────────────────────── */
 /**
- * Render the current frame to the canvas.
- * Pure draw — must not modify game state.
+ * Render the current game frame onto the main canvas using the current visual state.
+ *
+ * Draws the baked sky layer (with day/night palette), ground texture, moon, clouds,
+ * obstacles, the dino sprite, on-canvas HUD (score/hi), milestone flash overlay,
+ * and the bottom speed bar. Rebuilds the palette and sky bake only when the day
+ * phase changes to minimize work.
+ *
+ * This function performs pure rendering and must not modify game state. It relies
+ * on externally maintained globals for all input state and drawing helpers.
  */
 function draw() {
   ctx.clearRect(0, 0, W, H);
@@ -942,9 +1005,14 @@ function draw() {
   ctx.fillRect(barPx, H - 4, W - barPx, 4);
 }
 
-/* ───────────────────────────────────────────────────────────
-   PIXEL ART DRAW ROUTINES
-   ─────────────────────────────────────────────────────────── */
+/**
+ * Draws the pixel-art dinosaur sprite at the specified canvas coordinates using the current palette and pose.
+ * @param {number} x - X coordinate of the sprite's top-left corner.
+ * @param {number} y - Y coordinate of the sprite's top-left corner.
+ * @param {number} frame - Animation frame index (0 or 1) selecting walk-leg positions.
+ * @param {boolean} jumping - When true, render the jumping (tucked legs) pose.
+ * @param {boolean} ducking - When true, render the ducking/crouched pose (overrides standing/jumping pose).
+ */
 
 function drawDino(x, y, frame, jumping, ducking) {
   let c  = C.dino;
@@ -1020,6 +1088,17 @@ function drawDino(x, y, frame, jumping, ducking) {
   }
 }
 
+/**
+ * Draws a pixel-art cactus at the given position and size using the current cactus color.
+ *
+ * The cactus is composed of a central stem and two arms (left and right), scaled to the
+ * provided width and height to preserve the intended pixel-art silhouette.
+ *
+ * @param {number} x - Leftmost x-coordinate of the cactus cluster.
+ * @param {number} y - Topmost y-coordinate of the cactus (smaller y is higher on screen).
+ * @param {number} w - Total width of the cactus cluster in pixels.
+ * @param {number} h - Total height of the cactus in pixels.
+ */
 function drawCactus(x, y, w, h) {
   let c   = C.cactus;
   let sw  = 6;                             // stem width
@@ -1096,8 +1175,12 @@ function drawCloud(x, y, w) {
    GAME LOOPS
    ─────────────────────────────────────────────────────────── */
 /**
- * Main game loop — drives update() and draw() via requestAnimationFrame.
- * @param {DOMHighResTimeStamp} timestamp - Provided by rAF
+ * Advance game state and render frames while the game is in the running state.
+ *
+ * Uses the provided high-resolution timestamp to compute a normalized delta time
+ * (1.0 = one 60 Hz frame) which is clamped to 3.0 to avoid excessively large updates
+ * after pauses or backgrounding.
+ * @param {DOMHighResTimeStamp} timestamp - High-resolution timestamp from requestAnimationFrame used to compute delta time.
  */
 function loop(timestamp) {
   if (state !== 'running' || paused) return;
@@ -1138,9 +1221,12 @@ function updateStatUI() {
 
 /* Safe DOM-only leaderboard render — shows local top-10 with timestamp */
 /**
- * Rebuild the leaderboard table from a sorted array of entries.
- * @param {Array<{name:string, score:number, when:string}>} lb - Top-10 entries
- */
+ * Populate the leaderboard table body with the provided sorted entries.
+ *
+ * Clears existing rows and inserts one row per entry; if `lb` is empty or falsy,
+ * inserts a single "NO RECORDS YET" row spanning all columns.
+ *
+ * @param {Array<{name?:string, score:number, when?:string}>} lb - Leaderboard entries sorted highest-first. `name` may be omitted (displayed as "ANON"); `when` is an optional timestamp string. */
 function renderLeaderboard(lb) {
   let tbody = DOM.lbBody;
 
