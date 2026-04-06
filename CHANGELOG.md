@@ -5,6 +5,122 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.7.0-beta] — 2026-04-06
+
+### Changed
+
+- **Speed system — hybrid formula removed; pure linear ramp restored** (`game.js`)  
+  `update()` previously ran two conflicting speed expressions on the same frame:
+  an additive `speed += 0.0025 * dt` followed immediately by a score-derived
+  clamp `speed = Math.min(CONFIG.SPEED_MIN + (score / 2660) * (CONFIG.SPEED_MAX -
+  CONFIG.SPEED_MIN), CONFIG.SPEED_MAX)`. The second expression overwrote the
+  first entirely, making the additive line dead code and tying speed exclusively
+  to score rather than elapsed time. At low scores this produced speed values
+  well below `SPEED_MIN`, undermining the Chrome-accurate starting pace.
+
+  Removed the score-based formula. The single remaining expression uses a
+  reduced coefficient: `speed += 0.002 * dt` (was `0.0025`), capped at `13`.
+  Speed now ramps continuously from game start at a rate that matches observed
+  Chrome Dino pacing more closely. The `CONFIG.SPEED_MIN` / `CONFIG.SPEED_MAX`
+  constants are retained for the speed bar display calculation.
+
+- **Day/Night cycle — looping timer replaced with score-triggered one-way fade** (`game.js`)  
+  The previous cycle used `dayTimer`, `dayDir`, and `dayPauseAt` to oscillate
+  indefinitely between day and night with a 350-frame pause at each extreme.
+  Direction reversed on every peak/trough, producing a full loop approximately
+  every 1400 frames (~23 s at 60 Hz). This made the night phase feel arbitrary
+  and repetitive — players experienced multiple full day/night oscillations
+  within a single short run.
+
+  Replaced the entire timer block with a single score gate:
+  ```js
+  if (score > 700) {
+    dayPhase = Math.min(dayPhase + 0.002 * dt, 1);
+  }
+  ```
+  `dayPhase` starts at `0` (full day) and transitions smoothly to `1` (full
+  night) once the player crosses score 700, then stays there for the remainder
+  of the run. The transition takes approximately 500 frames (~8 s) to complete.
+  `dayTimer`, `dayDir`, and `dayPauseAt` are no longer used in the update loop;
+  their declarations and `initGame()` assignments are retained as dead-state
+  cleanup but have no runtime effect.
+
+- **Jump physics — softer arc, lower gravity** (`game.js`)  
+  `GRAVITY` reduced from `0.65` to `0.55` and `JUMP_V` from `-14` to `-11.5`.
+  The previous values produced a tight, punishing arc that felt mismatched
+  against the slower obstacle spawn rate. The new values give the dino a
+  noticeably more floaty trajectory — hang time increases by approximately 15%
+  and peak height decreases slightly, making close-call jumps over tall cacti
+  more readable and rewarding.
+
+- **Mid-air fast-fall — duck multiplier increased** (`game.js`)  
+  The downward velocity bonus applied while holding duck during a jump was
+  increased from `2.5 * dt` to `3.8 * dt`. The previous value was too subtle
+  at the new lower gravity — the fast-fall felt nearly identical to a normal
+  descent. At `3.8` the dino snaps down perceptibly when duck is held mid-air,
+  making the mechanic feel intentional and useful again.
+
+- **Obstacle cooldown formula — CONFIG constants replaced with direct expression** (`game.js`)  
+  The spawn cooldown was derived from four `CONFIG` fields (`OBS_CD_MIN`,
+  `OBS_CD_BASE`, `OBS_CD_RNG`, `OBS_CD_SPEED`) which combined to
+  `Math.max(30, Math.floor(55 + random * 70 - speed * 1.5))`. The random range
+  of `70` frames produced excessive spacing variance — consecutive obstacles
+  could spawn anywhere from ~30 to ~110 frames apart at minimum speed.
+
+  Replaced with a tighter expression:
+  ```js
+  obsCooldown = Math.max(20, (80 - speed * 3.2) + Math.random() * 25);
+  ```
+  The base shrinks faster with speed (`3.2` vs `1.5` coefficient), the random
+  spread is narrowed to `25` frames, and the hard floor drops to `20`. At
+  starting speed (`6`) the cooldown is approximately `60–85` frames; at cap
+  (`13`) it is approximately `20–45` frames. Obstacle density now scales more
+  aggressively with speed, sharpening the mid-to-late game difficulty curve.
+
+- **Collision hitboxes — both dino and obstacle boxes tightened by 1 px per side** (`game.js`)  
+  Dino box inset changed from `x+8 / y+6 / h-10` to `x+9 / y+7 / h-12`.
+  Obstacle box inset changed from `+4 / +4 / w-8 / h-8` to `+5 / +5 / w-10 /
+  h-10`. Each side gains 1 px of additional leniency — reducing the effective
+  collision area by ~2 px on every axis. Combined with the updated jump physics,
+  this eliminates the class of kills where the dino appeared to clear an
+  obstacle visually but died due to invisible hitbox overlap on the sprite's
+  transparent border pixels.
+
+- **Game start speed — `CONFIG.SPEED_MIN` replaced with literal `6`** (`game.js`)  
+  `initGame()` now sets `speed = 6` directly (was `speed = CONFIG.SPEED_MIN`,
+  i.e. `8.5`). Starting at `8.5` — the 854px-canvas-scaled equivalent of the
+  original Chromium speed — proved too fast for new players given the other
+  physics changes. `6` matches the raw Chromium source value and gives players
+  roughly two additional seconds at a comfortable pace before the speed ramp
+  becomes meaningful. `CONFIG.SPEED_MIN` is unchanged and continues to anchor
+  the speed bar display.
+
+- **Speed bar formula — updated to match new start speed** (`game.js`)  
+  The `speed-fill` width calculation used `(speed - CONFIG.SPEED_MIN) /
+  (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)`, which would show the bar at a negative
+  percentage during the new `6 → 8.5` range. Updated to use the literal range
+  boundaries `(speed - 6) / (13 - 6)` so the bar starts at `0%` and fills
+  linearly to `100%` at the cap.
+
+- **`visibilitychange` handler — auto-pause captures `pauseStartTime`** (`game.js`)  
+  The previous hidden-tab handler unconditionally called
+  `cancelAnimationFrame(animFrame)` without going through `togglePause()`.
+  This meant `pauseStartTime` was never set, so when the tab became visible
+  again and the player unpaused, `gameStartWallTime` was not offset by the
+  hidden duration — all time spent with the tab backgrounded was counted
+  toward the run's Best Time. The handler now calls `togglePause()` when
+  `state === 'running' && !paused`, ensuring the pause infrastructure runs
+  through a single, consistent code path.
+
+- **Inline annotation comments stripped** (`game.js`)  
+  All `BUG-#N FIX:`, `OPT-N:`, `FIX-N:`, `SEC-N:`, and `ISSUE-N FIX:` prefixes
+  were removed from inline comments throughout the file. The annotations were
+  added during the bug-fix and audit passes to cross-reference issues; they are
+  no longer necessary now that the issues are resolved and documented here.
+  Comment text was preserved or condensed; no logic was changed.
+
+---
+
 ## [0.6.4-beta] — 2026-03-24
 
 ### Fixed
@@ -395,7 +511,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 ### Fixed
 
 - **CSS backtick syntax in `:fullscreen body` background rule** (`style.css`)  
-  The rule read `background: \`#000\`` — JavaScript template literal syntax that
+  The rule read `` background: `#000` `` — JavaScript template literal syntax that
   CSS parsers do not understand. The declaration was silently ignored, leaving
   the body background as `#f5f5f5` (the default light grey) in fullscreen mode
   instead of black. Fixed to `background: #000`.

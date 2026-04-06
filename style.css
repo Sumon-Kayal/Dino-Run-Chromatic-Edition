@@ -33,7 +33,7 @@
   --text:     #595959;   /* Chrome's body-text gray */
   --muted:    #9aa0a6;
   --accent:   #535353;   /* Chrome dino gray */
-  --gold:     #ffd700;  /* BUG-6 FIX: was #b8860b (dark gold), now matches JS renderLeaderboard() */
+  --gold:     #ffd700;   /* Matches JS renderLeaderboard() */
   --danger:   #c0392b;
   --green:    #1e7e34;
   --blue:     #1a73e8;   /* Chrome brand blue */
@@ -41,11 +41,7 @@
 }
 
 /* ── ACCESSIBILITY: SCREEN-READER-ONLY ───────────────────── */
-/* FIX-12: Visually hides content while keeping it in the
-   accessibility tree. clip-path is the modern replacement for
-   clip:rect() which is deprecated. The 1px size + overflow:hidden
-   avoids the element collapsing to a zero-size box (which some
-   screen readers skip). Positioned so it doesn't affect layout.  */
+/* Visually hides content while keeping it in the accessibility tree */
 .sr-only {
   position: absolute;
   width: 1px;
@@ -105,8 +101,6 @@ header {
 .score-display .score-val { color: var(--accent); }
 
 /* ── RESET HI BUTTON ─────────────────────────────────────── */
-/* Sits inline with the HI score. Intentionally small and muted
-   so it does not distract during play, but clearly tappable.  */
 .reset-hi-btn {
   display: inline-flex;
   align-items: center;
@@ -150,8 +144,7 @@ header {
   box-shadow: var(--shadow);
   cursor: pointer;
   touch-action: manipulation;
-  /* OPT-CSS-2: isolate layout/paint inside the frame so the browser does not
-     need to invalidate surrounding page layout on every canvas repaint. */
+  /* Isolate layout/paint inside the frame to prevent full-page layout invalidations */
   contain: layout style;
 }
 
@@ -162,9 +155,7 @@ canvas {
   height: auto;
   image-rendering: crisp-edges;
   image-rendering: pixelated;
-  /* OPT-CSS-2: promote the canvas to its own GPU compositing layer.
-     Repainting the canvas (60×/s) no longer triggers layout invalidation
-     of surrounding elements. */
+  /* Promote canvas to its own GPU compositing layer */
   will-change: transform;
 }
 
@@ -260,10 +251,7 @@ canvas {
   font-size: clamp(6px, 1.5vw, 8px);
   cursor: pointer;
   border-radius: 3px;
-  /* OPT-CSS-3: was `transition: all 0.12s` — transitioning ALL properties
-     causes the browser to watch every CSS property for changes, including
-     ones that are never animated. Scope to only what actually changes on
-     .active toggle so the compositor thread does less work per input event. */
+  /* Scope transitions to specific properties to reduce compositor workload */
   transition: background 0.12s, color 0.12s, border-color 0.12s, opacity 0.12s;
   user-select: none;
   box-shadow: var(--shadow);
@@ -304,15 +292,19 @@ canvas {
 
 /* stylelint-disable selector-no-vendor-prefix */
 /* ── FULLSCREEN MODE ─────────────────────────────────────── */
-/* Standard (:fullscreen) — Chrome 71+, Firefox 64+, Edge 79+
-   WebKit prefix (:-webkit-full-screen) — Safari desktop/iOS
-   No -moz- prefix needed: Firefox 64+ uses the standard pseudo-class.
-   Our minimum (Firefox 93) is well past that threshold.            */
-:fullscreen body,
+
+/* Standard (:fullscreen) — Chrome 71+, Firefox 64+, Edge 79+ */
+:fullscreen body {
+  background: #000;
+  height: 100vh;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+/* WebKit prefix (:-webkit-full-screen) — Safari desktop/iOS */
 :-webkit-full-screen body {
   background: #000;
-  /* height must be explicit (not just min-height) so the flex column
-     has a fixed container height and justify-content: center works   */
   height: 100vh;
   justify-content: center;
   align-items: center;
@@ -320,15 +312,30 @@ canvas {
 }
 
 :fullscreen header,
-:-webkit-full-screen header,
 :fullscreen .panel-row,
+:fullscreen footer {
+  display: none;
+}
+
+:-webkit-full-screen header,
 :-webkit-full-screen .panel-row,
-:fullscreen footer,
 :-webkit-full-screen footer {
   display: none;
 }
 
-:fullscreen .game-area,
+:fullscreen .game-area {
+  max-width: none;
+  width: 100vw;
+  height: 100vh;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
 :-webkit-full-screen .game-area {
   max-width: none;
   width: 100vw;
@@ -342,11 +349,14 @@ canvas {
   position: relative;
 }
 
-/* Scale game frame to fill viewport, preserving 854:480 (16:9) ratio.
-   min() picks whichever dimension is the constraint:
-     landscape: height is the limit → width = 100vh × 854/480
-     portrait:  width  is the limit → use 100vw directly            */
-:fullscreen .game-frame,
+:fullscreen .game-frame {
+  width: min(100vw, calc(100vh * 854 / 480));
+  max-width: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
 :-webkit-full-screen .game-frame {
   width: min(100vw, calc(100vh * 854 / 480));
   max-width: none;
@@ -356,7 +366,18 @@ canvas {
 }
 
 /* Mobile controls float at the bottom in fullscreen */
-:fullscreen .controls,
+:fullscreen .controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 6px;
+  background: rgba(0, 0, 0, 0.45);
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
 :-webkit-full-screen .controls {
   position: absolute;
   bottom: 0;
@@ -436,10 +457,7 @@ canvas {
   height: 100%;
   background: linear-gradient(90deg, var(--blue), var(--danger));
   border-radius: 2px;
-  /* OPT-CSS-1: removed `transition: width 0.5s ease`. game.js writes style.width
-     every frame at 60fps — a 0.5s CSS transition fights those writes, creates a
-     compositor animation that chases each JS update with 500ms of lag, and adds
-     unnecessary GPU work. JS at 60fps is already smooth; no transition needed. */
+  /* No transition needed; JS updates width smoothly at 60fps */
   width: 0%;
 }
 
@@ -527,11 +545,7 @@ canvas {
   font-size: clamp(12px, 2.5vw, 17px);
 }
 
-/* BUG-3 FIX: medal colouring is applied by renderLeaderboard() via
-   td.style.color (inline JS always beats CSS). These CSS rules were
-   dead code and used a mismatched gold shade (#b8860b vs JS #ffd700). */
-
-/* FIX-3: higher specificity than :first-child so empty msg stays muted */
+/* Higher specificity to keep empty message muted */
 .lb-table tbody tr td.lb-empty {
   color: var(--muted);
   font-size: 14px;
