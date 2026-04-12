@@ -19,10 +19,10 @@ export function getSoundMuted() { return soundMuted; }
 export function setSoundMuted(v) { soundMuted = v; }
 
 export function initAudio() {
-  if (audioCtx || !AudioCtxCtor) return;
+  if (!AudioCtxCtor) return;
   try {
-    audioCtx = new AudioCtxCtor();
-    if (_loadState === 'idle') _loadAllBuffers();
+    if (!audioCtx) audioCtx = new AudioCtxCtor();
+    if (_loadState === 'idle' || _loadState === 'failed') _loadAllBuffers();
   } catch (e) { audioCtx = null; }
 }
 
