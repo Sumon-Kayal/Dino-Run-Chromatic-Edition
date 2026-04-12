@@ -49,8 +49,9 @@ export function spawnObstacle() {
   if (!isPtera) {
     const h       = CONFIG.CACTUS_H_MIN + Math.floor(Math.random() * CONFIG.CACTUS_H_RNG);
     const singleW = CONFIG.CACTUS_W_MIN + Math.floor(Math.random() * CONFIG.CACTUS_W_RNG);
-    const cl      = Math.random() < CONFIG.CACTUS_TRIPLE ? 3
-                  : Math.random() < CONFIG.CACTUS_DBL    ? 2 : 1;
+    const r       = Math.random();
+    const cl      = r < CONFIG.CACTUS_TRIPLE ? 3
+                  : r < CONFIG.CACTUS_TRIPLE + CONFIG.CACTUS_DBL ? 2 : 1;
     const INTRA   = CACTUS_INTRA_GAP;
     const totalW  = singleW * cl + INTRA * (cl - 1);
     G.obstacles.push({

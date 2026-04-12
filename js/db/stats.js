@@ -26,7 +26,12 @@ const DB_VERSION = 1;
             changed = true;
           }
         });
-        if (changed) dbSet('dino:lb', JSON.stringify(lb));
+        if (changed) {
+          if (!dbSet('dino:lb', JSON.stringify(lb))) {
+            console.warn('[Stats] Migration failed: could not save backfilled leaderboard');
+            return;
+          }
+        }
       } catch (err) { /* corrupt data — leave it */ }
     }
   }

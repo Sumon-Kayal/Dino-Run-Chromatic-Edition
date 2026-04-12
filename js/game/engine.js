@@ -45,7 +45,8 @@ export class Engine {
     this.render();
 
     // FIX #1: reuse the already-bound function — no new allocation each frame.
-    this._raf = requestAnimationFrame(this._boundLoop);
+    // Re-check _running in case stop() was called during update() or render().
+    if (this._running) this._raf = requestAnimationFrame(this._boundLoop);
   }
 
   resetTimer() {

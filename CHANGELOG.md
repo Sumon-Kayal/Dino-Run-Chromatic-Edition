@@ -1366,6 +1366,3 @@ day/night cycle, and audio confirmed stable across all platforms.
 - Termux/Android test environment verified: `server.py` HTTPS and HTTP
   fallback confirmed functional on Android 12 and 13.
 - No blockers found on first load across all platforms.
-oid test environment verified: `server.py` HTTPS and HTTP
-  fallback confirmed functional on Android 12 and 13.
-- No blockers found on first load across all platforms.

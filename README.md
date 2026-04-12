@@ -125,7 +125,8 @@ Dino-Run-Chromatic-Edition/
 │   ├── main.js                 # ES module entry point
 │   ├── game/
 │   │   ├── engine.js           # Engine class: delta-time game loop
-│   │   ├── state.js            # Shared constants (CONFIG, W, H, GY) + mutable state (G)
+│   │   ├── config.js           # Shared constants (CONFIG, W, H, GY)
+│   │   ├── runtime.js          # Mutable game state (G)
 │   │   ├── audio.js            # Web Audio: OGG load + synthesised fallback
 │   │   ├── player.js           # Dino physics, jump, duck, idle animation
 │   │   ├── obstacles.js        # Cactus / pterodactyl spawning & movement
@@ -380,8 +381,9 @@ Additional hardening:
 
 ## 🧩 Architecture Notes
 
-All mutable game state lives in a single `G` object exported from `state.js`.
+All mutable game state lives in a single `G` object exported from `runtime.js`.
 Every module imports and mutates `G` directly — no prop-drilling, no global namespace pollution.
+Static constants (CONFIG, W, H, GY) are exported from `config.js`.
 
 DB modules follow a clean one-directional import chain:
 `storage.js` ← `database.js` ← `leaderboard.js` / `stats.js`. No circular dependencies.
@@ -393,7 +395,8 @@ DB modules follow a clean one-directional import chain:
 | Module | Concern | Key detail |
 |---|---|---|
 | `engine.js` | Game loop | `requestAnimationFrame`; `dt` = elapsed ms / 16.667, clamped to 3.0 |
-| `state.js` | Shared state | `CONFIG`, `W`, `H`, `GY` constants + mutable `G` object |
+| `config.js` | Static constants | `CONFIG`, `W`, `H`, `GY` — populated from `data/config.json` |
+| `runtime.js` | Mutable state | `G` object — all per-frame and per-session state |
 | `physics.js` | Collision | Two-pass AABB; reusable box objects — zero allocations per frame |
 | `renderer.js` | Canvas drawing | `lerpRGB` palette cached; sky on `OffscreenCanvas`; `setFill()` deduplicates `fillStyle` |
 | `obstacles.js` | Obstacle management | Gap-based spawning matching Chrome source; in-place reverse `splice` |

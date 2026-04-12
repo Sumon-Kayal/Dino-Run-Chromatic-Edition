@@ -19,8 +19,18 @@ export function getQuotaTotal() { return quotaTotal; }
  * Dispatches `db:quota` with { used, total } on the window.
  */
 export function refreshQuota() {
-  if (!navigator.storage || !navigator.storage.estimate) return;
-  if (_quotaTimer !== null) return;
+  if (!navigator.storage || !navigator.storage.estimate) {
+    window.dispatchEvent(new CustomEvent('db:quota', {
+      detail: { used: quotaUsed, total: quotaTotal },
+    }));
+    return;
+  }
+  if (_quotaTimer !== null) {
+    window.dispatchEvent(new CustomEvent('db:quota', {
+      detail: { used: quotaUsed, total: quotaTotal },
+    }));
+    return;
+  }
   _quotaTimer = setTimeout(function () {
     _quotaTimer = null;
     navigator.storage.estimate().then(function (est) {

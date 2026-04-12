@@ -456,7 +456,7 @@ describe('engine.js — Engine lifecycle', () => {
     let capturedDt = 0;
     const e = new Engine((dt) => { capturedDt = dt; }, () => {});
     e._running = true;
-    e.last = 0;
+    e.last = 1;  // Set to non-zero so dt calculation is triggered
     // Simulate a 10-second gap (extreme lag)
     e.loop(10_000);
     e._running = false;
@@ -591,6 +591,7 @@ const _ls   = makeLocalStorage();
 const _win  = makeWindowStub();
 
 globalThis.localStorage = _ls;
+globalThis.window = _win;
 Object.defineProperty(globalThis, 'navigator', { value: { storage: { estimate: async () => ({ usage: 0, quota: 5*1024*1024 }) } }, writable: true, configurable: true });
 
 // ── Import modules ────────────────────────────────────────────────────
@@ -656,14 +657,17 @@ describe('database.js — dbSet', () => {
     globalThis.localStorage = tiny;
     _win._events.length = 0;
 
-    // dbSet reads globalThis.localStorage via the module's closure —
-    // since the module was already imported we can't swap the reference
-    // it captured, but we can test via dbSet's return value:
-    // (the quota error is caught and returns false)
+    // Attempt a write that should fail due to quota
+    const result = dbSet('testKey', 'x'.repeat(100));
+
     globalThis.localStorage = orig;  // restore before assertions
-    // We test the return-false path indirectly via a separate in-memory path:
-    // The module already captured the real _ls ref.  We test quota via leaderboard.
-    assert.ok(true, 'quota path covered by leaderboard quota tests below');
+
+    // Verify the write failed
+    assert.equal(result, false, 'dbSet should return false when quota exceeded');
+
+    // Verify db:quotaFull event was dispatched
+    const quotaFullEvents = _win._events.filter(e => e.type === 'db:quotaFull');
+    assert.ok(quotaFullEvents.length > 0, 'db:quotaFull event should be dispatched');
   });
 });
 

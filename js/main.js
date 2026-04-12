@@ -235,7 +235,8 @@ function gameOver() {
     renderLeaderboard(lb);
   } else {
     const existingLb = getLeaderboard();
-    G.dbStats.bestScore = prevSessionBest;
+    G.dbStats.bestScore = prevBest;
+    G.hiScore = prevBest;
     saveStats(G.dbStats);
     console.warn('[Game] Score not saved — storage full');
     renderLeaderboard(existingLb);
@@ -247,7 +248,7 @@ function gameOver() {
 
   DOM.goScore.textContent = 'SCORE ' + String(s).padStart(5, '0');
   DOM.goHi.textContent    = 'HI: '   + String(G.hiScore).padStart(5, '0');
-  if (s > prevBest && prevBest > 0) {
+  if (s > prevBest && prevBest > 0 && lb) {
     DOM.goNewBest.classList.remove('hidden');
   } else {
     DOM.goNewBest.classList.add('hidden');

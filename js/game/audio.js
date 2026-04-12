@@ -12,7 +12,7 @@ let _soundTimers    = [];
 // Decoded AudioBuffer cache
 const _buffers = { jump: null, die: null, milestone: null };
 
-// Load state: 'idle' | 'loading' | 'ready'
+// Load state: 'idle' | 'loading' | 'ready' | 'failed'
 let _loadState = 'idle';
 
 export function getSoundMuted() { return soundMuted; }
@@ -75,12 +75,16 @@ function _loadAllBuffers() {
     Object.keys(_SND_FILES).map(function(k) {
       return _loadBuffer(k, _SND_FILES[k]);
     })
-  ).then(function() { _loadState = 'ready'; });
+  ).then(function() { _loadState = 'ready'; })
+    .catch(function() { _loadState = 'failed'; });
 }
 
 // ── Playback ─────────────────────────────────────────────
 function _playBuffer(key, vol) {
-  if (soundMuted || !audioCtx || !_buffers[key]) return false;
+  if (soundMuted || !audioCtx) return false;
+  if (_loadState === 'failed') return false;
+  if (_loadState === 'loading') return null;
+  if (!_buffers[key]) return false;
   resumeAudio();
   try {
     const src  = audioCtx.createBufferSource();
@@ -123,19 +127,22 @@ export function playBeep(freq, type, dur, vol, endF) {
 
 // ── Public sound functions ────────────────────────────────
 export function soundJump() {
-  if (!_playBuffer('jump', 0.9))
+  const result = _playBuffer('jump', 0.9);
+  if (result === false)
     playBeep(400, 'square', 0.12, 0.07, 880);
 }
 
 export function soundDie() {
-  if (!_playBuffer('die', 1.0)) {
+  const result = _playBuffer('die', 1.0);
+  if (result === false) {
     playBeep(440, 'square', 0.10, 0.08);
     _scheduleSound(function() { playBeep(220, 'square', 0.18, 0.07); }, 90);
   }
 }
 
 export function soundMilestone() {
-  if (!_playBuffer('milestone', 0.85)) {
+  const result = _playBuffer('milestone', 0.85);
+  if (result === false) {
     playBeep(660, 'square', 0.07, 0.07);
     _scheduleSound(function() { playBeep(880,  'square', 0.07, 0.07); },  70);
     _scheduleSound(function() { playBeep(1100, 'square', 0.12, 0.07); }, 140);

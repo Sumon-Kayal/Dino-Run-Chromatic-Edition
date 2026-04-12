@@ -19,7 +19,7 @@ const useLocalStorage = (function () {
   } catch (e) { return false; }
 }());
 
-const memStore = {};
+const memStore = Object.create(null);
 
 export const backendName = useLocalStorage
   ? 'LOCAL STORAGE \xB7 OFFLINE'

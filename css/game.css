@@ -38,8 +38,10 @@
 .game-canvas-layer {
   display: block;
   /* P0 FIX: Force nearest-neighbour (pixelated) upscaling in every browser. */
+  /* stylelint-disable value-no-vendor-prefix */
   image-rendering: -moz-crisp-edges !important;
   image-rendering: -webkit-optimize-contrast !important;
+  /* stylelint-enable value-no-vendor-prefix */
   image-rendering: crisp-edges !important;
   image-rendering: pixelated !important;
   will-change: transform;
@@ -124,14 +126,14 @@
 
 /* stylelint-disable selector-no-vendor-prefix */
 /* ── FULLSCREEN MODE ─────────────────────────────────────── */
-:fullscreen body {
+body:fullscreen {
   background: #000;
   height: 100vh;
   justify-content: center;
   align-items: center;
   overflow: hidden;
 }
-:-webkit-full-screen body {
+body:-webkit-full-screen {
   background: #000;
   height: 100vh;
   justify-content: center;
@@ -139,15 +141,15 @@
   overflow: hidden;
 }
 
-:fullscreen header,
-:fullscreen .panel-row,
-:fullscreen footer { display: none; }
+body:fullscreen header,
+body:fullscreen .panel-row,
+body:fullscreen footer { display: none; }
 
-:-webkit-full-screen header,
-:-webkit-full-screen .panel-row,
-:-webkit-full-screen footer { display: none; }
+body:-webkit-full-screen header,
+body:-webkit-full-screen .panel-row,
+body:-webkit-full-screen footer { display: none; }
 
-:fullscreen .game-area {
+.game-area:fullscreen {
   max-width: none;
   width: 100vw;
   height: 100vh;
@@ -159,7 +161,7 @@
   justify-content: center;
   position: relative;
 }
-:-webkit-full-screen .game-area {
+.game-area:-webkit-full-screen {
   max-width: none;
   width: 100vw;
   height: 100vh;
@@ -172,14 +174,14 @@
   position: relative;
 }
 
-:fullscreen .game-frame {
+.game-frame:fullscreen {
   width: min(100vw, calc(100vh * 854 / 480));
   max-width: none;
   border: none;
   border-radius: 0;
   box-shadow: none;
 }
-:-webkit-full-screen .game-frame {
+.game-frame:-webkit-full-screen {
   width: min(100vw, calc(100vh * 854 / 480));
   max-width: none;
   border: none;
@@ -187,7 +189,8 @@
   box-shadow: none;
 }
 
-:fullscreen .controls {
+.game-area:fullscreen .controls,
+.game-frame:fullscreen .controls {
   position: absolute;
   bottom: 0;
   left: 0;
@@ -198,7 +201,8 @@
   flex-wrap: wrap;
   gap: 4px;
 }
-:-webkit-full-screen .controls {
+.game-area:-webkit-full-screen .controls,
+.game-frame:-webkit-full-screen .controls {
   position: absolute;
   bottom: 0;
   left: 0;

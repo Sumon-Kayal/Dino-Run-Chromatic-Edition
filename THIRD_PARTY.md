@@ -8,7 +8,7 @@ All third-party components are used in compliance with their respective licenses
 Chromium Dino Game
 
 Source: https://chromium.googlesource.com/chromium/src/
-Project:
+Project: components/neterror/resources/offline.js
 
 Copyright (c) The Chromium Authors
 All rights reserved.

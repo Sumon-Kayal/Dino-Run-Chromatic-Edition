@@ -345,14 +345,15 @@ export function draw() {
   }
 
   // FIX #3: Speed bar — LUT avoids lerpRGB() per frame
-  const speedPct = Math.min(
+  const speedPct = Math.max(0, Math.min(
     (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN) > 0
       ? (G.speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)
       : 0,
     1
-  );
+  ));
   const barPx  = (speedPct * W) | 0;
-  const barCol = SPEED_BAR_LUTS[(speedPct * 100) | 0];
+  const lutIdx = Math.max(0, Math.min((speedPct * 100) | 0, 100));
+  const barCol = SPEED_BAR_LUTS[lutIdx];
   uiCtx.fillStyle = barCol;
   uiCtx.fillRect(0, H - 4, barPx, 4);
   uiCtx.fillStyle = dimC;
