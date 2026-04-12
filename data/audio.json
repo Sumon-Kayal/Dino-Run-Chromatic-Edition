@@ -1,0 +1,5 @@
+{
+  "jump": "assets/audio/jump.ogg",
+  "die": "assets/audio/die.ogg",
+  "milestone": "assets/audio/milestone.ogg"
+}

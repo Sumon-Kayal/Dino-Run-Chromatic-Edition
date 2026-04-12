@@ -1,0 +1,11 @@
+{
+  "physics": {
+    "gravity": 0.48,
+    "jumpVelocity": -12.2,
+    "acceleration": 0.0015
+  },
+  "game": {
+    "initialSpeed": 5,
+    "maxSpeed": 13
+  }
+}

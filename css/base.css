@@ -1,0 +1,131 @@
+/* ═══════════════════════════════════════════════════════════
+   base.css — Reset, fonts, CSS variables, global layout
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── LOCAL FONTS ─────────────────────────────────────────── */
+@font-face {
+  font-family: 'Press Start 2P';
+  font-style:  normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/press-start-2p.woff2') format('woff2');
+}
+@font-face {
+  font-family: 'VT323';
+  font-style:  normal;
+  font-weight: 400;
+  font-display: swap;
+  src: url('../assets/fonts/vt323.woff2') format('woff2');
+}
+
+/* ── CSS VARIABLES ───────────────────────────────────────── */
+:root {
+  --bg:          #f5f5f5;   /* Chrome 404 page background */
+  --surface:     #ffffff;
+  --border:      #e0e0e0;
+  --text:        #595959;   /* Chrome's body-text gray */
+  --muted:       #9aa0a6;
+  --accent:      #535353;   /* Chrome dino gray */
+  --gold:        #ffd700;
+  --danger:      #c0392b;
+  --green:       #1e7e34;
+  --blue:        #1a73e8;   /* Chrome brand blue */
+  --shadow:      0 1px 4px rgba(0,0,0,0.10);
+
+  /* Shared composite values — extracted to avoid repetition across sheets */
+  --overlay-bg:    rgba(255, 255, 255, 0.93); /* semi-transparent game overlays */
+  --separator:     rgba(224, 224, 224, 0.6);  /* stat-row / table row dividers  */
+  --controls-overlay-bg: rgba(0, 0, 0, 0.45); /* fullscreen bottom controls bar */
+}
+
+/* ── RESET ───────────────────────────────────────────────── */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+/* ── BODY ────────────────────────────────────────────────── */
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: 'Press Start 2P', monospace;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  overflow-x: hidden;
+}
+
+/* ── HEADER ──────────────────────────────────────────────── */
+header {
+  width: 100%;
+  max-width: 960px;
+  padding: 14px 20px 10px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+}
+
+.logo {
+  font-size: clamp(9px, 2.2vw, 13px);
+  color: var(--accent);
+  letter-spacing: 3px;
+}
+
+.score-display {
+  font-size: clamp(8px, 2vw, 11px);
+  color: var(--muted);
+  letter-spacing: 1px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.score-display .score-val { color: var(--accent); }
+
+/* "HI" prefix label — muted colour, slightly smaller than the score digits */
+.hi-label {
+  color: var(--muted);
+  font-size: 0.8em;
+  letter-spacing: 1px;
+}
+
+/* ── RESET HI BUTTON ─────────────────────────────────────── */
+.reset-hi-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  padding: 0;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 2px;
+  color: var(--muted);
+  font-size: 8px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 0.15s, background 0.15s, color 0.15s;
+  vertical-align: middle;
+}
+.reset-hi-btn:hover {
+  opacity: 1;
+  background: var(--danger);
+  border-color: var(--danger);
+  color: #fff;
+}
+
+/* ── FOOTER ──────────────────────────────────────────────── */
+footer {
+  max-width: 960px;
+  width: 100%;
+  padding: 12px 20px;
+  text-align: center;
+  font-size: clamp(5px, 1.1vw, 6px);
+  color: var(--muted);
+  border-top: 1px solid var(--border);
+  margin-top: auto;
+  letter-spacing: 2px;
+}

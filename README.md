@@ -1,330 +1,452 @@
-# 🦖 Dino Run — Chromatic Edition
+# 🦕 Dino Run — Chromatic Edition
 
-A faithful, offline-first Chrome Dino clone with a chromatic day/night cycle,
-pterodactyls, persistent local leaderboard, and a full Web Audio sound engine.
-No network calls. No tracking. No dependencies.
+A fully offline Chrome-style endless runner with day/night cycle,
+pterodactyls, persistent local leaderboard, and session stats.  
+No network calls · No tracking · No image assets.
 
-> **Current version:** `0.7.0-beta`  
-> See [CHANGELOG.md](CHANGELOG.md) for the full history.
-
----
-
-## Features
-
-- **Chrome-accurate physics** — delta-time game loop (Hz-independent), linear
-  speed ramp, gravity and jump arc tuned against the original Chromium source
-- **Day/Night transition** — smooth chromatic fade from full day to full night
-  triggered at score 700; stars, crescent moon, and full palette inversion
-- **Obstacle variety** — single, double, and triple cactus clusters; three
-  pterodactyl flight heights requiring jump, duck, or either
-- **Web Audio sound engine** — jump, death, and milestone sounds built from
-  Web Audio API oscillators; no audio files required
-- **Persistent leaderboard** — top 10 scores stored in `localStorage` with
-  player names and timestamps; survives page reloads
-- **Session stats** — games played, best score, best time, obstacles dodged,
-  deaths, total distance
-- **Fullscreen support** — `F` key or `FULL` button; 16:9 aspect ratio
-  preserved via CSS `min()` scaling; header/panels hidden in fullscreen
-- **Mobile controls** — touch-friendly JUMP / DUCK / PAUSE / MUTE / FULL
-  button bar; works on Android Cromite and Firefox for Android
-- **Offline-first** — zero CDN requests; all fonts are local `.woff2` files
-- **Storage quota awareness** — live quota badge; graceful degradation to
-  in-memory store in private/restricted contexts; quota-full warning with
-  actionable recovery steps
-- **Accessibility** — full ARIA markup; `prefers-reduced-motion` respected;
-  keyboard-navigable controls; screen-reader-compatible leaderboard table
+**Current version: 0.7.5-beta**
 
 ---
 
-## Project Structure
+## ✨ Features
 
-```
-dino-run/
-├── index.html          # Shell, overlays, stats panel, leaderboard UI
-├── game.js             # Game engine — physics, rendering, input, audio, HUD
-├── db.js               # Storage layer — localStorage / in-memory, quota, stats
-├── style.css           # All styles including fullscreen, dark palette, animations
-├── server.py           # Local HTTPS dev server (required for Termux / Cromite)
-├── cert.pem            # TLS certificate  ← generate locally, never commit
-├── key.pem             # TLS private key  ← generate locally, never commit
-├── db.test.js          # Unit tests for db.js  (node db.test.js)
-├── game.test.js        # Unit tests for game.js pure logic  (node game.test.js)
-├── fonts/
-│   ├── press-start-2p.woff2
-│   └── vt323.woff2
-└── CHANGELOG.md
-```
+- **Endless runner** with delta-time physics — Hz-independent at 60 / 90 / 120 / 144 Hz
+- **Speed calibrated to the original Chrome Dino** — `5 → 13 px/frame`, reaching max speed at score ~2660
+- **Chromatic day/night cycle** — colour-interpolated sky, crescent moon, stars, cloud parallax
+- **Fullscreen mode** — `F` key or `FULL` button; canvas scales to fill viewport at 16:9
+- **Top-10 local leaderboard** persisted in `localStorage` (session-only fallback for private contexts)
+- **★ NEW BEST ★ banner** — pulsing gold overlay when the player beats their previous best
+- **5 MB storage awareness** — live quota display, graceful pruning on overflow, user-visible alert on critical failure
+- **Web Audio** sound effects — `.ogg` files loaded at runtime with synthesised beep fallback; mutable via `M`
+- **Mobile-friendly** — touch jump/duck controls, no double-fire on tap
+- **Keyboard shortcuts** — `Space`/`↑` jump · `↓` duck · `P` pause · `M` mute · `F` fullscreen
+- **Reset top score** — `✕` button beside the HI display resets the high score while keeping leaderboard records
+- **Accessible** — ARIA labels, live regions, screen-reader–compatible, `prefers-reduced-motion` support
+- **HTTPS dev server** with security headers, request timeout, and HTTP method guards (`server/server.py`)
+- **Modular ES module architecture** — game engine and DB layer split into focused, dependency-clean modules
 
 ---
 
-## Quick Start
+## 🚀 Quick Start
 
-### Desktop (Chrome / Firefox / Edge)
+### 🌐 Clone from GitHub
 
 ```bash
-python3 -m http.server 8080
+git clone https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition.git
+cd Dino-Run-Chromatic-Edition
 ```
 
-Open `http://localhost:8080`.
+If `server/certs/cert.pem` / `server/certs/key.pem` are missing, generate them
+before running `server.py` — see the [certificate section](#-generating-the-self-signed-certificate) below.
 
-### Android (Termux + Cromite)
+---
 
-Cromite enforces HTTPS for Web Audio and fullscreen when not on `localhost`.
-The bundled `server.py` sets up a local TLS server to satisfy this.
+## 🖥️ Platform Setup Guide
 
-**1. Generate a self-signed certificate** (one-time):
+### 🪟 Windows
 
 ```bash
-openssl req -x509 -newkey rsa:2048 -keyout key.pem -out cert.pem \
-  -days 365 -nodes -subj "/CN=localhost"
+cd Dino-Run-Chromatic-Edition/server
+python server.py
 ```
 
-Place `cert.pem` and `key.pem` in the project root.
+Open: https://localhost:1999
 
-**2. Start the server:**
+### 🍎 macOS
 
 ```bash
+cd Dino-Run-Chromatic-Edition/server
 python3 server.py
 ```
 
-**3. Open in Cromite:**
+Open: https://localhost:1999
 
-```
-https://localhost:1999
-```
-
-Accept the self-signed certificate warning on first visit (**Advanced → Proceed**).
-
-> ⚠️ `cert.pem` and `key.pem` are in `.gitignore`. Never commit them.
-
----
-
-## Running Tests
-
-Both test files use the Node.js built-in test runner — no `npm install` needed.
+### 🐧 Linux
 
 ```bash
-node db.test.js      # Storage layer tests (~40 assertions)
-node game.test.js    # Game logic tests (~35 assertions)
+cd Dino-Run-Chromatic-Edition/server
+python3 server.py
 ```
 
-`game.test.js` reads `game.js` from the current working directory. Run from
-the project root.
+Open: https://localhost:1999
 
----
+### 📱 Termux (Android)
 
-## Controls
+```bash
+pkg update && pkg upgrade
+pkg install python git
 
-| Action | Keyboard | Mobile |
-|---|---|---|
-| Jump / Start / Restart | `Space` or `↑` | JUMP button or tap canvas |
-| Duck | `↓` (hold) | DUCK button (hold) |
-| Pause / Resume | `P` | PAUSE button |
-| Mute / Unmute | `M` | 🔊 button |
-| Fullscreen | `F` | FULL button |
+git clone https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition.git
+cd Dino-Run-Chromatic-Edition/server
 
----
+python server.py
+```
 
-## Gameplay
+Open: https://localhost:1999
 
-### Speed
+Fallback (no correct MIME types, pixel fonts may not load):
+```bash
+python3 -m http.server 1999
+```
 
-The game starts at **speed 6** (`CONFIG.SPEED_MIN`) and ramps linearly via
-`speed += 0.002 × dt` each frame, capped at **13** (`CONFIG.SPEED_MAX`). The
-speed bar fills from `0%` at start to `100%` at cap.
+## 🔐 Generating the self-signed certificate
 
-### Day / Night
-
-The scene starts in full daylight. Once the player reaches **score 700**, the
-background gradually transitions to night over approximately 500 frames (~8 s).
-Night persists for the remainder of the run.
-
-### Obstacles
-
-| Type | Condition | How to clear |
-|---|---|---|
-| Single cactus | Always | Jump over |
-| Double cactus (35%) | Always | Jump over |
-| Triple cactus (12%) | Always | Jump over |
-| Pterodactyl — high (`GY−120`) | Score > 900 | Duck under (mid-air dino can enter this band) |
-| Pterodactyl — mid (`GY−40`) | Score > 900 | Jump over (ducking also hits) |
-| Pterodactyl — low (`GY−69`) | Score > 900 | Jump over or duck under |
-
-Obstacle spawn cooldown scales with speed: ~60–85 frames at start; ~20–45
-frames at cap. Up to 5 obstacles exist simultaneously.
-
-### Jump Physics
-
-| Parameter | Value |
-|---|---|
-| `GRAVITY` | `0.55` per frame² |
-| `JUMP_V` | `−11.5` px/frame |
-| Fast-fall (duck mid-air) | `+3.8 × dt` added to `vy` per frame |
-
-### Hitboxes
-
-| Box | Inset |
-|---|---|
-| Dino (standing / ducking) | `x+9`, `y+7`, `w−14` (constant), `h−12` |
-| Obstacle (cactus / ptera) | `+5` each side (`w−10`, `h−10`) |
-
----
-
-## Leaderboard & Stats
-
-### Player Name
-
-Enter a name (up to 10 characters) in the leaderboard panel and press **SAVE**
-or `Enter`. The active name is shown as `▶ NAME` above the table.
-
-### Leaderboard
-
-Top 10 scores persisted with player name, score, and a formatted timestamp.
-Rank 1–3 are colour-coded (gold / silver / bronze).
-
-Click **CLEAR** to wipe all leaderboard records. This also resets the persisted
-best score and best time.
-
-### Stats Panel
-
-| Stat | Description |
-|---|---|
-| GAMES PLAYED | Total runs across all sessions |
-| BEST SCORE | All-time high score |
-| BEST TIME | Longest run (wall-clock, pause-excluded) |
-| OBSTACLES DODGED | Total obstacles passed |
-| DEATHS | Total deaths |
-| TOTAL DISTANCE | Sum of all run scores |
-
-### Resetting Scores
-
-| Action | HI Score | Best Score | Best Time | Leaderboard records |
-|---|---|---|---|---|
-| `✕` button (header) | ✓ reset | ✓ reset | — | — |
-| CLEAR (leaderboard) | ✓ reset | ✓ reset | ✓ reset | ✓ wiped |
-
----
-
-## Storage
-
-### Backend
-
-| Backend | Condition | Persistence |
-|---|---|---|
-| `localStorage` | Available and writable | Survives page reloads |
-| In-memory | Private context or unavailable | Session only |
-
-### Keys
-
-| Key | Content |
-|---|---|
-| `dino:lb` | Leaderboard array (JSON, top 10) |
-| `dino:stats` | Stats object |
-| `dino:player` | Player name string |
-| `dino:version` | Schema version integer (current: `1`) |
-
-### Quota Management
-
-- `navigator.storage.persist()` requested at startup
-- `navigator.storage.estimate()` polled (debounced 2 s) — shown in badge as `BACKEND · NKB (X%)`
-- On `QuotaExceededError`: prune to top 5 and retry; on total failure show
-  blocking alert with recovery steps
-- All storage writes return `true` / `false` / `null`; no silent data loss
-
----
-
-## Architecture Notes
-
-### `game.js`
-
-| Concern | Approach |
-|---|---|
-| Game loop | `requestAnimationFrame`; `dt` = elapsed ms / 16.667, clamped to 3.0 |
-| Speed | Linear ramp `+= 0.002 × dt`, range `CONFIG.SPEED_MIN (6)` → `CONFIG.SPEED_MAX (13)` |
-| Physics | Euler integration; all values scaled by `dt` — Hz-independent |
-| DOM access | All elements cached once in `const DOM = {…}` at startup |
-| Canvas palette | `lerpRGB()` result cached; rebuilt only when `dayPhase` changes |
-| Sky layer | Baked onto `OffscreenCanvas` on each `dayPhase` change; blitted each frame |
-| `fillStyle` | Deduplicated via `setFill()` — only written when colour changes |
-| HUD text | `textContent` deduplicated — skipped when string unchanged |
-| Speed bar | `style.width` deduplicated — skipped when integer `%` unchanged; `CONFIG.SPEED_MIN/MAX` with division-by-zero guard |
-| Collision | Two reusable `_dinoBox` / `_obsBox` objects mutated in-place each frame |
-| Obstacle array | Cleaned in-place with reverse `splice` — no per-frame allocation |
-| Sound timers | `setTimeout` IDs tracked in `_soundTimers`; cancelled on restart |
-| Pause | Wall-clock `pauseStartTime` captured; `gameStartWallTime` offset on resume |
-| Best time | `performance.now()` wall-clock delta — correct at 60 / 120 / 144 Hz |
-
-### `db.js`
-
-| Concern | Approach |
-|---|---|
-| Backend detection | Try/catch probe at module load |
-| Declaration order | `quotaUsed`, `quotaTotal`, `quotaError`, `_quotaTimer` declared before `migrate()` IIFE — avoids TDZ crash on fresh install |
-| Score validation | `isFinite` + `>= 0` guard in `addScore`; invalid values stored as `0` |
-| `pruneAndSave` | When `knownExisting` provided, skips redundant top-10 retry; falls back to top-5; dispatches `db:criticalFailure` on total failure |
-| Return values | `addScore` / `saveLeaderboard` return saved array or `null`; callers never assume success |
-| `this` safety | API captured in `api` local; internal calls use `api.method()` directly |
-| Quota polling | Debounced 2 s; initial eager call at boot |
-| Schema migration | `migrate()` IIFE at boot; v0→v1 backfills missing `recordId` fields |
-
-### `server.py`
-
-| Concern | Approach |
-|---|---|
-| Binding | `0.0.0.0:1999` — required for Termux/Cromite same-device access |
-| TLS setup | `find_ssl_files` validates pair and returns ready-to-use `SSLContext`; `bind_and_activate=False` ensures socket is TLS-wrapped before first `listen()` |
-| Exception scope | `except (ssl.SSLError, OSError)` — catches both bad cert pairs and missing/unreadable files |
-| Request timeout | `Handler.timeout = 10` — slowloris mitigation |
-| Credential guard | `_DENIED` covers all `*.pem / *.crt / *.key` files in DIR; iterative URL-decode prevents encoded bypass |
-| HSTS | Only emitted when `Handler.tls_enabled` is `True` — not sent over plain HTTP |
-| Fallback gating | `ThreadingHTTPServer` only instantiated after `ALLOW_HTTP_FALLBACK` check — no socket bound on exit paths |
-| Security headers | `X-Frame-Options`, `X-Content-Type-Options`, `CSP`, `Referrer-Policy`, `Permissions-Policy`, `HSTS` on every response |
-
----
-
-## Browser Compatibility
-
-| Feature | Chrome 88+ / Cromite 142+ | Firefox 93+ / Librewolf | Firefox Android 93+ |
-|---|---|---|---|
-| Canvas 2D, `fillRect`, `globalAlpha` | ✓ | ✓ | ✓ |
-| `image-rendering: pixelated` | ✓ | ✓ | ✓ |
-| Web Audio API | ✓ | ✓ | ✓ |
-| `navigator.storage.estimate/persist` | ✓ | ✓ | ✓ |
-| Fullscreen API (standard) | ✓ | ✓ | ✓ |
-| `:-webkit-full-screen` CSS | ✓ | n/a | n/a |
-| CSS `min()`, `clamp()`, custom properties | ✓ | ✓ | ✓ |
-| `passive: false` listener option | ✓ | ✓ | ✓ |
-| `classList.toggle(name, force)` | ✓ | ✓ | ✓ |
-| `e.code` keyboard events | ✓ | ✓ | ⚠ virtual kbd |
-| `woff2` fonts, `padStart`, `CustomEvent` | ✓ | ✓ | ✓ |
-| `prefers-reduced-motion` | ✓ | ✓ | ✓ |
-
-**Notes:**
-
-- `e.code` is unreliable on Android software keyboards. Touch buttons are the
-  primary Android input; keyboard shortcuts are secondary.
-- Librewolf may block fullscreen via privacy settings — the `.catch()` guard
-  handles this gracefully.
-- Safari was confirmed functional during `0.0.1.0-rc` testing (Safari 13+ /
-  iOS 13+) but is not an officially supported target.
-
----
-
-## Generating TLS Certificates
+If `cert.pem` and `key.pem` are not present, generate them locally before
+running `server.py`:
 
 ```bash
 openssl req -x509 -newkey rsa:2048 \
-  -keyout key.pem -out cert.pem \
-  -days 365 -nodes \
-  -subj "/CN=localhost"
+  -keyout server/certs/key.pem -out server/certs/cert.pem \
+  -days 365 -nodes -subj "/CN=localhost"
 ```
 
-Both files must be in the same directory as `server.py`. They are excluded
-by `.gitignore`. Regenerate on expiry by deleting and rerunning the command.
+The cert is for local HTTPS only — it is not trusted by any external CA, which
+is expected and fine for a localhost dev server. `server.py` prints a clear
+error with the generation command if the files are missing when it starts.
 
 ---
 
-## License
+## 📁 Project Structure
 
-MIT — see [LICENSE](LICENSE).  
-Copyright © 2026 Sumon Kayal.
+```text
+Dino-Run-Chromatic-Edition/
+├── index.html                  # UI structure, overlays, panels, ARIA semantics
+├── assets/
+│   ├── audio/
+│   │   ├── die.ogg             # Death sound
+│   │   ├── jump.ogg            # Jump sound
+│   │   └── milestone.ogg       # Milestone sound
+│   └── fonts/
+│       ├── press-start-2p.woff2   # Pixel heading font
+│       └── vt323.woff2            # Monospace stats / leaderboard font
+├── css/
+│   └── style.css               # Retro pixel aesthetic + accessibility + reduced-motion
+├── js/
+│   ├── main.js                 # ES module entry point
+│   ├── game/
+│   │   ├── engine.js           # Engine class: delta-time game loop
+│   │   ├── state.js            # Shared constants (CONFIG, W, H, GY) + mutable state (G)
+│   │   ├── audio.js            # Web Audio: OGG load + synthesised fallback
+│   │   ├── player.js           # Dino physics, jump, duck, idle animation
+│   │   ├── obstacles.js        # Cactus / pterodactyl spawning & movement
+│   │   ├── physics.js          # Two-pass AABB collision detection
+│   │   ├── renderer.js         # All canvas drawing
+│   │   └── input.js            # Keyboard + mobile controls
+│   └── db/
+│       ├── database.js         # dbGet / dbSet (localStorage + in-memory)
+│       ├── storage.js          # Quota tracking + db:quota events
+│       ├── leaderboard.js      # Top-10 leaderboard with pruning fallback
+│       └── stats.js            # Stats, player name, schema migration
+├── server/
+│   ├── server.py               # HTTPS dev server with security headers (Python 3.6+)
+│   └── certs/
+│       ├── cert.pem            # Local TLS certificate — generate with openssl (not in git)
+│       └── key.pem             # Local TLS private key  — generate with openssl (not in git)
+├── tests/
+│   ├── db.test.js              # Unit tests for db modules  (node tests/db.test.js)
+│   └── game.test.js            # Unit tests for game logic  (node tests/game.test.js)
+├── .gitignore                  # Excludes cert.pem / key.pem from version control
+├── .github/
+│   └── workflows/
+│       └── codeql.yml          # CodeQL security analysis workflow
+├── README.md
+├── CHANGELOG.md
+└── LICENSE                     # MIT
+```
+
+---
+
+## 🔤 Fonts
+
+Fonts are loaded from `assets/fonts/` at runtime. If the directory or files are
+missing, the game falls back to the system monospace font — fully playable
+but without the retro pixel look.
+
+To add the fonts manually (~50 KB total):
+
+```bash
+mkdir -p assets/fonts
+curl -L -o assets/fonts/press-start-2p.woff2 \
+  https://cdn.jsdelivr.net/fontsource/fonts/press-start-2p@latest/latin-400-normal.woff2
+curl -L -o assets/fonts/vt323.woff2 \
+  https://cdn.jsdelivr.net/fontsource/fonts/vt323@latest/latin-400-normal.woff2
+```
+
+---
+
+## 🎮 Controls
+
+| Action                  | Keyboard             | Mobile                        |
+|-------------------------|----------------------|-------------------------------|
+| Start                   | Space / ↑            | Tap screen                    |
+| Jump                    | Space / ↑            | Tap / ▲ JUMP button           |
+| Duck                    | Hold ↓               | Hold ▼ DUCK button            |
+| Fast-fall (airborne)    | Hold ↓ while jumping | Hold ▼ DUCK while airborne    |
+| Pause                   | P                    | ❙❙ PAUSE button               |
+| Mute                    | M                    | 🔊 MUTE button                |
+| Fullscreen              | F                    | FULL button                   |
+| Restart                 | Space / Tap          | ↺ RESTART button              |
+| Reset top score         | —                    | ✕ beside HI display in header |
+
+---
+
+## 💾 Storage
+
+All data is stored **locally on your device only**. No server, no network,
+no global leaderboard.
+
+| Context                  | Backend      | Persists across sessions |
+|--------------------------|--------------|--------------------------|
+| localhost / any browser  | localStorage | ✓ Yes                    |
+| Private / Incognito      | In-memory    | ✗ Session only           |
+
+The DB badge in the Stats panel shows which backend is active and live storage
+usage (e.g. `LOCAL STORAGE · OFFLINE · 12KB (0.2%)`).
+
+## 🗝️ Storage keys
+
+| Key             | Contents                                                         |
+|-----------------|------------------------------------------------------------------|
+| `dino:lb`       | Top-10 leaderboard entries (JSON array)                          |
+| `dino:stats`    | Lifetime stats: games, deaths, obstacles, distance, best score, best time |
+| `dino:player`   | Player display name (max 10 chars, uppercase)                    |
+| `dino:version`  | Schema version — triggers automatic data migration on upgrade    |
+
+## 📊 Quota handling
+
+localStorage provides ~5 MB per origin in all major browsers. The game uses
+a few KB at most. `navigator.storage.persist()` is requested at startup to
+prevent eviction under browser storage pressure.
+
+If a write fails, the storage layer merges the new score with existing entries,
+sorts by score, and prunes to top-10 (falling back to top-5 if still too large).
+A `db:criticalFailure` event is dispatched on total failure — triggering a
+blocking alert with recovery steps. Quota usage is read via
+`navigator.storage.estimate()`, debounced to at most one IPC call per 2 seconds.
+
+## 🏆 Reset options
+
+| Action           | HI display | Best score (persisted) | Best time | Leaderboard records |
+|------------------|:----------:|:----------------------:|:---------:|:-------------------:|
+| **✕** HI button  | ✓ reset    | ✓ reset                | —         | Intact              |
+| **CLEAR** button | ✓ reset    | ✓ reset                | ✓ reset   | ✓ wiped             |
+
+---
+
+## 🏆 Leaderboard
+
+- **Local top-10** sorted by score (highest first)
+- Each entry stores: player name, score, and full timestamp (e.g. `19 Mar '26 14:07`)
+- Gold / Silver / Bronze highlight for top 3
+- Persists across browser sessions via localStorage
+- Enter your name in the leaderboard panel; saves immediately on `SAVE` or `Enter`
+
+---
+
+## ♿ Accessibility
+
+- All interactive controls have `aria-label` attributes
+- Toggle buttons (`PAUSE`, `MUTE`) sync `aria-pressed` on every state change
+- Game canvas has `role="application"` and a descriptive `aria-label`
+- Game-over overlay is `role="alertdialog"` — announced immediately by screen readers
+- Speed bar has `role="progressbar"` with live `aria-valuenow`
+- Storage badge and player name display are `aria-live` regions
+- Player name `<input>` has a programmatically associated `<label>` (visually hidden via `.sr-only`)
+- Stat panel values use `aria-labelledby` linking to their label spans
+- `blink`, `pulse`, and `go-newbest` animations are fully disabled under
+  `prefers-reduced-motion: reduce` (WCAG 2.1 §2.3.3)
+
+---
+
+## 🌐 Browser Compatibility
+
+| Browser                | Minimum version |
+|------------------------|-----------------|
+| Chrome / Chromium      | 88+             |
+| Cromite                | 142+            |
+| Edge (Chromium)        | 88+             |
+| Firefox                | 93+             |
+| Librewolf / Waterfox   | ✓               |
+| Safari / iOS Safari    | 13+             |
+| Samsung Internet       | 12+             |
+
+> **ES modules** (`type="module"`) are required and supported by all listed browsers.  
+> **`e.code` keyboard events** are unreliable on Android software keyboards — on-screen
+> touch buttons are the primary Android input; keyboard shortcuts are secondary.  
+> **Librewolf** may block fullscreen via privacy settings — the `.catch()` guard handles this gracefully.
+
+---
+
+## 🔧 Technical Notes
+
+### Canvas & rendering
+
+- Intrinsic resolution: **854 × 480 px (16:9)**, scaled to full width via CSS
+- All sprites drawn with `fillRect` — zero image assets, zero HTTP requests for graphics
+- In fullscreen, canvas scales to fill the viewport maintaining 16:9 via CSS `min()`
+- `will-change: transform` promotes the canvas to its own GPU compositor layer
+- `contain: layout style` on the game frame isolates layout recalculation
+
+### Physics & timing
+
+- **Delta-time physics**: all movement scaled by `dt` (normalised to 1.0 = one 60 Hz frame)
+- Ground scroll uses accumulated `groundScrollX` (not `frameCount`) — Hz-independent; offset negated so texture scrolls left
+- Best-time tracking uses `performance.now()` wall-clock delta — Hz-independent; pause duration is subtracted via `pauseStartTime` offset so only active play time counts
+- Collision uses **two-pass AABB** (matches Chrome source `checkForCollision`): pass 1 fast-rejects with outer entity box; pass 2 checks per-part inner boxes (body + head/neck for standing; single wide box for ducking) against obstacle inner box shrunk 5 px per side
+
+### Performance summary
+
+| Optimisation | Benefit |
+|---|---|
+| DOM element cache (`const DOM`) | Zero `getElementById` calls at runtime |
+| Palette cache (`_pal`) | `lerpRGB` skipped when `dayPhase` unchanged |
+| Sky layer blit (`skyCanvas`) | Background + horizon + stars drawn once per `dayPhase` change; stamped with a single `drawImage` every frame |
+| `setFill()` dedup | ~50% fewer `ctx.fillStyle` writes per frame |
+| HUD `textContent` dedup | Eliminates style recalcs when score hasn't changed |
+| Speed bar integer dedup | `style.width` only written when `%` actually changes |
+| In-place obstacle splice | Zero `Array.filter` allocations at 60 Hz |
+| Debounced `refreshQuota()` | One storage IPC call per 2 s vs 2–3 per game-over |
+| ES module tree shaking | Each module imports only what it uses — no global namespace |
+
+### Speed constants
+
+| Parameter     | Value  | Notes                                           |
+|---------------|--------|-------------------------------------------------|
+| `SPEED_MIN`   | 5      | Starting speed (px/frame at 60 Hz)              |
+| `SPEED_MAX`   | 13     | Cap speed (px/frame at 60 Hz)                   |
+| `ACCELERATION`| 0.0015 | Speed ramp per `dt`                             |
+| `SCORE_COEFF` | 0.04   | Score increment per `(speed × dt)`              |
+| `PTERA_SCORE` | 700    | Score threshold before pterodactyls can appear  |
+| `PTERA_CHANCE`| 0.22   | Per-spawn probability of a pterodactyl (22%)    |
+
+### Obstacle spawn mix
+
+| Type          | Probability | Notes                         |
+|---------------|:-----------:|-------------------------------|
+| Single cactus | 60%         | Always                        |
+| Double cactus | 32%         | Always                        |
+| Triple cactus | 8%          | Always                        |
+| Pterodactyl   | 22% chance  | Only when score > `PTERA_SCORE` (700) |
+
+### Pterodactyl flight heights
+
+Three distinct heights with specific dodge requirements:
+
+| Height  | Bottom edge | Standing dino | Ducking dino | Required action    |
+|---------|-------------|:-------------:|:------------:|--------------------|
+| GY−40   | GY−12       | **HIT**       | **HIT**      | Jump over          |
+| GY−69   | GY−41       | **HIT**       | Clear        | Jump or duck       |
+| GY−120  | GY−92       | Clear         | Clear        | Duck mid-air       |
+
+### Audio
+
+Sound effects are loaded as `.ogg` files from `assets/audio/` via `fetch` +
+`Web Audio API` (`decodeAudioData`). If the fetch or decode fails for any
+sound, that sound automatically falls back to a synthesised oscillator beep —
+the game remains fully playable with no manual configuration.
+
+---
+
+## 🔒 Security
+
+### Server (`server/server.py`)
+
+Every HTTP response includes the following security headers:
+
+| Header | Value |
+|--------|-------|
+| `X-Content-Type-Options` | `nosniff` — blocks MIME sniffing |
+| `X-Frame-Options` | `DENY` — blocks clickjacking via iframe |
+| `Content-Security-Policy` | `default-src 'self'`; `img-src 'self' data:` for SVG favicon |
+| `Referrer-Policy` | `no-referrer` — no URL leakage |
+| `Permissions-Policy` | camera, microphone, geolocation, payment all disabled |
+| `Strict-Transport-Security` | `max-age=31536000` — HTTPS-only for 1 year |
+
+Additional hardening:
+
+- **10-second request timeout** — prevents slowloris / hung-connection DOS on the single-threaded server
+- **Method guards** — `POST`, `PUT`, `DELETE`, `OPTIONS` all return 405; credential file paths return 403 regardless of method, before the body is read
+- **Dynamic deny list** — cert/key basenames derived at startup from the actual loaded paths (`server/certs/`), not hardcoded strings
+- **Iterative URL decode** — path decoded in a loop until stable before basename extraction (blocks `/%2563ert.pem` and multi-encoded bypass attempts)
+
+### Client (`js/game/`, `js/db/`)
+
+- Player names rendered exclusively via `textContent` — zero `innerHTML`, zero XSS surface
+- Score validated as a finite non-negative number before storage — prevents NaN/Infinity corruption of localStorage and `Array.sort()`
+- localStorage is origin-scoped to `https://localhost:1999` — no cross-origin contamination possible
+- `JSON.parse` results used as plain data only — no prototype pollution vector
+
+---
+
+## 🧩 Architecture Notes
+
+All mutable game state lives in a single `G` object exported from `state.js`.
+Every module imports and mutates `G` directly — no prop-drilling, no global namespace pollution.
+
+DB modules follow a clean one-directional import chain:
+`storage.js` ← `database.js` ← `leaderboard.js` / `stats.js`. No circular dependencies.
+
+`input.js` receives callbacks so it stays fully decoupled from game logic.
+
+### `js/game/`
+
+| Module | Concern | Key detail |
+|---|---|---|
+| `engine.js` | Game loop | `requestAnimationFrame`; `dt` = elapsed ms / 16.667, clamped to 3.0 |
+| `state.js` | Shared state | `CONFIG`, `W`, `H`, `GY` constants + mutable `G` object |
+| `physics.js` | Collision | Two-pass AABB; reusable box objects — zero allocations per frame |
+| `renderer.js` | Canvas drawing | `lerpRGB` palette cached; sky on `OffscreenCanvas`; `setFill()` deduplicates `fillStyle` |
+| `obstacles.js` | Obstacle management | Gap-based spawning matching Chrome source; in-place reverse `splice` |
+| `audio.js` | Sound | `fetch` + `decodeAudioData` for `.ogg`; synthesised beep fallback per sound |
+| `player.js` | Dino physics | Jump, duck, idle animation; wall-clock pause tracking via `pauseStartTime` |
+| `input.js` | Input | Callbacks-based; DOM elements cached once at startup |
+
+### `js/db/`
+
+| Module | Concern | Key detail |
+|---|---|---|
+| `database.js` | Backend | Try/catch probe at load; `dbGet` / `dbSet` API |
+| `storage.js` | Quota | Debounced 2 s polling; `navigator.storage.persist()` at startup |
+| `leaderboard.js` | Scores | `pruneAndSave` falls back to top-5; dispatches `db:criticalFailure` on total failure |
+| `stats.js` | Stats & migration | `migrate()` IIFE at boot; v0→v1 backfills missing `recordId` fields |
+
+---
+
+## 📋 Changelog
+
+Full release history with per-fix root-cause analysis in [CHANGELOG.md](CHANGELOG.md)
+
+---
+
+## 📄 License
+
+This project is licensed under the MIT LicenseMIT — see [LICENSE](LICENSE).
+
+---
+
+🧩 Third-Party Components
+
+Portions of this project are derived from the Chromium Dino game
+from .
+
+- Original authors: The Chromium Authors
+- License: BSD 3-Clause License
+
+These include:
+
+- Game logic concepts (physics, obstacle system, collision handling)
+- Structural behavior inspired by the original implementation
+- Audio assets ("jump", "die", "milestone" sounds)
+
+All such components have been adapted, refactored, and integrated into a new modular architecture.
+
+---
+
+📜 Attribution
+
+Redistributions of this project must retain:
+
+- The MIT License (this project)
+- The BSD 3-Clause License (Chromium components)
+
+See [THIRD_PARTY.md](THIRD_PARTY.md) for full license text and attribution details.
