@@ -62,9 +62,11 @@ function _loadBuffer(key, url) {
     })
     .then(function(decoded) {
       _buffers[key] = decoded;
+      return true;       
     })
     .catch(function(err) {
       console.warn('[Audio] Failed to load ' + key + ' (' + url + '):', err);
+      return false;  // signal failure
     });
 }
 
@@ -75,8 +77,9 @@ function _loadAllBuffers() {
     Object.keys(_SND_FILES).map(function(k) {
       return _loadBuffer(k, _SND_FILES[k]);
     })
-  ).then(function() { _loadState = 'ready'; })
-    .catch(function() { _loadState = 'failed'; });
+  ).then(function(results) {
+    _loadState = results.every(Boolean) ? 'ready' : 'failed';
+    });
 }
 
 // ── Playback ─────────────────────────────────────────────
