@@ -43,6 +43,8 @@ export function updatePlayer(dt) {
       d.y       = land;
       d.vy      = 0;
       d.jumping = false;
+      // Recompute ducking state after landing so collision checks reflect correct state
+      d.ducking = G.duckHeld && !d.jumping;
     }
   } else {
     d.y = GY - (d.ducking ? DUCK_H : DINO_H);

@@ -64,7 +64,10 @@ function pruneAndSave(newLb, knownExisting) {
 
 export function getLeaderboard() {
   const raw = dbGet(KEY);
-  try { return raw ? JSON.parse(raw) : []; }
+  try {
+    const parsed = raw ? JSON.parse(raw) : [];
+    return Array.isArray(parsed) ? parsed : [];
+  }
   catch (e) { return []; }
 }
 

@@ -412,17 +412,3 @@ export function initRenderer() {
   _pal.dimC   = '#d4d4d4';
   rebuildSprites();
 }
-
-import {
-  W, H, GY, CONFIG,
-  C, _pal, _lastDayPhase, setLastDayPhase,
-  HUD_SCORE_X, HUD_HI_X, HUD_FONT, HUD_Y,
-  GROUND_PERIOD,
-} from './config.js';
-import { G } from './runtime.js';
-
-let canvas = null;
-let ctx    = null;
-
-// Fill-style dedup — skip redundant ctx.fillStyle assignments
-let _lastFill = '';

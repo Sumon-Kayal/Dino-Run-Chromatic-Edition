@@ -11,9 +11,12 @@ from typing import ClassVar
 # server.py lives in  dino-run/server/
 # Static files live in dino-run/           (one level up — the project root)
 # TLS certificates live in dino-run/server/certs/
-DIR      = os.path.dirname(os.path.abspath(__file__))   # .../dino-run/server/
-ROOT     = os.path.dirname(DIR)                          # .../dino-run/
-CERT_DIR = os.path.join(DIR, "certs")                   # .../dino-run/server/certs/
+DIR         = os.path.dirname(os.path.abspath(__file__))   # .../dino-run/server/
+ROOT        = os.path.dirname(DIR)                          # .../dino-run/
+CERT_DIR    = os.path.join(DIR, "certs")                    # .../dino-run/server/certs/
+# Security note: For production deployments, change PUBLIC_ROOT to a dedicated
+# public/ subdirectory to prevent serving sensitive files from the project root.
+PUBLIC_ROOT = ROOT
 
 # Set ALLOW_HTTP_FALLBACK=1 (or 'true'/'yes') in the environment to let the
 # server start in plain HTTP when SSL setup fails.  Off by default.
@@ -81,17 +84,44 @@ class Handler(SimpleHTTPRequestHandler):
     tls_enabled: ClassVar[bool] = False
 
     def __init__(self, *args, **kwargs):
-        # Serve files from the project root, not from the server/ sub-folder.
-        super().__init__(*args, directory=ROOT, **kwargs)
+        # Serve files from the public root directory (configurable above).
+        # For production, set PUBLIC_ROOT to a dedicated public/ subdirectory.
+        super().__init__(*args, directory=PUBLIC_ROOT, **kwargs)
 
     def _is_denied(self):
+        # Strip query string and decode URL-encoding iteratively
         path = self.path.split('?')[0]
         while True:
             decoded = urllib.parse.unquote(path)
             if decoded == path:
                 break
             path = decoded
-        return os.path.basename(decoded).lower() in self._DENIED
+
+        # Normalize path to resolve . and .. components
+        normalized = os.path.normpath(decoded)
+
+        # Extract basename and check against denied set
+        basename = os.path.basename(normalized).lower()
+        if basename in self._DENIED:
+            return True
+
+        # Block if normalized path attempts to access CERT_DIR subtree
+        # Convert to absolute path relative to PUBLIC_ROOT for comparison
+        try:
+            abs_path = os.path.abspath(os.path.join(PUBLIC_ROOT, normalized.lstrip('/')))
+            abs_cert_dir = os.path.abspath(CERT_DIR)
+            # Check if the requested path is inside CERT_DIR
+            if abs_path.startswith(abs_cert_dir + os.sep) or abs_path == abs_cert_dir:
+                return True
+        except (ValueError, OSError):
+            # Path traversal attempt or invalid path
+            return True
+
+        # Block directory requests with empty basename (e.g., /)
+        if not basename and normalized == '/':
+            return False  # Allow root
+
+        return False
 
     def end_headers(self):
         self.send_header('X-Content-Type-Options', 'nosniff')
@@ -167,7 +197,9 @@ class Handler(SimpleHTTPRequestHandler):
 # ─────────────────────────────────────────────
 # 🚀 Server Init
 # ─────────────────────────────────────────────
-HOST = '0.0.0.0'
+# Security note: Binding to 127.0.0.1 restricts access to localhost only.
+# Binding to 0.0.0.0 allows network access — use with caution.
+HOST = '127.0.0.1'
 PORT = 1999
 
 # Block all TLS-related files found in CERT_DIR from being served over HTTP.

@@ -4,7 +4,6 @@ All notable changes to Dino Run — Chromatic Edition are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
-# Changelog
 
 ## [0.7.5-beta] — Modular Architecture 2026-04-12 
 

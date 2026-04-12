@@ -420,14 +420,13 @@ Full release history with per-fix root-cause analysis in [CHANGELOG.md](CHANGELO
 
 ## 📄 License
 
-This project is licensed under the MIT LicenseMIT — see [LICENSE](LICENSE).
+This project is licensed under the MIT License — see [LICENSE](LICENSE).
 
 ---
 
-🧩 Third-Party Components
+## Third-Party Components
 
-Portions of this project are derived from the Chromium Dino game
-from .
+Portions of this project are derived from the Chromium Dino game from https://source.chromium.org/chromium/chromium/src/+/main:components/neterror/resources/offline.js.
 
 - Original authors: The Chromium Authors
 - License: BSD 3-Clause License
@@ -442,7 +441,7 @@ All such components have been adapted, refactored, and integrated into a new mod
 
 ---
 
-📜 Attribution
+## 📜 Attribution
 
 Redistributions of this project must retain:
 

@@ -148,6 +148,11 @@ function initGame() {
   initPlayer();
   initObstacles();
 
+  // Clear duck input state to prevent stale button/key state carrying over
+  G.duckHeld = false;
+  const duckBtn = document.querySelector('#duckBtn');
+  if (duckBtn) duckBtn.classList.remove('active');
+
   G.clouds = [];
   for (let i = 0; i < CLOUD_COUNT; i++) {
     G.clouds.push({

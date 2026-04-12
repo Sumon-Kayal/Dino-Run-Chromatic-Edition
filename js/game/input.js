@@ -39,7 +39,13 @@ export function setupInput(DOM, handlers) {
 
   // ── Keyboard ────────────────────────────────────────────
   function onKeyDown(e) {
-    if (e.target && e.target.tagName === 'INPUT') return;
+    // Bail out if focus is in an interactive control
+    if (e.target) {
+      const tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.target.contentEditable === 'true') return;
+      if (e.target.closest('button, [role="button"], [contenteditable="true"]')) return;
+    }
     // P2 FIX: Ignore auto-repeat events — without this, holding Space causes
     // the jump callback to fire dozens of times per second (auto-jump bug).
     if (e.repeat) return;
@@ -67,7 +73,13 @@ export function setupInput(DOM, handlers) {
   }
 
   function onKeyUp(e) {
-    if (e.target && e.target.tagName === 'INPUT') return;
+    // Bail out if focus is in an interactive control
+    if (e.target) {
+      const tag = e.target.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return;
+      if (e.target.contentEditable === 'true') return;
+      if (e.target.closest('button, [role="button"], [contenteditable="true"]')) return;
+    }
     if (e.code === 'ArrowDown') endDuck();
   }
 

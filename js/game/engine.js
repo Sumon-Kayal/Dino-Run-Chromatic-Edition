@@ -20,6 +20,7 @@ export class Engine {
   }
 
   start() {
+    if (this._running) return;
     this._running = true;
     this._raf = requestAnimationFrame(this._boundLoop);
   }
