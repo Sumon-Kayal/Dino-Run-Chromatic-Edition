@@ -22,7 +22,7 @@ No network calls · No tracking · No image assets.
 - **Keyboard shortcuts** — `Space`/`↑` jump · `↓` duck · `P` pause · `M` mute · `F` fullscreen
 - **Reset top score** — `✕` button beside the HI display resets the high score while keeping leaderboard records
 - **Accessible** — ARIA labels, live regions, screen-reader–compatible, `prefers-reduced-motion` support
-- **HTTPS dev server** with security headers, request timeout, and HTTP method guards (`server/server.py`)
+- **HTTPS dev server** with security headers, request timeout, and HTTP method guards (`server.py`)
 - **Modular ES module architecture** — game engine and DB layer split into focused, dependency-clean modules
 - **JSON-driven tuning** — physics, speed, obstacle geometry, and audio paths configurable without editing source code
 
@@ -47,7 +47,7 @@ before running `server.py` — see the [certificate section](#-generating-the-se
 ### 🪟 Windows
 
 ```bash
-cd Dino-Run-Chromatic-Edition/server
+cd Dino-Run-Chromatic-Edition/
 python server.py
 ```
 
@@ -56,7 +56,7 @@ Open: https://localhost:1999
 ### 🍎 macOS
 
 ```bash
-cd Dino-Run-Chromatic-Edition/server
+cd Dino-Run-Chromatic-Edition/
 python3 server.py
 ```
 
@@ -65,7 +65,7 @@ Open: https://localhost:1999
 ### 🐧 Linux
 
 ```bash
-cd Dino-Run-Chromatic-Edition/server
+cd Dino-Run-Chromatic-Edition/
 python3 server.py
 ```
 
@@ -78,9 +78,9 @@ pkg update && pkg upgrade
 pkg install python git
 
 git clone https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition.git
-cd Dino-Run-Chromatic-Edition/server
+cd Dino-Run-Chromatic-Edition/
 
-python server.py
+python3 server.py
 ```
 
 Open: https://localhost:1999
@@ -97,7 +97,7 @@ running `server.py`:
 
 ```bash
 openssl req -x509 -newkey rsa:2048 \
-  -keyout server/certs/key.pem -out server/certs/cert.pem \
+  -keyout assets/certs/key.pem -out assets/certs/cert.pem \
   -days 365 -nodes -subj "/CN=localhost"
 ```
 
