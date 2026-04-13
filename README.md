@@ -123,7 +123,10 @@ Dino-Run-Chromatic-Edition/
 │   │   ├── jump.ogg            # Jump sound (OGG)
 │   │   ├── milestone.mp3       # Milestone sound (MP3)
 │   │   └── milestone.ogg       # Milestone sound (OGG)
-│       ├── cert.pem            # Local TLS certificate — generate with openssl (not in git)
+│       ├── cert.pem            # Local
+
+TLS certificate — generate with openssl (not in git)
+
 │       └── key.pem             # Local TLS private key  — generate with openssl (not in git)
 │   └── fonts/
 │       ├── press-start-2p.woff2   # Pixel heading font
