@@ -40,7 +40,7 @@ git clone https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition.git
 cd Dino-Run-Chromatic-Edition
 ```
 
-If `server/certs/cert.pem` / `server/certs/key.pem` are missing, generate them
+If `assets/certs/cert.pem` / `assets/certs/key.pem` are missing, generate them
 before running `server.py` — see the [certificate section](#-generating-the-self-signed-certificate) below.
 
 ---
@@ -122,9 +122,10 @@ Dino-Run-Chromatic-Edition/
 │   │   ├── jump.mp3            # Jump sound (MP3)
 │   │   ├── jump.ogg            # Jump sound (OGG)
 │   │   ├── milestone.mp3       # Milestone sound (MP3)
-│   │   └── milestone.ogg       # Milestone sound (OGG)
-│       ├── cert.pem            # Local TLS certificate — generate with openssl (not in git)
-│       └── key.pem             # Local TLS private key  — generate with openssl (not in git)
+│   │   ├── milestone.ogg       # Milestone sound (OGG)
+│   ├── certs/
+│   │   ├── cert.pem            # Local TLS certificate — generate with openssl (not in git)
+│   │   └── key.pem             # Local TLS private key  — generate with openssl (not in git)
 │   └── fonts/
 │       ├── press-start-2p.woff2   # Pixel heading font
 │       └── vt323.woff2            # Monospace stats / leaderboard font
@@ -179,7 +180,9 @@ Dino-Run-Chromatic-Edition/
 │       └── codeql.yml          # CodeQL security analysis workflow
 ├── README.md
 ├── CHANGELOG.md
-└── LICENSE                     # MIT
+├── THIRD_PARTY.md              # Third-party license attributions (Chromium BSD-3-Clause)
+└── LICENSE                    ## MIT
+
 ```
 
 ---
@@ -400,7 +403,7 @@ configuration.
 
 ## 🔒 Security
 
-### Server (`server/server.py`)
+### Server (`server.py`)
 
 Every HTTP response includes the following security headers:
 
@@ -417,7 +420,7 @@ Additional hardening:
 
 - **10-second request timeout** — prevents slowloris / hung-connection DOS on the single-threaded server
 - **Method guards** — `POST`, `PUT`, `DELETE`, `OPTIONS` all return 405; credential file paths return 403 regardless of method, before the body is read
-- **Dynamic deny list** — cert/key basenames derived at startup from the actual loaded paths (`server/certs/`), not hardcoded strings
+- **Dynamic deny list** — cert/key basenames derived at startup from the actual loaded paths (`assets/certs/`), not hardcoded strings
 - **Iterative URL decode** — path decoded in a loop until stable before basename extraction (blocks `/%2563ert.pem` and multi-encoded bypass attempts)
 
 ### Client (`js/game/`, `js/db/`)
