@@ -4,7 +4,7 @@
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
-import { W, H, GY, CONFIG, DINO_H, DINO_X, applyJSONConfig,
+import { W, H, GY, CONFIG, DINO_H, DINO_X, applyJSONConfig, applyObstaclesConfig,
          CLOUD_COUNT, STAR_COUNT,
          CLOUD_Y_MIN, CLOUD_Y_RNG, CLOUD_W_MIN, CLOUD_W_RNG, CLOUD_SP_MIN, CLOUD_SP_RNG,
          STAR_Y_MARGIN,
@@ -19,7 +19,7 @@ import { initPlayer, updatePlayer, tickIdleAnimation, jump as playerJump, startD
 import { initObstacles, updateObstacles } from './game/obstacles.js';
 import { checkCollision }    from './game/physics.js';
 import { setupInput, teardownInput } from './game/input.js';
-import { initAudio, soundDie, soundMilestone, cancelSoundTimers } from './game/audio.js';
+import { initAudio, soundDie, soundMilestone, cancelSoundTimers, applyAudioConfig } from './game/audio.js';
 import { backendName }       from './db/database.js';
 import { addScore, getLeaderboard, clearLeaderboard } from './db/leaderboard.js';
 import { getStats, saveStats, getPlayerName, savePlayerName } from './db/stats.js';
@@ -565,6 +565,22 @@ async function loadJSON(path) {
     applyJSONConfig(jsonConfig);
   } catch (err) {
     console.warn('[boot] Could not load data/config.json — using defaults:', err);
+  }
+
+  // Load obstacle tuning from data/obstacles.json
+  try {
+    const jsonObstacles = await loadJSON('data/obstacles.json');
+    applyObstaclesConfig(jsonObstacles);
+  } catch (err) {
+    console.warn('[boot] Could not load data/obstacles.json — using defaults:', err);
+  }
+
+  // Load audio paths from data/audio.json (must run before initAudio)
+  try {
+    const jsonAudio = await loadJSON('data/audio.json');
+    applyAudioConfig(jsonAudio);
+  } catch (err) {
+    console.warn('[boot] Could not load data/audio.json — using defaults:', err);
   }
 
   loadProgress(35, 'Initialising renderer\u2026');
