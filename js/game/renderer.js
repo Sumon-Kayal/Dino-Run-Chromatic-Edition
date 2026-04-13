@@ -27,8 +27,9 @@ import {
   W, H, GY, CONFIG,
   C, _pal, _lastDayPhase, setLastDayPhase,
   HUD_SCORE_X, HUD_HI_X, HUD_FONT, HUD_Y,
-  GROUND_PERIOD,
+  GROUND_PERIOD, CACTUS_INTRA_GAP,
 } from './config.js';
+import { lerp } from '../utils/utils.js';
 import { G } from './runtime.js';
 
 // ── Layer contexts ────────────────────────────────────────
@@ -43,8 +44,6 @@ function setFill(color) {
 }
 
 // ── Colour math ───────────────────────────────────────────
-function lerp(a, b, t) { return a + (b - a) * t; }
-
 function lerpRGB(ca, cb, t) {
   const pa = parseInt(ca.slice(1), 16);
   const pb = parseInt(cb.slice(1), 16);
@@ -313,7 +312,7 @@ export function draw() {
   G.obstacles.forEach((o) => {
     if (o.type === 'cactus') {
       const n = o.count || 1, sw = o.singleW || o.w;
-      for (let k = 0; k < n; k++) drawCactus(o.x + k * (sw + 6), o.y, sw, o.h);
+      for (let k = 0; k < n; k++) drawCactus(o.x + k * (sw + CACTUS_INTRA_GAP), o.y, sw, o.h);
     } else if (o.type === 'ptera') {
       drawPtera(o.x, o.y, o.frame);
     }

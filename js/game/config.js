@@ -30,8 +30,8 @@ export const PTERA_Y_MID  = GY - 69;   // mid-air
 export const PTERA_Y_HIGH = GY - 120;  // high flier
 
 // Gap-based spawning constants
-export const MIN_GAP_CACTUS  = 120;
-export const MIN_GAP_PTERA   = 150;
+export let MIN_GAP_CACTUS  = 120;
+export let MIN_GAP_PTERA   = 150;
 export const MAX_GAP_COEFF   = 1.5;
 
 // World population constants
@@ -199,6 +199,21 @@ export function applyJSONConfig(json) {
 
     CONFIG.SPEED_MIN = validatedMin;
     CONFIG.SPEED_MAX = validatedMax;
+  }
+}
+
+/* ── Apply loaded obstacles.json config ──────────────────── */
+export function applyObstaclesConfig(json) {
+  if (!json) return;
+  if (json.cactus) {
+    const c = json.cactus;
+    if (typeof c.width  === 'number' && c.width  > 0) CONFIG.CACTUS_W_MIN = c.width;
+    if (typeof c.height === 'number' && c.height > 0) CONFIG.CACTUS_H_MIN = c.height;
+    if (typeof c.minGap === 'number' && c.minGap > 0) MIN_GAP_CACTUS      = c.minGap;
+  }
+  if (json.ptera) {
+    const p = json.ptera;
+    if (typeof p.minGap === 'number' && p.minGap > 0) MIN_GAP_PTERA = p.minGap;
   }
 }
 
