@@ -59,7 +59,7 @@ export function checkCollision() {
   if (!o) return false;
 
   const dh = G.dino.ducking ? DUCK_H : DINO_H;
-  const dy = G.dino.y;
+  const dy = G.dino.jumping ? G.dino.y : (GY - dh);
 
   // ── Pass 1: outer AABB (fast reject) ────────────────────
   const dinoOuter = { x: G.dino.x, y: dy, w: DINO_W,  h: dh  };
