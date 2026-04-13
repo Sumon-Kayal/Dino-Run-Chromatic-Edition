@@ -59,10 +59,7 @@ export function checkCollision() {
   if (!o) return false;
 
   const dh = G.dino.ducking ? DUCK_H : DINO_H;
-
-  // Adjust dino Y position based on height when not jumping
-  // (matches updatePlayer behavior: d.y = GY - (d.ducking ? DUCK_H : DINO_H))
-  const dy = G.dino.jumping ? G.dino.y : (G.dino.y + (DINO_H - dh));
+  const dy = G.dino.y;
 
   // ── Pass 1: outer AABB (fast reject) ────────────────────
   const dinoOuter = { x: G.dino.x, y: dy, w: DINO_W,  h: dh  };
