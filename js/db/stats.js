@@ -9,7 +9,8 @@ import { dbGet, dbSet } from './database.js';
 const DB_VERSION = 1;
 
 (function migrate() {
-  const stored = parseInt(dbGet('dino:version') || '0', 10);
+  const parsed = parseInt(dbGet('dino:version') || '0', 10);
+  const stored = Number.isFinite(parsed) ? parsed : 0;
   if (stored >= DB_VERSION) return;
 
   // v0 → v1: backfill missing recordId on older leaderboard entries

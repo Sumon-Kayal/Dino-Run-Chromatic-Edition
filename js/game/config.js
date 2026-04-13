@@ -139,7 +139,7 @@ export function applyJSONConfig(json) {
     // Gravity: validate numeric, enforce reasonable range [0.1, 2.0]
     if (json.physics.gravity !== undefined) {
       let g = Number(json.physics.gravity);
-      if (typeof g === 'number' && !isNaN(g) && g >= 0.1 && g <= 2.0) {
+      if (Number.isFinite(g) && g >= 0.1 && g <= 2.0) {
         GRAVITY = g;
       } else {
         console.warn('[config] Invalid gravity value — ignoring:', json.physics.gravity);
@@ -149,7 +149,7 @@ export function applyJSONConfig(json) {
     // Jump velocity: validate numeric, enforce reasonable range [-20, -5]
     if (json.physics.jumpVelocity !== undefined) {
       let jv = Number(json.physics.jumpVelocity);
-      if (typeof jv === 'number' && !isNaN(jv) && jv >= -20 && jv <= -5) {
+      if (Number.isFinite(jv) && jv >= -20 && jv <= -5) {
         JUMP_V = jv;
       } else {
         console.warn('[config] Invalid jumpVelocity value — ignoring:', json.physics.jumpVelocity);
@@ -159,7 +159,7 @@ export function applyJSONConfig(json) {
     // Acceleration: validate numeric, enforce non-negative
     if (json.physics.acceleration !== undefined) {
       let acc = Number(json.physics.acceleration);
-      if (typeof acc === 'number' && !isNaN(acc) && acc >= 0) {
+      if (Number.isFinite(acc) && acc >= 0) {
         CONFIG.ACCELERATION = acc;
       } else {
         console.warn('[config] Invalid acceleration value — ignoring:', json.physics.acceleration);
@@ -168,39 +168,37 @@ export function applyJSONConfig(json) {
   }
 
   if (json.game) {
-    let minSpeed, maxSpeed;
+    let validatedMin = CONFIG.SPEED_MIN;
+    let validatedMax = CONFIG.SPEED_MAX;
 
     // Initial speed: validate numeric, enforce non-negative
     if (json.game.initialSpeed !== undefined) {
-      minSpeed = Number(json.game.initialSpeed);
-      if (typeof minSpeed === 'number' && !isNaN(minSpeed) && minSpeed >= 0) {
-        CONFIG.SPEED_MIN = minSpeed;
+      let minSpeed = Number(json.game.initialSpeed);
+      if (Number.isFinite(minSpeed) && minSpeed >= 0) {
+        validatedMin = minSpeed;
       } else {
         console.warn('[config] Invalid initialSpeed value — ignoring:', json.game.initialSpeed);
-        minSpeed = CONFIG.SPEED_MIN;
       }
-    } else {
-      minSpeed = CONFIG.SPEED_MIN;
     }
 
     // Max speed: validate numeric, enforce non-negative
     if (json.game.maxSpeed !== undefined) {
-      maxSpeed = Number(json.game.maxSpeed);
-      if (typeof maxSpeed === 'number' && !isNaN(maxSpeed) && maxSpeed >= 0) {
-        CONFIG.SPEED_MAX = maxSpeed;
+      let maxSpeed = Number(json.game.maxSpeed);
+      if (Number.isFinite(maxSpeed) && maxSpeed >= 0) {
+        validatedMax = maxSpeed;
       } else {
         console.warn('[config] Invalid maxSpeed value — ignoring:', json.game.maxSpeed);
-        maxSpeed = CONFIG.SPEED_MAX;
       }
-    } else {
-      maxSpeed = CONFIG.SPEED_MAX;
     }
 
-    // Ensure initialSpeed <= maxSpeed; if not, swap or reject
-    if (CONFIG.SPEED_MIN > CONFIG.SPEED_MAX) {
+    // Ensure initialSpeed <= maxSpeed; if not, swap
+    if (validatedMin > validatedMax) {
       console.warn('[config] initialSpeed > maxSpeed — swapping values');
-      [CONFIG.SPEED_MIN, CONFIG.SPEED_MAX] = [CONFIG.SPEED_MAX, CONFIG.SPEED_MIN];
+      [validatedMin, validatedMax] = [validatedMax, validatedMin];
     }
+
+    CONFIG.SPEED_MIN = validatedMin;
+    CONFIG.SPEED_MAX = validatedMax;
   }
 }
 

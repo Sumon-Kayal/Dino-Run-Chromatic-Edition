@@ -23,9 +23,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - `leaderboard.js` — top-10 management: `addScore`, `getLeaderboard`, `clearLeaderboard`, pruning
   - `stats.js`       — stats, player name, DB schema migration (v0 → v1)
 - Created `js/main.js` as the single ES module entry point
-- Moved assets: fonts → `assets/fonts/`, styles → `css/style.css`
-- Updated `index.html`: `<script type="module" src="js/main.js">`, updated preload/stylesheet hrefs
-- Updated `css/style.css`: font paths now `../assets/fonts/`
+- Moved assets: fonts → `assets/fonts/`, styles split into `css/base.css`, `css/game.css`, `css/ui.css`, `css/accessibility.css`
+- Updated `index.html`: `<script type="module" src="js/main.js">`, updated preload hrefs and stylesheet links to reference the new CSS files
+- Updated CSS files: font paths now `../assets/fonts/`
 - Moved server: `server/server.py` now serves from project root; certs in `server/certs/`
 - Updated `server.py`: `CERT_DIR = os.path.join(DIR, "certs")`, `directory=ROOT`
 - Added `server/certs/*.pem` to `.gitignore`
