@@ -49,6 +49,23 @@ const _SND_FILES = {
   milestone: 'assets/audio/milestone' + _audioExt,
 };
 
+/**
+ * Override audio file paths from data/audio.json.
+ * The JSON may specify any extension — it is stripped and replaced
+ * with the browser-detected format (_audioExt) so Safari gets .mp3
+ * and everything else gets .ogg regardless of what the JSON says.
+ * Call this before the first user interaction (before initAudio).
+ */
+export function applyAudioConfig(json) {
+  if (!json) return;
+  ['jump', 'die', 'milestone'].forEach(function (key) {
+    if (typeof json[key] === 'string') {
+      const base = json[key].replace(/\.[^/.]+$/, ''); // strip extension
+      _SND_FILES[key] = base + _audioExt;
+    }
+  });
+}
+
 function _loadBuffer(key, url) {
   return fetch(url)
     .then(function(r) {

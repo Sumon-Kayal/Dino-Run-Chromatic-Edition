@@ -9,26 +9,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Changed
 - Split monolithic `game.js` into focused ES modules under `js/game/`:
+  - `game.js`      — barrel re-export: re-exports all public symbols from every game sub-module for test tooling and external consumers
   - `engine.js`    — `Engine` class: delta-time game loop
-  - `state.js`     — shared constants (`CONFIG`, `W`, `H`, `GY`, …) and mutable state object `G`
-  - `audio.js`     — Web Audio API: jump / death / milestone sounds
+  - `config.js`    — static world constants (`CONFIG`, `W`, `H`, `GY`, …); `applyJSONConfig()` and `applyObstaclesConfig()` populate values from `data/` JSON at boot
+  - `runtime.js`   — mutable game state object `G`; all per-frame and per-session values
+  - `state.js`     — **deprecated compatibility shim**; re-exports from `config.js` and `runtime.js` only; kept for backwards compatibility — import directly from source modules instead
+  - `audio.js`     — Web Audio API: jump / death / milestone sounds; `applyAudioConfig()` overrides file paths from `data/audio.json`
   - `player.js`    — dino physics, jump, duck, idle animation
   - `obstacles.js` — cactus / pterodactyl spawning and movement
   - `physics.js`   — AABB collision detection with shrunk hitboxes
-  - `renderer.js`  — all canvas drawing: sky, sprites, HUD, speed bar
+  - `renderer.js`  — all canvas drawing: sky, sprites, HUD, speed bar; imports `lerp` from `js/utils/utils.js`
   - `input.js`     — keyboard events and mobile control wiring
+- Created `js/utils/utils.js` — shared utility functions: `clamp`, `lerp`, `randomInt`, `formatScore`, `deepClone`
 - Split monolithic `db.js` into focused ES modules under `js/db/`:
+  - `db.js`          — barrel re-export: re-exports all public symbols from every db sub-module (`backendName`, `dbGet`, `dbSet`, `addScore`, `getLeaderboard`, `saveLeaderboard`, `clearLeaderboard`, `getStats`, `saveStats`, `getPlayerName`, `savePlayerName`, `getQuotaUsed`, `getQuotaTotal`, `refreshQuota`)
   - `database.js`    — `dbGet` / `dbSet` with localStorage / in-memory backend
   - `storage.js`     — quota tracking, `db:quota` / `db:quotaFull` events, persistent storage
   - `leaderboard.js` — top-10 management: `addScore`, `getLeaderboard`, `clearLeaderboard`, pruning
   - `stats.js`       — stats, player name, DB schema migration (v0 → v1)
 - Created `js/main.js` as the single ES module entry point
-- Moved assets: fonts → `assets/fonts/`, styles split into `css/base.css`, `css/game.css`, `css/ui.css`, `css/accessibility.css`
+- Moved assets: fonts → `assets/fonts/`, styles split into `css/base.css`, `css/game.css`, `css/ui.css`, `css/accessibility.css`, `css/style.css` (Chromatic Edition theme tokens, NEW BEST pulse animation, scrollbar polish, focus rings)
 - Updated `index.html`: `<script type="module" src="js/main.js">`, updated preload hrefs and stylesheet links to reference the new CSS files
 - Updated CSS files: font paths now `../assets/fonts/`
 - Moved server: `server/server.py` now serves from project root; certs in `server/certs/`
 - Updated `server.py`: `CERT_DIR = os.path.join(DIR, "certs")`, `directory=ROOT`
 - Added `server/certs/*.pem` to `.gitignore`
+- **JSON-driven configuration wired at boot** (`js/main.js`, `js/game/config.js`, `js/game/audio.js`)  
+  The boot sequence now fetches all three `data/` JSON files sequentially before the renderer or
+  game world initialise. Fetch failure for any file is non-fatal — the game falls back to hardcoded
+  defaults with a `console.warn`:
+  - `data/config.json` → `applyJSONConfig()` — physics (`gravity`, `jumpVelocity`, `acceleration`) and speed (`initialSpeed`, `maxSpeed`)
+  - `data/obstacles.json` → `applyObstaclesConfig()` — cactus `width`, `height`, `minGap`; pterodactyl `minGap`; `MIN_GAP_CACTUS` and `MIN_GAP_PTERA` changed from `const` to `let` to allow runtime override
+  - `data/audio.json` → `applyAudioConfig()` — sound file base paths; extension stripped at runtime and replaced with browser-detected `.ogg` or `.mp3`
+
+### Fixed
+
+- **Obstacle inner-box shrink increased 5 → 8 px per side; dino body box tightened** (`js/game/physics.js`, `js/game/config.js`) — **HIGH**  
+  Descent-phase false collisions: the dino was dying while still visually above a cactus top on
+  the way down. Root cause — the sprite's transparent leg pixels extend below the opaque body
+  region (~`y+32`), so the body hitbox bottom was including non-visible pixels.  
+  `HIT_OBS_SHRINK` increased from `5` to `8` (obstacle forgiveness margin). `HIT_BODY_INSET_H`
+  increased from `18` to `26` so the body box height reduction no longer covers the transparent
+  leg region. Combined effect: ~17 px additional forgiveness on descent without affecting
+  ground-level run-into collisions.  
+  `physics.js` comment updated: `"shrunk 8 px per side (was 5 px)"`.
 
 ---
 
@@ -60,7 +84,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   the actual start speed was the literal `6`. The constants were therefore
   documentation that disagreed with runtime behaviour.
 
-  Updated to `SPEED_MIN: 6` and `SPEED_MAX: 13` so they match the actual start
+  Updated to `SPEED_MIN: 5` and `SPEED_MAX: 13` so they match the actual start
   and cap values. `initGame()` now sets `speed = CONFIG.SPEED_MIN` and
   `update()` caps at `CONFIG.SPEED_MAX` throughout — one authoritative source
   for both values. The speed bar formulas in `update()` and `draw()` both use
@@ -243,9 +267,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
-- **`db.test.js` — unit tests for `db.js`** (new file)  
+- **`all.test.mjs` — unit tests for `db` modules** (added to unified test suite)  
   Comprehensive test suite using the Node.js built-in `node:test` runner — no
-  external dependencies. Run with `node db.test.js`. Covers:
+  external dependencies. Run with `node tests/all.test.mjs`. Covers:
   - `pruneAndSave`: write-count assertions proving the conditional top-10 skip,
     top-5 fallback success, `db:criticalFailure` dispatch on total failure
   - `saveLeaderboard`: direct write, quota-exceeded path, `null` return
@@ -261,15 +285,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - TDZ regression suite: five tests confirming the `migrate()` declaration
     order fix, including `doesNotThrow` guards and initial value assertions
 
-- **`game.test.js` — unit tests for changed game logic** (new file)  
+- **`all.test.mjs` — unit tests for changed game logic** (added to unified test suite)  
   Isolated pure-function test suite using the Node.js built-in `node:test`
   runner. Extracts `CONFIG` from the source file directly to validate structural
   changes; mirrors the changed computation formulas as standalone functions.
   Covers:
   - `CONFIG` structure: asserts `OBS_CD_MIN/BASE/RNG/SPEED` removed,
     `OBS_CD_INIT` retained
-  - `initGame` speed literal: asserts `speed = 6` present and
-    `speed = CONFIG.SPEED_MIN` assignment absent
+  - `initGame` speed assignment: asserts `G.speed = CONFIG.SPEED_MIN` is present
   - Speed bar integer percentage (`update()` dedup): boundary values, cap at
     100, monotonicity across valid range
   - Speed bar float percentage (`draw()` bar width): boundary, cap, range [0,1]
@@ -278,8 +301,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   - AABB hitbox shrink: all four dimensions at 5 px per side
   - Removed globals: regex assertions that `dayDir`, `dayTimer`, `dayPauseAt`
     `let` declarations are gone from source
-  - Speed bar source literals: confirms `(speed - 6) / (13 - 6)` appears twice
-    and `CONFIG.SPEED_MIN/MAX` are not used in the bar calculation
+  - Speed bar source literals: confirms `CONFIG.SPEED_MIN` and `CONFIG.SPEED_MAX` are used in the bar calculation (not hardcoded literals)
 
 ---
 
