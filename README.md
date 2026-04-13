@@ -17,13 +17,14 @@ No network calls · No tracking · No image assets.
 - **Top-10 local leaderboard** persisted in `localStorage` (session-only fallback for private contexts)
 - **★ NEW BEST ★ banner** — pulsing gold overlay when the player beats their previous best
 - **5 MB storage awareness** — live quota display, graceful pruning on overflow, user-visible alert on critical failure
-- **Web Audio** sound effects — `.ogg` files loaded at runtime with synthesised beep fallback; mutable via `M`
+- **Web Audio** sound effects — `.ogg` / `.mp3` files loaded at runtime with synthesised beep fallback; paths driven by `data/audio.json`; mutable via `M`
 - **Mobile-friendly** — touch jump/duck controls, no double-fire on tap
 - **Keyboard shortcuts** — `Space`/`↑` jump · `↓` duck · `P` pause · `M` mute · `F` fullscreen
 - **Reset top score** — `✕` button beside the HI display resets the high score while keeping leaderboard records
 - **Accessible** — ARIA labels, live regions, screen-reader–compatible, `prefers-reduced-motion` support
 - **HTTPS dev server** with security headers, request timeout, and HTTP method guards (`server/server.py`)
 - **Modular ES module architecture** — game engine and DB layer split into focused, dependency-clean modules
+- **JSON-driven tuning** — physics, speed, obstacle geometry, and audio paths configurable without editing source code
 
 ---
 
@@ -113,39 +114,63 @@ Dino-Run-Chromatic-Edition/
 ├── index.html                  # UI structure, overlays, panels, ARIA semantics
 ├── assets/
 │   ├── audio/
-│   │   ├── die.ogg             # Death sound
-│   │   ├── jump.ogg            # Jump sound
-│   │   └── milestone.ogg       # Milestone sound
+│   │   ├── die.mp3             # Death sound (MP3 — used by Safari / iOS)
+│   │   ├── die.ogg             # Death sound (OGG Vorbis — all other browsers)
+│   │   ├── jump.mp3            # Jump sound (MP3)
+│   │   ├── jump.ogg            # Jump sound (OGG)
+│   │   ├── milestone.mp3       # Milestone sound (MP3)
+│   │   └── milestone.ogg       # Milestone sound (OGG)
 │   └── fonts/
 │       ├── press-start-2p.woff2   # Pixel heading font
 │       └── vt323.woff2            # Monospace stats / leaderboard font
 ├── css/
-│   └── style.css               # Retro pixel aesthetic + accessibility + reduced-motion
+│   ├── base.css                # Reset, custom properties, layout primitives
+│   ├── game.css                # Canvas stack, overlays, HUD bar
+│   ├── ui.css                  # Buttons, leaderboard, stats panel, name input
+│   ├── accessibility.css       # Screen-reader utilities, reduced-motion overrides
+│   └── style.css               # Chromatic Edition theme tokens (CSS custom properties),
+│                               #   NEW BEST pulse animation, scrollbar polish, focus rings
+├── data/
+│   ├── config.json             # Physics & speed tuning (gravity, jumpVelocity,
+│   │                           #   acceleration, initialSpeed, maxSpeed)
+│   ├── obstacles.json          # Obstacle geometry tuning (cactus width, height,
+│   │                           #   minGap; pterodactyl minGap)
+│   └── audio.json              # Audio file paths — extension stripped at runtime
+│                               #   and replaced with browser-detected .ogg or .mp3
 ├── js/
-│   ├── main.js                 # ES module entry point
+│   ├── main.js                 # ES module entry point — boot, game lifecycle, UI wiring
 │   ├── game/
-│   │   ├── engine.js           # Engine class: delta-time game loop
-│   │   ├── config.js           # Shared constants (CONFIG, W, H, GY)
-│   │   ├── runtime.js          # Mutable game state (G)
-│   │   ├── audio.js            # Web Audio: OGG load + synthesised fallback
-│   │   ├── player.js           # Dino physics, jump, duck, idle animation
-│   │   ├── obstacles.js        # Cactus / pterodactyl spawning & movement
+│   │   ├── game.js             # Barrel re-export — re-exports everything from all game
+│   │   │                       #   sub-modules for test tooling and external consumers
+│   │   ├── engine.js           # Engine class: delta-time rAF game loop
+│   │   ├── config.js           # Static constants (CONFIG, W, H, GY) + applyJSONConfig()
+│   │   │                       #   + applyObstaclesConfig() — populated from data/*.json at boot
+│   │   ├── runtime.js          # Mutable game state (G object)
+│   │   ├── state.js            # Compatibility shim — re-exports from config.js + runtime.js
+│   │   │                       #   (deprecated; import directly from source modules instead)
+│   │   ├── audio.js            # Web Audio: browser-format detection, OGG/MP3 load,
+│   │   │                       #   synthesised beep fallback, applyAudioConfig()
+│   │   ├── player.js           # Dino physics: jump, duck, idle animation
+│   │   ├── obstacles.js        # Cactus / pterodactyl spawning and movement
 │   │   ├── physics.js          # Two-pass AABB collision detection
-│   │   ├── renderer.js         # All canvas drawing
-│   │   └── input.js            # Keyboard + mobile controls
-│   └── db/
-│       ├── database.js         # dbGet / dbSet (localStorage + in-memory)
-│       ├── storage.js          # Quota tracking + db:quota events
-│       ├── leaderboard.js      # Top-10 leaderboard with pruning fallback
-│       └── stats.js            # Stats, player name, schema migration
+│   │   ├── renderer.js         # Three-layer canvas renderer (bgCanvas / gameCanvas / uiCanvas)
+│   │   └── input.js            # Keyboard + mobile touch controls; full listener teardown
+│   ├── db/
+│   │   ├── db.js               # Barrel re-export for db sub-modules
+│   │   ├── database.js         # dbGet / dbSet (localStorage + in-memory fallback)
+│   │   ├── storage.js          # Quota tracking + db:quota / db:criticalFailure events
+│   │   ├── leaderboard.js      # Top-10 leaderboard with pruning fallback
+│   │   └── stats.js            # Stats, player name, schema migration
+│   └── utils/
+│       └── utils.js            # Shared utilities: clamp, lerp, randomInt,
+│                               #   formatScore, deepClone
 ├── server/
 │   ├── server.py               # HTTPS dev server with security headers (Python 3.6+)
 │   └── certs/
 │       ├── cert.pem            # Local TLS certificate — generate with openssl (not in git)
 │       └── key.pem             # Local TLS private key  — generate with openssl (not in git)
 ├── tests/
-│   ├── db.test.js              # Unit tests for db modules  (node tests/db.test.js)
-│   └── game.test.js            # Unit tests for game logic  (node tests/game.test.js)
+│   └── all.test.mjs            # Full test suite — db layer + game logic
 ├── .gitignore                  # Excludes cert.pem / key.pem from version control
 ├── .github/
 │   └── workflows/
@@ -272,6 +297,7 @@ blocking alert with recovery steps. Quota usage is read via
 | Samsung Internet       | 12+             |
 
 > **ES modules** (`type="module"`) are required and supported by all listed browsers.  
+> **Safari / iOS** — OGG Vorbis is not supported; the audio module detects this via `canPlayType()` and selects `.mp3` automatically. Both formats ship in `assets/audio/`.  
 > **`e.code` keyboard events** are unreliable on Android software keyboards — on-screen
 > touch buttons are the primary Android input; keyboard shortcuts are secondary.  
 > **Librewolf** may block fullscreen via privacy settings — the `.catch()` guard handles this gracefully.
@@ -283,6 +309,7 @@ blocking alert with recovery steps. Quota usage is read via
 ### Canvas & rendering
 
 - Intrinsic resolution: **854 × 480 px (16:9)**, scaled to full width via CSS
+- **Three-layer canvas stack** (`bgCanvas` / `gameCanvas` / `uiCanvas`) — static background redrawn only on palette change; moving entities and HUD clear+repaint every frame
 - All sprites drawn with `fillRect` — zero image assets, zero HTTP requests for graphics
 - In fullscreen, canvas scales to fill the viewport maintaining 16:9 via CSS `min()`
 - `will-change: transform` promotes the canvas to its own GPU compositor layer
@@ -293,7 +320,19 @@ blocking alert with recovery steps. Quota usage is read via
 - **Delta-time physics**: all movement scaled by `dt` (normalised to 1.0 = one 60 Hz frame)
 - Ground scroll uses accumulated `groundScrollX` (not `frameCount`) — Hz-independent; offset negated so texture scrolls left
 - Best-time tracking uses `performance.now()` wall-clock delta — Hz-independent; pause duration is subtracted via `pauseStartTime` offset so only active play time counts
-- Collision uses **two-pass AABB** (matches Chrome source `checkForCollision`): pass 1 fast-rejects with outer entity box; pass 2 checks per-part inner boxes (body + head/neck for standing; single wide box for ducking) against obstacle inner box shrunk 5 px per side
+- Collision uses **two-pass AABB** (matches Chrome source `checkForCollision`): pass 1 fast-rejects with outer entity box; pass 2 checks per-part inner boxes (body + head/neck for standing; single wide box for ducking) against obstacle inner box shrunk 8 px per side
+
+### JSON-driven configuration
+
+All three `data/` JSON files are fetched sequentially at boot before the renderer
+or game world initialise. Fetch failure for any file is non-fatal — the game
+falls back to the hardcoded defaults in `config.js` with a `console.warn`.
+
+| File | Applied by | What it controls |
+|---|---|---|
+| `data/config.json` | `applyJSONConfig()` in `config.js` | `gravity`, `jumpVelocity`, `acceleration`, `initialSpeed`, `maxSpeed` |
+| `data/obstacles.json` | `applyObstaclesConfig()` in `config.js` | Cactus `width`, `height`, `minGap`; pterodactyl `minGap` |
+| `data/audio.json` | `applyAudioConfig()` in `audio.js` | Sound file base paths — extension auto-replaced with `.ogg` or `.mp3` per browser |
 
 ### Performance summary
 
@@ -308,6 +347,8 @@ blocking alert with recovery steps. Quota usage is read via
 | In-place obstacle splice | Zero `Array.filter` allocations at 60 Hz |
 | Debounced `refreshQuota()` | One storage IPC call per 2 s vs 2–3 per game-over |
 | ES module tree shaking | Each module imports only what it uses — no global namespace |
+| Sprite offscreen cache | Dino / cactus / ptera frames pre-rendered to offscreen canvases; rebuilt only on palette change |
+| Speed-bar colour LUT | 101-entry precomputed array — zero `lerpRGB` calls per frame |
 
 ### Speed constants
 
@@ -341,10 +382,17 @@ Three distinct heights with specific dodge requirements:
 
 ### Audio
 
-Sound effects are loaded as `.ogg` files from `assets/audio/` via `fetch` +
-`Web Audio API` (`decodeAudioData`). If the fetch or decode fails for any
-sound, that sound automatically falls back to a synthesised oscillator beep —
-the game remains fully playable with no manual configuration.
+Sound effects ship in both `.ogg` (OGG Vorbis) and `.mp3` formats under
+`assets/audio/`. The audio module probes `canPlayType()` once at load time and
+selects the appropriate extension — Safari and iOS WebKit receive `.mp3`;
+all other browsers receive `.ogg`. The active paths can be overridden via
+`data/audio.json` without editing source code; the extension in the JSON is
+always replaced with the browser-detected format at runtime.
+
+Sounds are loaded via `fetch` + `Web Audio API` (`decodeAudioData`). If the
+fetch or decode fails for any sound, that sound automatically falls back to a
+synthesised oscillator beep — the game remains fully playable with no manual
+configuration.
 
 ---
 
@@ -383,31 +431,48 @@ Additional hardening:
 
 All mutable game state lives in a single `G` object exported from `runtime.js`.
 Every module imports and mutates `G` directly — no prop-drilling, no global namespace pollution.
-Static constants (CONFIG, W, H, GY) are exported from `config.js`.
+Static constants (`CONFIG`, `W`, `H`, `GY`) are exported from `config.js` and populated
+from the three `data/` JSON files at boot before any game logic runs.
 
 DB modules follow a clean one-directional import chain:
 `storage.js` ← `database.js` ← `leaderboard.js` / `stats.js`. No circular dependencies.
 
 `input.js` receives callbacks so it stays fully decoupled from game logic.
 
+`game.js` is a barrel re-export of all game sub-modules — external tooling,
+tests, and dev-console code can import any symbol from a single entry point
+without knowing the internal file layout.
+
+`state.js` is a deprecated compatibility shim that re-exports from `config.js`
+and `runtime.js`. Prefer importing directly from those source modules.
+
 ### `js/game/`
 
 | Module | Concern | Key detail |
 |---|---|---|
-| `engine.js` | Game loop | `requestAnimationFrame`; `dt` = elapsed ms / 16.667, clamped to 3.0 |
-| `config.js` | Static constants | `CONFIG`, `W`, `H`, `GY` — populated from `data/config.json` |
+| `game.js` | Barrel re-export | Re-exports all public symbols from the 9 game sub-modules |
+| `engine.js` | Game loop | `requestAnimationFrame`; `dt` = elapsed ms / 16.667, clamped to 3.0; bound loop function allocated once in constructor |
+| `config.js` | Static constants | `CONFIG`, `W`, `H`, `GY`; `applyJSONConfig()` + `applyObstaclesConfig()` populate from `data/` at boot |
 | `runtime.js` | Mutable state | `G` object — all per-frame and per-session state |
-| `physics.js` | Collision | Two-pass AABB; reusable box objects — zero allocations per frame |
-| `renderer.js` | Canvas drawing | `lerpRGB` palette cached; static background on `bgCanvas` layer; `setFill()` deduplicates `fillStyle` |
-| `obstacles.js` | Obstacle management | Gap-based spawning matching Chrome source; in-place reverse `splice` |
-| `audio.js` | Sound | `fetch` + `decodeAudioData` for `.ogg`; synthesised beep fallback per sound |
-| `player.js` | Dino physics | Jump, duck, idle animation; wall-clock pause tracking via `pauseStartTime` |
-| `input.js` | Input | Callbacks-based; DOM elements cached once at startup |
+| `state.js` | Compatibility shim | Re-exports `config.js` + `runtime.js` — deprecated, kept for backwards compatibility |
+| `physics.js` | Collision | Two-pass AABB; reusable box objects — zero allocations per frame; obstacle box shrunk 8 px per side |
+| `renderer.js` | Canvas drawing | Three-layer stack; `lerpRGB` palette cached; sprite offscreen cache; `CACTUS_INTRA_GAP` used for multi-cactus spacing; `lerp` imported from `utils.js` |
+| `obstacles.js` | Obstacle management | Gap-based spawning matching Chrome source; `CACTUS_INTRA_GAP` constant controls intra-cluster spacing |
+| `audio.js` | Sound | Browser format detection; `fetch` + `decodeAudioData` for OGG/MP3; synthesised beep fallback; `applyAudioConfig()` for JSON path overrides |
+| `player.js` | Dino physics | Jump, duck, fast-fall, idle animation; sub-pixel `y` position for smooth descent |
+| `input.js` | Input | Callbacks-based; full listener registry enables zero-leak `teardownInput()` |
+
+### `js/utils/`
+
+| Module | Concern | Key detail |
+|---|---|---|
+| `utils.js` | Shared utilities | `clamp`, `lerp` (imported by `renderer.js`), `randomInt`, `formatScore`, `deepClone` |
 
 ### `js/db/`
 
 | Module | Concern | Key detail |
 |---|---|---|
+| `db.js` | Barrel re-export | Re-exports all public symbols from all 4 db sub-modules (`database`, `leaderboard`, `stats`, `storage`) |
 | `database.js` | Backend | Try/catch probe at load; `dbGet` / `dbSet` API |
 | `storage.js` | Quota | Debounced 2 s polling; `navigator.storage.persist()` at startup |
 | `leaderboard.js` | Scores | `pruneAndSave` falls back to top-5; dispatches `db:criticalFailure` on total failure |
