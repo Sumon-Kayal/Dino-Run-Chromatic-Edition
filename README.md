@@ -77,8 +77,8 @@ Open: https://localhost:1999
 ### 📱 Termux (Android)
 
 ```bash
-pkg update && pkg upgrade
-pkg install python git
+pkg update && pkg upgrade -y
+pkg install python git -y
 
 git clone https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition.git
 cd Dino-Run-Chromatic-Edition/
