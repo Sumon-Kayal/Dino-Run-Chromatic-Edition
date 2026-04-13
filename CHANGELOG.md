@@ -5,6 +5,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.7.5-beta] — Modular Architecture 2026-04-12 
+
+### Changed
+- Split monolithic `game.js` into focused ES modules under `js/game/`:
+  - `engine.js`    — `Engine` class: delta-time game loop
+  - `state.js`     — shared constants (`CONFIG`, `W`, `H`, `GY`, …) and mutable state object `G`
+  - `audio.js`     — Web Audio API: jump / death / milestone sounds
+  - `player.js`    — dino physics, jump, duck, idle animation
+  - `obstacles.js` — cactus / pterodactyl spawning and movement
+  - `physics.js`   — AABB collision detection with shrunk hitboxes
+  - `renderer.js`  — all canvas drawing: sky, sprites, HUD, speed bar
+  - `input.js`     — keyboard events and mobile control wiring
+- Split monolithic `db.js` into focused ES modules under `js/db/`:
+  - `database.js`    — `dbGet` / `dbSet` with localStorage / in-memory backend
+  - `storage.js`     — quota tracking, `db:quota` / `db:quotaFull` events, persistent storage
+  - `leaderboard.js` — top-10 management: `addScore`, `getLeaderboard`, `clearLeaderboard`, pruning
+  - `stats.js`       — stats, player name, DB schema migration (v0 → v1)
+- Created `js/main.js` as the single ES module entry point
+- Moved assets: fonts → `assets/fonts/`, styles split into `css/base.css`, `css/game.css`, `css/ui.css`, `css/accessibility.css`
+- Updated `index.html`: `<script type="module" src="js/main.js">`, updated preload hrefs and stylesheet links to reference the new CSS files
+- Updated CSS files: font paths now `../assets/fonts/`
+- Moved server: `server/server.py` now serves from project root; certs in `server/certs/`
+- Updated `server.py`: `CERT_DIR = os.path.join(DIR, "certs")`, `directory=ROOT`
+- Added `server/certs/*.pem` to `.gitignore`
+
+---
+
 ## [0.7.0-beta] — 2026-04-06
 
 ### Changed
@@ -253,8 +280,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
     `let` declarations are gone from source
   - Speed bar source literals: confirms `(speed - 6) / (13 - 6)` appears twice
     and `CONFIG.SPEED_MIN/MAX` are not used in the bar calculation
-
----
 
 ---
 
@@ -1339,8 +1364,5 @@ day/night cycle, and audio confirmed stable across all platforms.
 - Builds distributed to testers on Chrome 88+ (Windows, macOS, Linux),
   Firefox 93+ (Linux), Cromite 142+ (Android), and Safari 13+ (iOS).
 - Termux/Android test environment verified: `server.py` HTTPS and HTTP
-  fallback confirmed functional on Android 12 and 13.
-- No blockers found on first load across all platforms.
-oid test environment verified: `server.py` HTTPS and HTTP
   fallback confirmed functional on Android 12 and 13.
 - No blockers found on first load across all platforms.

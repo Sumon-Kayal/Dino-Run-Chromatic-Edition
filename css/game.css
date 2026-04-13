@@ -1,0 +1,216 @@
+/* ═══════════════════════════════════════════════════════════
+   game.css — Canvas, game container, controls, fullscreen
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── GAME AREA ───────────────────────────────────────────── */
+.game-area {
+  width: 100%;
+  max-width: 960px;
+  padding: 0 12px;
+  margin-top: 14px;
+}
+
+.game-frame {
+  position: relative;
+  width: 100%;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  touch-action: manipulation;
+  contain: layout style;
+}
+
+/* ── CANVAS STACK ────────────────────────────────────────── */
+/* Wrapper div that establishes the stacking context.
+   bgCanvas sits in normal flow and sets the container's intrinsic
+   height via its aspect ratio (854:480). gameCanvas and uiCanvas
+   are absolutely positioned on top, matching the same size. */
+#canvasStack {
+  position: relative;
+  width: 100%;
+  /* Do not set height here — it is determined by #bgCanvas's aspect ratio */
+}
+
+/* Shared rules for all three canvas layers */
+.game-canvas-layer {
+  display: block;
+  /* P0 FIX: Force nearest-neighbour (pixelated) upscaling in every browser. */
+  /* stylelint-disable value-no-vendor-prefix */
+  image-rendering: -moz-crisp-edges !important;
+  image-rendering: -webkit-optimize-contrast !important;
+  /* stylelint-enable value-no-vendor-prefix */
+  image-rendering: crisp-edges !important;
+  image-rendering: pixelated !important;
+  will-change: transform;
+}
+
+/* bg layer: in normal flow — sets container height via aspect ratio */
+#bgCanvas {
+  width: 100%;
+  height: auto;
+}
+
+/* game + ui layers: float above bgCanvas, exactly the same CSS size */
+#gameCanvas,
+#uiCanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ui layer sits on top; pointer events pass through to gameCanvas below */
+#uiCanvas {
+  pointer-events: none;
+}
+
+/* ── CONTROLS ────────────────────────────────────────────── */
+.controls {
+  display: flex;
+  padding: 10px 0;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
+.ctrl-btn {
+  margin: 4px;
+  padding: 9px 18px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  color: var(--text);
+  font-family: 'Press Start 2P', monospace;
+  font-size: clamp(6px, 1.5vw, 8px);
+  cursor: pointer;
+  border-radius: 3px;
+  transition: background 0.12s, color 0.12s, border-color 0.12s, opacity 0.12s;
+  user-select: none;
+  box-shadow: var(--shadow);
+  letter-spacing: 1px;
+}
+
+/* Jump — blue */
+.ctrl-btn.jump { border-color: var(--blue); color: var(--blue); }
+.ctrl-btn.jump:active {
+  background: var(--blue); color: #fff; border-color: var(--blue);
+}
+
+/* Duck — green; .active persists while held */
+.ctrl-btn.duck { border-color: var(--green); color: var(--green); }
+.ctrl-btn.duck.active,
+.ctrl-btn.duck:active {
+  background: var(--green); color: #fff; border-color: var(--green);
+  transform: scale(0.95);
+}
+
+/* Pause */
+.ctrl-btn.pause-btn { border-color: var(--accent); color: var(--accent); }
+.ctrl-btn.pause-btn:active,
+.ctrl-btn.pause-btn.active {
+  background: var(--accent); color: #fff;
+}
+
+/* Mute */
+.ctrl-btn.mute-btn { font-size: 16px; padding: 7px 12px; }
+.ctrl-btn.mute-btn.active { background: var(--border); }
+
+/* Fullscreen */
+.ctrl-btn.fullscreen-btn { border-color: var(--muted); color: var(--muted); }
+.ctrl-btn.fullscreen-btn:active,
+.ctrl-btn.fullscreen-btn.active {
+  background: var(--accent); color: #fff; border-color: var(--accent);
+}
+
+/* stylelint-disable selector-no-vendor-prefix */
+/* ── FULLSCREEN MODE ─────────────────────────────────────── */
+body:fullscreen {
+  background: #000;
+  height: 100vh;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+body:-webkit-full-screen {
+  background: #000;
+  height: 100vh;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+}
+
+body:fullscreen header,
+body:fullscreen .panel-row,
+body:fullscreen footer { display: none; }
+
+body:-webkit-full-screen header,
+body:-webkit-full-screen .panel-row,
+body:-webkit-full-screen footer { display: none; }
+
+.game-area:fullscreen {
+  max-width: none;
+  width: 100vw;
+  height: 100vh;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.game-area:-webkit-full-screen {
+  max-width: none;
+  width: 100vw;
+  height: 100vh;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.game-frame:fullscreen {
+  width: min(100vw, calc(100vh * 854 / 480));
+  max-width: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+.game-frame:-webkit-full-screen {
+  width: min(100vw, calc(100vh * 854 / 480));
+  max-width: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.game-area:fullscreen .controls,
+.game-frame:fullscreen .controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 6px;
+  background: var(--controls-overlay-bg);
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.game-area:-webkit-full-screen .controls,
+.game-frame:-webkit-full-screen .controls {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 6px;
+  background: var(--controls-overlay-bg);
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+/* stylelint-enable selector-no-vendor-prefix */

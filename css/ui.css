@@ -1,0 +1,269 @@
+/* ═══════════════════════════════════════════════════════════
+   ui.css — Overlays, score, panels, stats, leaderboard
+   ═══════════════════════════════════════════════════════════ */
+
+/* ── LOADING BAR ─────────────────────────────────────────── */
+.loading-bar-wrap {
+  width: min(260px, 70%);
+  height: 6px;
+  background: var(--border);
+  border-radius: 3px;
+  overflow: hidden;
+}
+.loading-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: var(--blue);
+  border-radius: 3px;
+  transition: width 0.25s ease;
+}
+
+/* ── OVERLAYS ────────────────────────────────────────────── */
+.overlay {
+  position: absolute;
+  top: 0; right: 0; bottom: 0; left: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: var(--overlay-bg);
+}
+.overlay.hidden { display: none; }
+.overlay > * + * { margin-top: 14px; }
+
+/* "404" style number on start screen */
+.dino-404 {
+  font-size: clamp(28px, 8vw, 56px);
+  color: var(--border);
+  letter-spacing: 6px;
+  line-height: 1;
+}
+
+.overlay-title {
+  font-size: clamp(10px, 3vw, 18px);
+  color: var(--accent);
+  letter-spacing: 4px;
+  text-align: center;
+}
+.overlay-title.danger { color: var(--danger); }
+
+.overlay-hint {
+  font-size: clamp(5px, 1.3vw, 8px);
+  color: var(--muted);
+  text-align: center;
+  line-height: 2.2;
+}
+
+.go-scores {
+  font-size: clamp(7px, 1.8vw, 11px);
+  color: var(--gold);
+  display: flex;
+  align-items: center;
+}
+.go-scores .go-sep { color: var(--border); margin: 0 10px; }
+.go-scores .go-hi  { color: var(--muted); }
+
+.go-newbest {
+  font-size: 10px;
+  color: var(--gold);
+  letter-spacing: 0.1em;
+  animation: pulse 1s infinite;
+}
+
+/* Shared button style */
+.chrome-btn {
+  padding: 10px 22px;
+  background: var(--blue);
+  border: none;
+  color: #fff;
+  font-family: 'Press Start 2P', monospace;
+  font-size: clamp(7px, 1.8vw, 10px);
+  cursor: pointer;
+  border-radius: 3px;
+  letter-spacing: 1px;
+  transition: opacity 0.15s;
+}
+.chrome-btn:hover { opacity: 0.88; }
+.chrome-btn.small { font-size: 7px; padding: 7px 14px; }
+
+/* .primary — used on the restart button; matches .chrome-btn defaults but
+   makes intent explicit so future styling has a named hook to target */
+.chrome-btn.primary {
+  background: var(--blue);
+  color: #fff;
+}
+
+/* Blink animation for restart button */
+.blink {
+  animation: blink 1s steps(1) infinite;
+}
+@keyframes blink { 0%,100% { opacity: 1; } 50% { opacity: 0; } }
+
+/* ── PANEL GRID ──────────────────────────────────────────── */
+.panel-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  max-width: 960px;
+  width: 100%;
+  padding: 4px 12px 20px;
+}
+@media (max-width: 600px) {
+  .panel-row { grid-template-columns: 1fr; }
+}
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 14px;
+  box-shadow: var(--shadow);
+}
+
+.panel-title {
+  font-size: clamp(6px, 1.3vw, 8px);
+  color: var(--muted);
+  letter-spacing: 2px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+/* ── STATS ───────────────────────────────────────────────── */
+.stat-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 7px 0;
+  border-bottom: 1px solid var(--separator);
+  font-family: 'VT323', monospace;
+}
+.stat-label { color: var(--muted);  font-size: clamp(12px, 2.5vw, 16px); }
+.stat-value { color: var(--accent); font-size: clamp(14px, 3vw, 20px); }
+.stat-value.gold   { color: var(--gold);   }
+.stat-value.danger { color: var(--danger); }
+.stat-value.green  { color: var(--green);  }
+
+/* ── SPEED BAR ───────────────────────────────────────────── */
+.speed-bar-wrap { margin-top: 12px; }
+.speed-label {
+  font-size: clamp(5px, 1.1vw, 7px);
+  color: var(--muted);
+  letter-spacing: 1px;
+  margin-bottom: 5px;
+}
+.speed-bar-bg {
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  overflow: hidden;
+}
+.speed-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue), var(--danger));
+  border-radius: 2px;
+  width: 0%;
+}
+
+/* ── DB BADGE ────────────────────────────────────────────── */
+.db-badge {
+  display: inline-flex;
+  align-items: center;
+  font-size: clamp(5px, 1vw, 6px);
+  color: var(--muted);
+  margin-top: 10px;
+}
+.db-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 4px var(--green);
+  margin-right: 6px;
+  flex-shrink: 0;
+  animation: pulse 2s infinite;
+}
+@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.3; } }
+
+/* ── NAME FORM ───────────────────────────────────────────── */
+.name-section { margin-bottom: 12px; }
+.name-form {
+  display: flex;
+  flex-wrap: wrap;
+  margin-top: 6px;
+}
+.name-input {
+  flex: 1;
+  min-width: 80px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  color: var(--accent);
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  padding: 6px 10px;
+  border-radius: 3px;
+  outline: none;
+  margin-right: 6px;
+  margin-bottom: 6px;
+}
+.name-input:focus { border-color: var(--blue); }
+.player-name-label {
+  font-family: 'VT323', monospace;
+  font-size: 18px;
+  color: var(--accent);
+  margin-top: 4px;
+}
+
+/* ── CLEAR BUTTON ────────────────────────────────────────── */
+.clear-btn {
+  padding: 3px 8px;
+  background: transparent;
+  border: 1px solid var(--danger);
+  color: var(--danger);
+  font-family: 'Press Start 2P', monospace;
+  font-size: 6px;
+  cursor: pointer;
+  border-radius: 2px;
+  letter-spacing: 1px;
+  transition: background 0.15s, color 0.15s;
+}
+.clear-btn:hover { background: var(--danger); color: #fff; }
+
+/* ── LEADERBOARD TABLE ───────────────────────────────────── */
+.lb-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.lb-table th {
+  color: var(--muted);
+  text-align: left;
+  padding: 4px 6px;
+  font-size: clamp(5px, 1.1vw, 6px);
+  letter-spacing: 1px;
+}
+.lb-table td {
+  padding: 6px;
+  border-bottom: 1px solid var(--separator);
+  color: var(--text);
+  font-family: 'VT323', monospace;
+  font-size: clamp(12px, 2.5vw, 17px);
+}
+.lb-table tbody tr td.lb-empty {
+  color: var(--muted);
+  font-size: 14px;
+  text-align: center;
+}
+
+.rank-badge {
+  display: inline-block;
+  width: 18px;
+  height: 18px;
+  background: var(--border);
+  border-radius: 2px;
+  text-align: center;
+  line-height: 18px;
+  font-size: 10px;
+}

@@ -12,9 +12,12 @@
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%23ffffff'/%3E%3Crect x='8' y='1' width='6' height='3' fill='%23535353'/%3E%3Crect x='6' y='3' width='8' height='4' fill='%23535353'/%3E%3Crect x='6' y='7' width='3' height='2' fill='%23535353'/%3E%3Crect x='1' y='5' width='3' height='3' fill='%23535353'/%3E%3Crect x='3' y='7' width='8' height='3' fill='%23535353'/%3E%3Crect x='3' y='10' width='6' height='2' fill='%23535353'/%3E%3Crect x='4' y='12' width='2' height='3' fill='%23535353'/%3E%3Crect x='7' y='12' width='2' height='3' fill='%23535353'/%3E%3C/svg%3E">
   
   <!-- Preload fonts to avoid FOIT (Flash of Invisible Text) -->
-  <link rel="preload" href="fonts/press-start-2p.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="fonts/vt323.woff2"          as="font" type="font/woff2" crossorigin>
-  <link rel="stylesheet" href="style.css">
+  <link rel="preload" href="assets/fonts/press-start-2p.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="assets/fonts/vt323.woff2"          as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="css/base.css">
+  <link rel="stylesheet" href="css/game.css">
+  <link rel="stylesheet" href="css/ui.css">
+  <link rel="stylesheet" href="css/accessibility.css">
 </head>
 <body>
 
@@ -23,9 +26,8 @@
     <div class="logo">&#127990; DINO RUN</div>
     <div class="score-display">
       <span class="hi-label" aria-hidden="true">HI</span>
-      <!-- Accessible labels for screen readers -->
       <span id="hdr-hi" aria-label="High score">00000</span>
-      <button class="reset-hi-btn" id="resetHiBtn"
+      <button type="button" class="reset-hi-btn" id="resetHiBtn"
               aria-label="Reset top score" title="Reset top score">&#10006;</button>
       <span id="hdr-score" aria-label="Current score" class="score-val">00000</span>
     </div>
@@ -34,12 +36,36 @@
   <!-- ══════════════════════════ GAME AREA ═══════════════════════ -->
   <div class="game-area">
     <div class="game-frame" id="gameFrame">
-      <!-- App region designation for assistive technologies -->
-      <canvas id="gameCanvas" width="854" height="480"
-              role="application" aria-label="Dino Run game canvas. Use Space or Up to jump, Down to duck."></canvas>
+      <!-- ── Canvas stack: bg / game / ui layers ─────────────────
+           bgCanvas  (alpha:false) — sky, stars, ground line.
+                     Only redrawn when the day/night palette changes.
+           gameCanvas (transparent) — moon, clouds, obstacles, dino.
+                     Cleared and redrawn every frame.
+           uiCanvas  (transparent) — HUD score text, flash overlay.
+                     Cleared and redrawn every frame.
+           All three share the same 854×480 logical coordinate space.
+      ─────────────────────────────────────────────────────────── -->
+      <div id="canvasStack">
+        <canvas id="bgCanvas" class="game-canvas-layer" width="854" height="480"
+                aria-hidden="true"></canvas>
+        <canvas id="gameCanvas" class="game-canvas-layer" width="854" height="480"
+                role="application" aria-label="Dino Run game canvas. Use Space or Up to jump, Down to duck."></canvas>
+        <canvas id="uiCanvas" class="game-canvas-layer" width="854" height="480"
+                aria-hidden="true"></canvas>
+      </div>
+
+      <!-- Loading overlay (hidden once boot() finishes) -->
+      <div class="overlay" id="loadingScreen" role="status" aria-live="polite">
+        <div class="dino-404" aria-hidden="true">...</div>
+        <h2 class="overlay-title">LOADING</h2>
+        <div class="loading-bar-wrap" aria-hidden="true">
+          <div class="loading-bar-fill" id="loadingBar"></div>
+        </div>
+        <p class="overlay-hint" id="loadingHint">Initialising&#8230;</p>
+      </div>
 
       <!-- Start overlay -->
-      <div class="overlay" id="startScreen" role="status" aria-live="polite">
+      <div class="overlay hidden" id="startScreen" aria-hidden="true">
         <div class="dino-404" aria-hidden="true">404</div>
         <h2 class="overlay-title">PRESS SPACE TO PLAY</h2>
         <p class="overlay-hint">
@@ -59,7 +85,7 @@
           <span class="go-sep" aria-hidden="true">&middot;</span>
           <span id="go-hi" class="go-hi">HI: 00000</span>
         </div>
-        <button class="chrome-btn primary blink" id="restartBtn">&#8635; RESTART</button>
+        <button type="button" class="chrome-btn primary blink" id="restartBtn">&#8635; RESTART</button>
       </div>
 
       <!-- Pause overlay -->
@@ -71,16 +97,15 @@
 
     <!-- Mobile controls -->
     <div class="controls" role="toolbar" aria-label="Game controls">
-      <button class="ctrl-btn jump"        id="jumpBtn"
+      <button type="button" class="ctrl-btn jump"        id="jumpBtn"
               aria-label="Jump">&#9650; JUMP</button>
-      <button class="ctrl-btn duck"        id="duckBtn"
+      <button type="button" class="ctrl-btn duck"        id="duckBtn"
               aria-label="Duck">&#9660; DUCK</button>
-      <button class="ctrl-btn pause-btn"   id="pauseBtn"
+      <button type="button" class="ctrl-btn pause-btn"   id="pauseBtn"
               aria-label="Pause" aria-pressed="false">&#9646;&#9646; PAUSE</button>
-      <!-- Dynamic aria-labels for icon buttons -->
-      <button class="ctrl-btn mute-btn"    id="muteBtn"
+      <button type="button" class="ctrl-btn mute-btn"    id="muteBtn"
               aria-label="Toggle mute" aria-pressed="false">&#128266;</button>
-      <button class="ctrl-btn fullscreen-btn" id="fullscreenBtn"
+      <button type="button" class="ctrl-btn fullscreen-btn" id="fullscreenBtn"
               aria-label="Toggle fullscreen">FULL</button>
     </div>
   </div>
@@ -132,16 +157,15 @@
     <div class="panel" role="region" aria-label="Leaderboard">
       <div class="panel-title">
         <span>LEADERBOARD &middot; TOP 10</span>
-        <button class="clear-btn" id="clearLbBtn"
+        <button type="button" class="clear-btn" id="clearLbBtn"
                 aria-label="Clear all leaderboard records">CLEAR</button>
       </div>
       <div class="name-section">
         <div class="name-form">
-          <!-- Visually hidden label for WCAG compliance -->
           <label for="nameInput" class="sr-only">Player name (up to 10 characters)</label>
           <input class="name-input" id="nameInput" maxlength="10"
                  placeholder="YOUR NAME" autocomplete="off" spellcheck="false"/>
-          <button class="chrome-btn small" id="nameSaveBtn"
+          <button type="button" class="chrome-btn small" id="nameSaveBtn"
                   aria-label="Save player name">SAVE</button>
         </div>
         <div class="player-name-label" id="currentName"
@@ -164,8 +188,7 @@
     DINO RUN &middot; CHROMATIC EDITION &middot; <span id="footer-year">2026</span>
   </footer>
 
-  <!-- Non-blocking script execution -->
-  <script src="db.js" defer></script>
-  <script src="game.js" defer></script>
+  <!-- ES Module entry point — loads all game and DB modules -->
+  <script type="module" src="js/main.js"></script>
 </body>
 </html>
