@@ -120,9 +120,13 @@ Dino-Run-Chromatic-Edition/
 │   │   ├── jump.ogg            # Jump sound (OGG)
 │   │   ├── milestone.mp3       # Milestone sound (MP3)
 │   │   └── milestone.ogg       # Milestone sound (OGG)
+│       ├── cert.pem            # Local TLS certificate — generate with openssl (not in git)
+│       └── key.pem             # Local TLS private key  — generate with openssl (not in git)
 │   └── fonts/
 │       ├── press-start-2p.woff2   # Pixel heading font
 │       └── vt323.woff2            # Monospace stats / leaderboard font
+
+
 ├── css/
 │   ├── base.css                # Reset, custom properties, layout primitives
 │   ├── game.css                # Canvas stack, overlays, HUD bar
@@ -164,11 +168,12 @@ Dino-Run-Chromatic-Edition/
 │   └── utils/
 │       └── utils.js            # Shared utilities: clamp, lerp, randomInt,
 │                               #   formatScore, deepClone
-├── server/
 │   ├── server.py               # HTTPS dev server with security headers (Python 3.6+)
 │   └── certs/
 │       ├── cert.pem            # Local TLS certificate — generate with openssl (not in git)
 │       └── key.pem             # Local TLS private key  — generate with openssl (not in git)
+
+
 ├── tests/
 │   └── all.test.mjs            # Full test suite — db layer + game logic
 ├── .gitignore                  # Excludes cert.pem / key.pem from version control
