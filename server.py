@@ -8,12 +8,12 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from typing import ClassVar
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-# server.py lives in  dino-run/server/
-# Static files live in dino-run/           (one level up — the project root)
-# TLS certificates live in dino-run/server/certs/
-DIR         = os.path.dirname(os.path.abspath(__file__))   # .../dino-run/server/
-ROOT        = os.path.dirname(DIR)                          # .../dino-run/
-CERT_DIR    = os.path.join(DIR, "certs")                    # .../dino-run/server/certs/
+# server.py lives in  Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/
+# Static files live in Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/           (one level up — the project root)
+# TLS certificates live in Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/assets/certs/
+DIR         = os.path.dirname(os.path.abspath(__file__))   # .../Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/assets/certs/
+ROOT        = os.path.dirname(DIR)                          # .../Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/
+CERT_DIR    = os.path.join(DIR, "certs")                    # .../Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/assets/certs/
 # Security note: For production deployments, change PUBLIC_ROOT to a dedicated
 # public/ subdirectory to prevent serving sensitive files from the project root.
 PUBLIC_ROOT = ROOT

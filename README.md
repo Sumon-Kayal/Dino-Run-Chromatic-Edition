@@ -6,6 +6,8 @@ No network calls · No tracking · No image assets.
 
 **Current version: 0.7.5-beta**
 
+![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Sumon-Kayal/Dino-Run-Chromatic-Edition?utm_source=oss&utm_medium=github&utm_campaign=Sumon-Kayal%2FDino-Run-Chromatic-Edition&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+
 ---
 
 ## ✨ Features
@@ -22,7 +24,7 @@ No network calls · No tracking · No image assets.
 - **Keyboard shortcuts** — `Space`/`↑` jump · `↓` duck · `P` pause · `M` mute · `F` fullscreen
 - **Reset top score** — `✕` button beside the HI display resets the high score while keeping leaderboard records
 - **Accessible** — ARIA labels, live regions, screen-reader–compatible, `prefers-reduced-motion` support
-- **HTTPS dev server** with security headers, request timeout, and HTTP method guards (`server/server.py`)
+- **HTTPS dev server** with security headers, request timeout, and HTTP method guards (`server.py`)
 - **Modular ES module architecture** — game engine and DB layer split into focused, dependency-clean modules
 - **JSON-driven tuning** — physics, speed, obstacle geometry, and audio paths configurable without editing source code
 
@@ -47,7 +49,7 @@ before running `server.py` — see the [certificate section](#-generating-the-se
 ### 🪟 Windows
 
 ```bash
-cd Dino-Run-Chromatic-Edition/server
+cd Dino-Run-Chromatic-Edition/
 python server.py
 ```
 
@@ -56,7 +58,7 @@ Open: https://localhost:1999
 ### 🍎 macOS
 
 ```bash
-cd Dino-Run-Chromatic-Edition/server
+cd Dino-Run-Chromatic-Edition/
 python3 server.py
 ```
 
@@ -65,7 +67,7 @@ Open: https://localhost:1999
 ### 🐧 Linux
 
 ```bash
-cd Dino-Run-Chromatic-Edition/server
+cd Dino-Run-Chromatic-Edition/
 python3 server.py
 ```
 
@@ -78,9 +80,9 @@ pkg update && pkg upgrade
 pkg install python git
 
 git clone https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition.git
-cd Dino-Run-Chromatic-Edition/server
+cd Dino-Run-Chromatic-Edition/
 
-python server.py
+python3 server.py
 ```
 
 Open: https://localhost:1999
@@ -97,7 +99,7 @@ running `server.py`:
 
 ```bash
 openssl req -x509 -newkey rsa:2048 \
-  -keyout server/certs/key.pem -out server/certs/cert.pem \
+  -keyout assets/certs/key.pem -out assets/certs/cert.pem \
   -days 365 -nodes -subj "/CN=localhost"
 ```
 
@@ -120,6 +122,8 @@ Dino-Run-Chromatic-Edition/
 │   │   ├── jump.ogg            # Jump sound (OGG)
 │   │   ├── milestone.mp3       # Milestone sound (MP3)
 │   │   └── milestone.ogg       # Milestone sound (OGG)
+│       ├── cert.pem            # Local TLS certificate — generate with openssl (not in git)
+│       └── key.pem             # Local TLS private key  — generate with openssl (not in git)
 │   └── fonts/
 │       ├── press-start-2p.woff2   # Pixel heading font
 │       └── vt323.woff2            # Monospace stats / leaderboard font
@@ -164,11 +168,8 @@ Dino-Run-Chromatic-Edition/
 │   └── utils/
 │       └── utils.js            # Shared utilities: clamp, lerp, randomInt,
 │                               #   formatScore, deepClone
-├── server/
-│   ├── server.py               # HTTPS dev server with security headers (Python 3.6+)
-│   └── certs/
-│       ├── cert.pem            # Local TLS certificate — generate with openssl (not in git)
-│       └── key.pem             # Local TLS private key  — generate with openssl (not in git)
+├── server.py                   # HTTPS dev server with security headers (Python 3.6+)
+│                               #   TLS certs live in assets/certs/ (cert.pem, key.pem)
 ├── tests/
 │   └── all.test.mjs            # Full test suite — db layer + game logic
 ├── .gitignore                  # Excludes cert.pem / key.pem from version control

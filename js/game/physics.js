@@ -59,7 +59,7 @@ export function checkCollision() {
   if (!o) return false;
 
   const dh = G.dino.ducking ? DUCK_H : DINO_H;
-  const dy = G.dino.y;
+  const dy = G.dino.jumping ? G.dino.y : (GY - dh);
 
   // ── Pass 1: outer AABB (fast reject) ────────────────────
   const dinoOuter = { x: G.dino.x, y: dy, w: DINO_W,  h: dh  };
@@ -90,7 +90,11 @@ export function checkCollision() {
   }];
 
   for (const db of dinoBoxes) {
-    adjustBox(tempBoxA, db, G.dino);
+    // Use precomputed dy (not G.dino.y) to match Pass 1
+    tempBoxA.x = db.x + G.dino.x;
+    tempBoxA.y = db.y + dy;
+    tempBoxA.w = db.w;
+    tempBoxA.h = db.h;
     for (const ob of obsBoxes) {
       adjustBox(tempBoxB, ob, o);
       if (boxCompare(tempBoxA, tempBoxB)) return true;
