@@ -301,7 +301,7 @@ blocking alert with recovery steps. Quota usage is read via
 |---|---|
 | DOM element cache (`const DOM`) | Zero `getElementById` calls at runtime |
 | Palette cache (`_pal`) | `lerpRGB` skipped when `dayPhase` unchanged |
-| Sky layer blit (`skyCanvas`) | Background + horizon + stars drawn once per `dayPhase` change; stamped with a single `drawImage` every frame |
+| Static background layer (`bgCanvas`) | Background, horizon, and stars drawn once per `dayPhase` change on dedicated layer; no per-frame blit |
 | `setFill()` dedup | ~50% fewer `ctx.fillStyle` writes per frame |
 | HUD `textContent` dedup | Eliminates style recalcs when score hasn't changed |
 | Speed bar integer dedup | `style.width` only written when `%` actually changes |
@@ -398,7 +398,7 @@ DB modules follow a clean one-directional import chain:
 | `config.js` | Static constants | `CONFIG`, `W`, `H`, `GY` — populated from `data/config.json` |
 | `runtime.js` | Mutable state | `G` object — all per-frame and per-session state |
 | `physics.js` | Collision | Two-pass AABB; reusable box objects — zero allocations per frame |
-| `renderer.js` | Canvas drawing | `lerpRGB` palette cached; sky on `OffscreenCanvas`; `setFill()` deduplicates `fillStyle` |
+| `renderer.js` | Canvas drawing | `lerpRGB` palette cached; static background on `bgCanvas` layer; `setFill()` deduplicates `fillStyle` |
 | `obstacles.js` | Obstacle management | Gap-based spawning matching Chrome source; in-place reverse `splice` |
 | `audio.js` | Sound | `fetch` + `decodeAudioData` for `.ogg`; synthesised beep fallback per sound |
 | `player.js` | Dino physics | Jump, duck, idle animation; wall-clock pause tracking via `pauseStartTime` |

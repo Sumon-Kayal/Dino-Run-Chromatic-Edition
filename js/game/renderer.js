@@ -383,7 +383,10 @@ function setupCanvas(canvasEl, contextOptions) {
     canvasEl.height = Math.round(cssH * dpr);
     canvasEl.style.width  = cssW + 'px';
     canvasEl.style.height = cssH + 'px';
-    context.scale(dpr, dpr);
+    // Scale to cover the full backing store
+    const fullX = canvasEl.width / W;
+    const fullY = canvasEl.height / H;
+    context.setTransform(fullX, 0, 0, fullY, 0, 0);
     // Re-apply after scale (some browsers reset it)
     context.imageSmoothingEnabled = false;
   }

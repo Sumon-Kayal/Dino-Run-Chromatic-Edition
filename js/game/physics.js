@@ -12,7 +12,7 @@
    ═══════════════════════════════════════════════════════════ */
 'use strict';
 
-import { DINO_W, DUCK_H, DINO_H,
+import { DINO_W, DUCK_H, DINO_H, GY,
          HIT_DUCK_INSET_X, HIT_DUCK_INSET_W, HIT_DUCK_INSET_Y, HIT_DUCK_INSET_H,
          HIT_BODY_INSET_X, HIT_BODY_INSET_W, HIT_BODY_INSET_Y, HIT_BODY_INSET_H,
          HIT_HEAD_X, HIT_HEAD_Y, HIT_HEAD_W_INSET, HIT_HEAD_H,
@@ -32,12 +32,19 @@ function boxCompare(a, b) {
   );
 }
 
+// Reusable temp boxes to avoid per-frame allocations
+const tempBoxA = { x: 0, y: 0, w: 0, h: 0 };
+const tempBoxB = { x: 0, y: 0, w: 0, h: 0 };
+
 /**
- * Offset a local hitbox by entity world position.
- * Matches createAdjustedCollisionBox() reference.
+ * Offset a local hitbox by entity world position into a target box.
+ * Matches createAdjustedCollisionBox() reference but mutates target.
  */
-function adjustBox(local, entity) {
-  return { x: local.x + entity.x, y: local.y + entity.y, w: local.w, h: local.h };
+function adjustBox(target, local, entity) {
+  target.x = local.x + entity.x;
+  target.y = local.y + entity.y;
+  target.w = local.w;
+  target.h = local.h;
 }
 
 /**
@@ -53,8 +60,12 @@ export function checkCollision() {
 
   const dh = G.dino.ducking ? DUCK_H : DINO_H;
 
+  // Adjust dino Y position based on height when not jumping
+  // (matches updatePlayer behavior: d.y = GY - (d.ducking ? DUCK_H : DINO_H))
+  const dy = G.dino.jumping ? G.dino.y : (G.dino.y + (DINO_H - dh));
+
   // ── Pass 1: outer AABB (fast reject) ────────────────────
-  const dinoOuter = { x: G.dino.x, y: G.dino.y, w: DINO_W,  h: dh  };
+  const dinoOuter = { x: G.dino.x, y: dy, w: DINO_W,  h: dh  };
   const obsOuter  = { x: o.x,      y: o.y,      w: o.w,     h: o.h };
   if (!boxCompare(dinoOuter, obsOuter)) return false;
 
@@ -82,8 +93,10 @@ export function checkCollision() {
   }];
 
   for (const db of dinoBoxes) {
+    adjustBox(tempBoxA, db, G.dino);
     for (const ob of obsBoxes) {
-      if (boxCompare(adjustBox(db, G.dino), adjustBox(ob, o))) return true;
+      adjustBox(tempBoxB, ob, o);
+      if (boxCompare(tempBoxA, tempBoxB)) return true;
     }
   }
 

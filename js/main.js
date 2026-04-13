@@ -186,6 +186,7 @@ function startGame() {
   G.state             = 'running';
   initGame();
   DOM.startScreen.classList.add('hidden');
+  DOM.startScreen.setAttribute('aria-hidden', 'true');
   DOM.gameOverScreen.classList.add('hidden');
   engine.resetTimer();
   engine.start();
@@ -220,6 +221,7 @@ function gameOver() {
   if (thisTime > G.sessionStats.bestTime) G.sessionStats.bestTime = thisTime;
 
   const prevBest = Math.max(G.hiScore, G.dbStats.bestScore);
+  const prevDbStats = { ...G.dbStats };
   if (s > G.hiScore) G.hiScore = s;
 
   G.dbStats.games++;
@@ -231,11 +233,22 @@ function gameOver() {
 
   const lb = addScore(G.playerName, s);
   if (lb) {
-    saveStats(G.dbStats);
-    renderLeaderboard(lb);
+    if (!saveStats(G.dbStats)) {
+      // saveStats failed — rollback
+      G.hiScore = prevBest;
+      G.dbStats = prevDbStats;
+      const existingLb = getLeaderboard();
+      renderLeaderboard(existingLb);
+      console.warn('[Game] Stats not saved — storage full');
+      DOM.dbStatus.textContent = 'STORAGE FULL \u26A0 \u2014 Score not saved';
+      DOM.dbStatus.style.setProperty('color', 'var(--danger)');
+    } else {
+      renderLeaderboard(lb);
+    }
   } else {
+    // addScore failed — rollback
     const existingLb = getLeaderboard();
-    G.dbStats.bestScore = prevBest;
+    G.dbStats = prevDbStats;
     G.hiScore = prevBest;
     saveStats(G.dbStats);
     console.warn('[Game] Score not saved — storage full');
@@ -283,7 +296,7 @@ function togglePause() {
 }
 
 function toggleFullscreen() {
-  const el   = document.documentElement;
+  const el   = document.querySelector('.game-frame');
   const isFs = document.fullscreenElement || document.webkitFullscreenElement;
   if (!isFs) {
     const req = el.requestFullscreen
@@ -540,6 +553,8 @@ async function loadJSON(path) {
   }
   function hideLoading() {
     DOM.loadingScreen.classList.add('hidden');
+    DOM.startScreen.classList.remove('hidden');
+    DOM.startScreen.setAttribute('aria-hidden', 'false');
   }
 
   loadProgress(10, 'Loading config\u2026');

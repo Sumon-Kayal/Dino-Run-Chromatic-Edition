@@ -218,14 +218,15 @@ describe('physics.js — checkCollision', () => {
   });
 
   test('ducking dino uses DUCK_H, not DINO_H, for height', () => {
-    // Place a cactus at mid-height — running dino would hit it, ducking clears it
+    // Place a cactus at mid-height — running dino would hit it, ducking clears it.
+    // obsX must overlap the dino horizontally (DINO_X) so the X check passes.
     const midY = GY - DUCK_H - 5;
-    setScene({ ducking: true, obsY: midY - 10, obsH: 15 });
-    // The inner hitboxes may still collide depending on exact values —
-    // the key contract is that ducking reduces the collision height.
-    // We test the outer-box fast-reject passes (outer H = DUCK_H, not DINO_H):
-    const result = checkCollision();
-    assert.equal(typeof result, 'boolean');  // must return boolean either way
+    setScene({ ducking: false, obsX: DINO_X, obsY: midY - 10, obsH: 15 });
+    const standingResult = checkCollision();
+    setScene({ ducking: true, obsX: DINO_X, obsY: midY - 10, obsH: 15 });
+    const duckingResult = checkCollision();
+    // Assert the two results differ: ducking should change collision outcome
+    assert.notEqual(standingResult, duckingResult, 'Ducking should change collision result vs standing');
   });
 
   test('obstacle just to the right of dino bounding box → no collision', () => {
@@ -460,7 +461,7 @@ describe('engine.js — Engine lifecycle', () => {
     // Simulate a 10-second gap (extreme lag)
     e.loop(10_000);
     e._running = false;
-    assert.ok(capturedDt <= MAX_DT, `dt ${capturedDt} should be <= MAX_DT ${MAX_DT}`);
+    assert.equal(capturedDt, MAX_DT, `dt should be clamped to exactly MAX_DT ${MAX_DT}`);
   });
 
   test('loop() dt is 1 on first tick (last === 0)', () => {
