@@ -8,12 +8,12 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from typing import ClassVar
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-# server.py lives in  Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/
-# Static files live in Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/           (one level up — the project root)
-# TLS certificates live in Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/assets/certs/
-DIR         = os.path.dirname(os.path.abspath(__file__))   # .../Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/assets/certs/
-ROOT        = os.path.dirname(DIR)                          # .../Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/
-CERT_DIR    = os.path.join(DIR, "certs")                    # .../Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/assets/certs/
+# server.py lives in  <project-root>/
+# Static files live in <project-root>/
+# TLS certificates live in <project-root>/assets/certs/
+DIR         = os.path.dirname(os.path.abspath(__file__))   # <project-root>/
+ROOT        = DIR                                           # <project-root>/  (server.py IS at the project root)
+CERT_DIR    = os.path.join(DIR, "assets", "certs")         # <project-root>/assets/certs/
 # Security note: For production deployments, change PUBLIC_ROOT to a dedicated
 # public/ subdirectory to prevent serving sensitive files from the project root.
 PUBLIC_ROOT = ROOT
@@ -90,6 +90,14 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _is_denied(self):
         # Strip query string and decode URL-encoding iteratively
+        """
+        Determine whether the current HTTP request path should be blocked.
+        
+        Checks the request path (after iterative URL-decoding and path normalization) and denies it if the final basename matches an entry in `Handler._DENIED`, if the resolved path lies inside the configured `CERT_DIR`, or if path resolution raises an error; the server root ("/") is allowed.
+        
+        Returns:
+            bool: `True` if the request should be denied, `False` otherwise.
+        """
         path = self.path.split('?')[0]
         while True:
             decoded = urllib.parse.unquote(path)
@@ -124,6 +132,21 @@ class Handler(SimpleHTTPRequestHandler):
         return False
 
     def end_headers(self):
+        """
+        Add standard security-related HTTP response headers before finalizing headers.
+        
+        This method injects:
+        - X-Content-Type-Options: nosniff
+        - X-Frame-Options: DENY
+        - Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; media-src 'self'; object-src 'none'; frame-ancestors 'none'
+        - Referrer-Policy: no-referrer
+        - Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+        
+        If `self.tls_enabled` is True, also adds:
+        - Strict-Transport-Security: max-age=31536000
+        
+        After adding headers, calls the superclass to complete header finalization.
+        """
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('X-Frame-Options', 'DENY')
         self.send_header(
@@ -133,7 +156,7 @@ class Handler(SimpleHTTPRequestHandler):
             "style-src 'self'; "
             "font-src 'self'; "
             "img-src 'self' data:; "
-            "media-src 'none'; "
+            "media-src 'self'; "
             "object-src 'none'; "
             "frame-ancestors 'none'"
         )

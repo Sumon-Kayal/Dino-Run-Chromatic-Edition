@@ -1,13 +1,43 @@
 # 🦕 Dino Run — Chromatic Edition
 
-A fully offline Chrome-style endless runner with day/night cycle,
-pterodactyls, persistent local leaderboard, and session stats.  
-No network calls · No tracking · No image assets.
+<div align="center">
 
-**Current version: 0.7.5-beta**
+![Dino Run Gameplay](assets/demo.gif)
 
-![CodeRabbit Pull Request Reviews](https://img.shields.io/coderabbit/prs/github/Sumon-Kayal/Dino-Run-Chromatic-Edition?utm_source=oss&utm_medium=github&utm_campaign=Sumon-Kayal%2FDino-Run-Chromatic-Edition&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews)
+**A pixel-perfect Chrome Dino clone with day/night cycle, pterodactyls,  
+persistent leaderboard, and physics calibrated to the Chromium source.**
 
+No ads · No tracking · No network calls · Runs 100% offline · Hz-independent physics
+
+[![GitHub Stars](https://img.shields.io/github/stars/Sumon-Kayal/Dino-Run-Chromatic-Edition?style=flat-square&logo=github)](https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition/stargazers)
+[![License](https://img.shields.io/github/license/Sumon-Kayal/Dino-Run-Chromatic-Edition?style=flat-square)](LICENSE)
+[![Version](https://img.shields.io/badge/version-0.7.5--beta-blue?style=flat-square)](CHANGELOG.md)
+[![CodeRabbit Reviews](https://img.shields.io/coderabbit/prs/github/Sumon-Kayal/Dino-Run-Chromatic-Edition?utm_source=oss&utm_medium=github&utm_campaign=Sumon-Kayal%2FDino-Run-Chromatic-Edition&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews&style=flat-square)](https://coderabbit.ai)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition/pulls)
+
+</div>
+
+---
+
+## 📋 Table of Contents
+
+- [✨ Features](#-features)
+- [📸 Screenshots](#-screenshots)
+- [🚀 Quick Start](#-quick-start)
+- [🖥️ Platform Setup Guide](#️-platform-setup-guide)
+- [🔐 Generating the Self-Signed Certificate](#-generating-the-self-signed-certificate)
+- [🔤 Fonts](#-fonts)
+- [🎮 Controls](#-controls)
+- [💾 Storage](#-storage)
+- [🏆 Leaderboard](#-leaderboard)
+- [♿ Accessibility](#-accessibility)
+- [🌐 Browser Compatibility](#-browser-compatibility)
+- [📁 Project Structure](#-project-structure)
+- [🔧 Technical Notes](#-technical-notes)
+- [🔒 Security](#-security)
+- [🧩 Architecture Notes](#-architecture-notes)
+- [📋 Changelog](#-changelog)
+- [📄 License](#-license)
 
 ---
 
@@ -28,6 +58,24 @@ No network calls · No tracking · No image assets.
 - **HTTPS dev server** with security headers, request timeout, and HTTP method guards (`server.py`)
 - **Modular ES module architecture** — game engine and DB layer split into focused, dependency-clean modules
 - **JSON-driven tuning** — physics, speed, obstacle geometry, and audio paths configurable without editing source code
+
+---
+
+## 📸 Screenshots
+
+<div align="center">
+
+| Start screen | Gameplay — day | Gameplay — night |
+|:---:|:---:|:---:|
+| ![Start](assets/screenshots/start.png) | ![Day](assets/screenshots/day.png) | ![Night](assets/screenshots/night.png) |
+
+| ★ NEW BEST banner | Mobile controls | Stats & leaderboard |
+|:---:|:---:|:---:|
+| ![New Best](assets/screenshots/newbest.png) | ![Mobile](assets/screenshots/mobile.png) | ![Stats](assets/screenshots/stats.png) |
+
+</div>
+
+> 📷 Add screenshots to `assets/screenshots/` to populate this section.
 
 ---
 
@@ -126,9 +174,11 @@ Dino-Run-Chromatic-Edition/
 │   ├── certs/
 │   │   ├── cert.pem            # Local TLS certificate — generate with openssl (not in git)
 │   │   └── key.pem             # Local TLS private key  — generate with openssl (not in git)
-│   └── fonts/
-│       ├── press-start-2p.woff2   # Pixel heading font
-│       └── vt323.woff2            # Monospace stats / leaderboard font
+│   ├── fonts/
+│   │   ├── press-start-2p.woff2   # Pixel heading font
+│   │   └── vt323.woff2            # Monospace stats / leaderboard font
+│   └── sprites/
+│       └── offline-sprite-1x.png  # Chromium offline dino sprite sheet
 ├── css/
 │   ├── base.css                # Reset, custom properties, layout primitives
 │   ├── game.css                # Canvas stack, overlays, HUD bar
@@ -181,9 +231,9 @@ Dino-Run-Chromatic-Edition/
 ├── README.md
 ├── CHANGELOG.md
 ├── THIRD_PARTY.md              # Third-party license attributions (Chromium BSD-3-Clause)
-└── LICENSE                    ## MIT
-
+└── LICENSE                     # MIT
 ```
+
 ---
 
 ## 🔤 Fonts
@@ -314,7 +364,7 @@ blocking alert with recovery steps. Quota usage is read via
 
 - Intrinsic resolution: **854 × 480 px (16:9)**, scaled to full width via CSS
 - **Three-layer canvas stack** (`bgCanvas` / `gameCanvas` / `uiCanvas`) — static background redrawn only on palette change; moving entities and HUD clear+repaint every frame
-- All sprites drawn with `fillRect` — zero image assets, zero HTTP requests for graphics
+- Sprites drawn from the Chromium offline dino sprite sheet (`offline-sprite-1x.png`) at `SPRITE_SCALE = 1.1`; source coordinates computed at draw time in the renderer
 - In fullscreen, canvas scales to fill the viewport maintaining 16:9 via CSS `min()`
 - `will-change: transform` promotes the canvas to its own GPU compositor layer
 - `contain: layout style` on the game frame isolates layout recalculation
@@ -508,6 +558,7 @@ These include:
 - Game logic concepts (physics, obstacle system, collision handling)
 - Structural behavior inspired by the original implementation
 - Audio assets ("jump", "die", "milestone" sounds)
+- Sprite sheet (`offline-sprite-1x.png`)
 
 All such components have been adapted, refactored, and integrated into a new modular architecture.
 
@@ -521,3 +572,13 @@ Redistributions of this project must retain:
 - The BSD 3-Clause License (Chromium components)
 
 See [THIRD_PARTY.md](THIRD_PARTY.md) for full license text and attribution details.
+
+---
+
+<div align="center">
+
+Made with ❤️ by [Sumon Kayal](https://github.com/Sumon-Kayal) · MIT © 2026
+
+⭐ Star the repo if you enjoy the game
+
+</div>
