@@ -8,12 +8,12 @@ from http.server import ThreadingHTTPServer, SimpleHTTPRequestHandler
 from typing import ClassVar
 
 # ── Paths ──────────────────────────────────────────────────────────────────────
-# server.py lives in  Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/
-# Static files live in Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/           (one level up — the project root)
-# TLS certificates live in Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/assets/certs/
-DIR         = os.path.dirname(os.path.abspath(__file__))   # .../Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/assets/certs/
-ROOT        = os.path.dirname(DIR)                          # .../Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/
-CERT_DIR    = os.path.join(DIR, "certs")                    # .../Dino-Run-Chromatic-Edition-main-Chromatic-Edition-main/assets/certs/
+# server.py lives in  <project-root>/
+# Static files live in <project-root>/
+# TLS certificates live in <project-root>/assets/certs/
+DIR         = os.path.dirname(os.path.abspath(__file__))   # <project-root>/
+ROOT        = DIR                                           # <project-root>/  (server.py IS at the project root)
+CERT_DIR    = os.path.join(DIR, "assets", "certs")         # <project-root>/assets/certs/
 # Security note: For production deployments, change PUBLIC_ROOT to a dedicated
 # public/ subdirectory to prevent serving sensitive files from the project root.
 PUBLIC_ROOT = ROOT
@@ -133,7 +133,7 @@ class Handler(SimpleHTTPRequestHandler):
             "style-src 'self'; "
             "font-src 'self'; "
             "img-src 'self' data:; "
-            "media-src 'none'; "
+            "media-src 'self'; "
             "object-src 'none'; "
             "frame-ancestors 'none'"
         )
