@@ -122,7 +122,7 @@ Dino-Run-Chromatic-Edition/
 │   │   ├── jump.mp3            # Jump sound (MP3)
 │   │   ├── jump.ogg            # Jump sound (OGG)
 │   │   ├── milestone.mp3       # Milestone sound (MP3)
-│   │   ├── milestone.ogg       # Milestone sound (OGG)
+│   │   └── milestone.ogg       # Milestone sound (OGG)
 │   ├── certs/
 │   │   ├── cert.pem            # Local TLS certificate — generate with openssl (not in git)
 │   │   └── key.pem             # Local TLS private key  — generate with openssl (not in git)
@@ -184,7 +184,6 @@ Dino-Run-Chromatic-Edition/
 └── LICENSE                    ## MIT
 
 ```
-
 ---
 
 ## 🔤 Fonts
