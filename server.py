@@ -124,6 +124,21 @@ class Handler(SimpleHTTPRequestHandler):
         return False
 
     def end_headers(self):
+        """
+        Add standard security-related HTTP response headers before finalizing headers.
+        
+        This method injects:
+        - X-Content-Type-Options: nosniff
+        - X-Frame-Options: DENY
+        - Content-Security-Policy: default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; media-src 'self'; object-src 'none'; frame-ancestors 'none'
+        - Referrer-Policy: no-referrer
+        - Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+        
+        If `self.tls_enabled` is True, also adds:
+        - Strict-Transport-Security: max-age=31536000
+        
+        After adding headers, calls the superclass to complete header finalization.
+        """
         self.send_header('X-Content-Type-Options', 'nosniff')
         self.send_header('X-Frame-Options', 'DENY')
         self.send_header(
