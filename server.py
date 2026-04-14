@@ -90,6 +90,14 @@ class Handler(SimpleHTTPRequestHandler):
 
     def _is_denied(self):
         # Strip query string and decode URL-encoding iteratively
+        """
+        Determine whether the current HTTP request path should be blocked.
+        
+        Checks the request path (after iterative URL-decoding and path normalization) and denies it if the final basename matches an entry in `Handler._DENIED`, if the resolved path lies inside the configured `CERT_DIR`, or if path resolution raises an error; the server root ("/") is allowed.
+        
+        Returns:
+            bool: `True` if the request should be denied, `False` otherwise.
+        """
         path = self.path.split('?')[0]
         while True:
             decoded = urllib.parse.unquote(path)
