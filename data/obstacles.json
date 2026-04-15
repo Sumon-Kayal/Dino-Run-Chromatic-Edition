@@ -3,5 +3,8 @@
     "width": 25,
     "height": 40,
     "minGap": 120
+  },
+  "ptera": {
+    "minGap": 150
   }
 }

@@ -22,19 +22,21 @@ No network calls · No tracking · No image assets.
 - [🚀 Quick Start](#-quick-start)
 - [🖥️ Platform Setup Guide](#️-platform-setup-guide)
 - [🔐 Generating the Self-Signed Certificate](#-generating-the-self-signed-certificate)
+- [📁 Project Structure](#-project-structure)
 - [🔤 Fonts](#-fonts)
 - [🎮 Controls](#-controls)
 - [💾 Storage](#-storage)
 - [🏆 Leaderboard](#-leaderboard)
 - [♿ Accessibility](#-accessibility)
 - [🌐 Browser Compatibility](#-browser-compatibility)
-- [📁 Project Structure](#-project-structure)
 - [🔧 Technical Notes](#-technical-notes)
 - [🔒 Security](#-security)
 - [🧩 Architecture Notes](#-architecture-notes)
 - [📋 Changelog](#-changelog)
 - [📄 License](#-license)
-
+- [Third-Party Components](#third-party-components)
+- [📜 Attribution](#-attribution)
+  
 ---
 
 ## ✨ Features
@@ -203,7 +205,12 @@ Dino-Run-Chromatic-Edition/
 ├── .gitignore                  # Excludes cert.pem / key.pem from version control
 ├── .github/
 │   └── workflows/
-│       └── codeql.yml          # CodeQL security analysis workflow
+│       ├── codeql.yml          # CodeQL security analysis workflow
+│       ├── semgrep.yml
+│       └── review.yml
+├── scripts/
+│   └── review.js
+├── semgrep.yml
 ├── README.md
 ├── CHANGELOG.md
 ├── THIRD_PARTY.md              # Third-party license attributions (Chromium BSD-3-Clause)

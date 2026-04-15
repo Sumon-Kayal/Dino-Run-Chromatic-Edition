@@ -1,0 +1,11 @@
+rules:
+  - id: no-console-log
+    pattern: console.log(...)
+    message: Remove debug logs before production
+    severity: WARNING
+    languages: [javascript, typescript]
+
+  - id: no-hardcoded-secret
+    pattern: password = "..."
+    message: Hardcoded secret detected
+    severity: ERROR
