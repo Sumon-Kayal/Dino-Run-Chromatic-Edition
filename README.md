@@ -203,7 +203,12 @@ Dino-Run-Chromatic-Edition/
 ├── .gitignore                  # Excludes cert.pem / key.pem from version control
 ├── .github/
 │   └── workflows/
-│       └── codeql.yml          # CodeQL security analysis workflow
+│       ├── codeql.yml          # CodeQL security analysis workflow
+│       ├── semgrep.yml
+│       └── review.yml
+├── scripts/
+│   └── review.js
+├── semgrep.yml
 ├── README.md
 ├── CHANGELOG.md
 ├── THIRD_PARTY.md              # Third-party license attributions (Chromium BSD-3-Clause)
