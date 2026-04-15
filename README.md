@@ -1,4 +1,4 @@
-# 🦕 Dino Run — Chromatic Edition 1
+# 🦕 Dino Run — Chromatic Edition
 
 <div align="center">
 
@@ -19,7 +19,6 @@ No network calls · No tracking · No image assets.
 ## 📋 Table of Contents
 
 - [✨ Features](#-features)
-- [📸 Screenshots](#-screenshots)
 - [🚀 Quick Start](#-quick-start)
 - [🖥️ Platform Setup Guide](#️-platform-setup-guide)
 - [🔐 Generating the Self-Signed Certificate](#-generating-the-self-signed-certificate)
