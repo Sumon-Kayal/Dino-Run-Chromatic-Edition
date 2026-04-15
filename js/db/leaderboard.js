@@ -60,9 +60,12 @@ function pruneAndSave(newLb, knownExisting) {
     }
   }
 
-  window.dispatchEvent(new CustomEvent('db:criticalFailure', {
-    detail: { message: 'Storage completely full — even top-5 pruning failed', key: KEY },
-  }));
+   const message = (combined.length > 5)
+     ? 'Storage completely full — even top-5 pruning failed'
+     : 'Storage completely full — leaderboard payload (<=5) failed to save';
+   window.dispatchEvent(new CustomEvent('db:criticalFailure', {
+     detail: { message, key: KEY },
+   }));
   return null;
 }
 
