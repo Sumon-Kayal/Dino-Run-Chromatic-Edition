@@ -21,7 +21,7 @@ jobs:
  
       - name: Get diff
         run: |
-          curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          curl -fsSL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
           ${{ github.event.pull_request.diff_url }} > diff.txt
 
       - name: Run review script
