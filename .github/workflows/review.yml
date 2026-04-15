@@ -30,6 +30,7 @@ jobs:
         run: node scripts/review.js
 
       - name: Comment on PR
+        uses: marocchino/sticky-pull-request-comment@<FULL_COMMIT_SHA_FOR_V2>
         uses: marocchino/sticky-pull-request-comment@REPLACE_WITH_SHA  # TODO: pin to commit SHA of v2 — see note below
         with:
           path: review.md
