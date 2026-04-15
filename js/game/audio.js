@@ -146,15 +146,18 @@ export function playBeep(freq, type, dur, vol, endF) {
 }
 
 // ── Public sound functions ────────────────────────────────
+// _playBuffer returns true (played), false (unavailable/failed), or
+// null (still loading). Treat null the same as false so the synth
+// fallback fires on early actions before the fetch completes.
 export function soundJump() {
   const result = _playBuffer('jump', 0.9);
-  if (result === false)
+  if (result !== true)
     playBeep(400, 'square', 0.12, 0.07, 880);
 }
 
 export function soundDie() {
   const result = _playBuffer('die', 1.0);
-  if (result === false) {
+  if (result !== true) {
     playBeep(440, 'square', 0.10, 0.08);
     _scheduleSound(function() { playBeep(220, 'square', 0.18, 0.07); }, 90);
   }
@@ -162,7 +165,7 @@ export function soundDie() {
 
 export function soundMilestone() {
   const result = _playBuffer('milestone', 0.85);
-  if (result === false) {
+  if (result !== true) {
     playBeep(660, 'square', 0.07, 0.07);
     _scheduleSound(function() { playBeep(880,  'square', 0.07, 0.07); },  70);
     _scheduleSound(function() { playBeep(1100, 'square', 0.12, 0.07); }, 140);
