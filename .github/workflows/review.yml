@@ -1,0 +1,26 @@
+name: PR Review Bot
+
+on:
+  pull_request:
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get diff
+        run: |
+          curl -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+          ${{ github.event.pull_request.diff_url }} > diff.txt
+
+      - name: Run review script
+        run: node scripts/review.js
+
+      - name: Comment on PR
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          path: review.md
