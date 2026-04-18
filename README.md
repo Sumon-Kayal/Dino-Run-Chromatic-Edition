@@ -30,9 +30,9 @@ No network calls · No tracking · No image assets.
 - [🔤 Fonts](#-fonts)
 - [🎮 Controls](#-controls)
 - [💾 Storage](#-storage)
-  - [🗝️ Storage keys](#️-storage-keys)
+  - [🗝️ Storage keys](#-storage-keys)
   - [📊 Quota handling](#-quota-handling)
-  - [⚙️ Reset options](#️-reset-options)
+  - [⚙️ Reset options](#-reset-options)
 - [🏆 Leaderboard](#-leaderboard)
 - [♿ Accessibility](#-accessibility)
 - [🌐 Browser Compatibility](#-browser-compatibility)
@@ -40,7 +40,7 @@ No network calls · No tracking · No image assets.
 - [🔒 Security](#-security)
 - [🧩 Architecture Notes](#-architecture-notes)
 - [🧪 Tests](#-tests)
-- [🗒️ Changelog](#️-changelog)
+- [🗒️ Changelog](#-changelog)
 - [📄 License](#-license)
 - [🔖 Third-Party Components](#-third-party-components)
 - [📜 Attribution](#-attribution)
@@ -214,14 +214,6 @@ Dino-Run-Chromatic-Edition/
 ├── tests/
 │   └── all.test.mjs            # Full test suite — DB layer + game logic
 ├── .gitignore                  # Excludes cert.pem / key.pem from version control
-├── .github/
-│   └── workflows/
-│       ├── codeql.yml          # CodeQL security analysis workflow
-│       ├── semgrep.yml         # Semgrep static analysis (uses root semgrep.yml rules)
-│       └── review.yml          # PR review bot — posts automated diff summary as PR comment
-├── scripts/
-│   └── review.js               # PR diff checker — outputs review.md for sticky comment
-├── semgrep.yml                 # Custom Semgrep rules (no-console-log, no-hardcoded-secret)
 ├── README.md                   # Project documentation (this file)
 ├── CHANGELOG.md                # Full release history with per-fix root-cause analysis
 ├── THIRD_PARTY.md              # Third-party license attributions (Chromium BSD-3-Clause)
@@ -289,9 +281,11 @@ usage (e.g. `LOCAL STORAGE · OFFLINE · 12KB (0.2%)`).
 
 ### 📊 Quota handling
 
-`localStorage` provides ~5 MB per origin in all major browsers. The game uses
-a few KB at most. `navigator.storage.persist()` is requested at startup to
-prevent eviction under browser storage pressure.
+`localStorage` storage quotas vary by browser, platform, and user settings,
+with ~5 MB per origin being a typical approximate value. The game uses a few
+KB at most. `navigator.storage.persist()` is called at startup to request
+persistent storage (though approval is not guaranteed) and help prevent
+eviction under browser storage pressure.
 
 If a write fails, the storage layer merges the new score with existing entries,
 sorts by score, and prunes to top-10 (falling back to top-5 if still too large).
