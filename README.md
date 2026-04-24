@@ -26,6 +26,7 @@ No network calls · No tracking · No image assets.
 - [🚀 Quick Start](#-quick-start)
 - [🖥️ Platform Setup Guide](#-platform-setup-guide)
 - [🔐 Generating the self-signed certificate](#-generating-the-self-signed-certificate)
+- [🟦 Caddy (alternative dev server)](#-caddy-alternative-dev-server)
 - [📁 Project Structure](#-project-structure)
 - [🔤 Fonts](#-fonts)
 - [🎮 Controls](#-controls)
@@ -60,7 +61,7 @@ No network calls · No tracking · No image assets.
 - **Keyboard shortcuts** — `Space`/`↑` jump · `↓` duck · `P` pause · `M` mute · `F` fullscreen
 - **Reset top score** — `✕` button beside the HI display resets the high score while keeping leaderboard records
 - **Accessible** — ARIA labels, live regions, screen-reader-compatible, `prefers-reduced-motion` support
-- **HTTPS dev server** — security headers, request timeout, and HTTP method guards (`server.py`)
+- **HTTPS dev server** — security headers and HTTP method guards for both options; per-request timeout (10-second guard) only in Python `server.py` (no direct per-request equivalent in `Caddyfile`)
 - **Modular ES module architecture** — game engine and DB layer split into focused, dependency-clean modules
 - **JSON-driven tuning** — physics, speed, obstacle geometry, and audio paths configurable without editing source code
 
@@ -79,6 +80,7 @@ cd Dino-Run-Chromatic-Edition
 
 If `assets/certs/cert.pem` / `assets/certs/key.pem` are missing, generate them
 before running `server.py` — see the [certificate section](#-generating-the-self-signed-certificate) below.
+If using Caddy instead, skip the certificate section — run `caddy trust` once and then `caddy run`.
 
 ---
 
@@ -132,7 +134,172 @@ python3 -m http.server 1999
 
 ---
 
+## 🟦 Caddy (alternative dev server)
+
+[Caddy v2](https://caddyserver.com) is a zero-config HTTPS server that provisions a trusted
+local certificate automatically — **no `openssl` command, no browser security
+warnings, no manual cert renewal.** If you prefer not to use `server.py` or
+Python, Caddy is a drop-in alternative that provides the same security headers,
+method guards, and certificate-directory protection defined in the `Caddyfile`
+at the project root.
+
+### One-time setup: trust the local CA
+
+```bash
+caddy trust
+```
+
+This installs Caddy's internal CA into your OS trust store so browsers
+accept `https://localhost` without a warning. Only required once per machine.
+
+> **Firefox** maintains its own trust store. After running `caddy trust`,
+> also visit `about:preferences#privacy` → **Certificates** → **View Certificates**
+> → **Authorities** → **Import** and import
+> `$HOME/.local/share/caddy/pki/authorities/local/root.crt`
+> (Linux) or the equivalent path on your platform.
+
+### 🪟 Windows
+
+```bash
+# Install (pick one)
+winget install Caddy.Caddy
+# — or —
+choco install caddy
+
+# Run from the project root
+cd Dino-Run-Chromatic-Edition/
+caddy run
+```
+
+Open: [`https://localhost:1999`](https://localhost:1999)
+
+### 🍎 macOS
+
+```bash
+brew install caddy
+
+cd Dino-Run-Chromatic-Edition/
+caddy run
+```
+
+Open: [`https://localhost:1999`](https://localhost:1999)
+
+### 🐧 Linux
+
+```bash
+# Debian / Ubuntu
+sudo apt install -y debian-keyring debian-archive-keyring apt-transport-https curl
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/gpg.key' \
+  | sudo gpg --dearmor -o /usr/share/keyrings/caddy-stable-archive-keyring.gpg
+curl -1sLf 'https://dl.cloudsmith.io/public/caddy/stable/debian.deb.txt' \
+  | sudo tee /etc/apt/sources.list.d/caddy-stable.list
+sudo apt update && sudo apt install caddy
+
+cd Dino-Run-Chromatic-Edition/
+caddy run
+```
+
+Open: [`https://localhost:1999`](https://localhost:1999)
+
+> Other distros: see the [official install guide](https://caddyserver.com/docs/install).
+
+### 📱 Termux (Android)
+
+Caddy is not in the standard Termux package index. Download the pre-built ARM64
+binary directly from the GitHub release page:
+
+```bash
+pkg update && pkg upgrade -y
+pkg install curl tar -y
+
+# Download and unpack the latest Caddy release for ARM64
+TAG=$(curl -s https://api.github.com/repos/caddyserver/caddy/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+curl -L "https://github.com/caddyserver/caddy/releases/download/${TAG}/caddy_${TAG}_linux_arm64.tar.gz" \
+  | tar -xz caddy
+chmod +x caddy
+```
+
+> **ARMv7 device?** Replace both occurrences of `arm64` (in the filename and tag variable) with `armv7` in the script above.  
+> Latest release URL: <https://github.com/caddyserver/caddy/releases/latest>
+
+#### Trust the local CA on Android
+
+`caddy trust` installs Caddy's CA into the system trust store, which requires
+root on Android. Use the manual import path instead:
+
+**Step 1 — generate the CA cert by starting Caddy once:**
+
+```bash
+cd Dino-Run-Chromatic-Edition/
+./caddy run &
+```
+
+Caddy writes its root CA to:
+
+```text
+$HOME/.local/share/caddy/pki/authorities/local/root.crt
+```
+
+**Step 2 — import the CA into Android:**
+
+1. Copy `root.crt` to a location accessible by the Android file manager
+   (e.g. `/sdcard/Download/caddy-root.crt`).
+2. Open **Android Settings → Security → Encryption & credentials →
+   Install a certificate → CA certificate**.
+3. Select `caddy-root.crt` and confirm.
+
+> The exact path varies by Android version and manufacturer skin — search
+> "Install CA certificate" in Android Settings if you cannot find it.
+
+**Step 3 — start Caddy properly:**
+
+```bash
+# Stop the background instance from Step 1
+kill %1
+
+# Start for real
+./caddy run
+```
+
+Open: [`https://localhost:1999`](https://localhost:1999)
+
+> **Rooted device?** You can run `./caddy trust` directly instead of the
+> manual import steps above.
+
+#### Moving Caddy to your PATH (optional)
+
+```bash
+mkdir -p $PREFIX/bin
+mv caddy $PREFIX/bin/caddy
+```
+
+After this, use `caddy run` instead of `./caddy run`.
+
+### Stopping Caddy
+
+Press `Ctrl+C` in the terminal where `caddy run` is active.
+
+### Caddy vs `server.py` — quick comparison
+
+| Feature | `server.py` | `Caddyfile` |
+|---|---|---|
+| Runtime required | Python 3.6+ | Caddy v2 binary |
+| TLS certificate | Manual `openssl` | Auto-provisioned |
+| Browser trust | Manual (accept warning) | `caddy trust` (desktop) / manual CA import (Android) |
+| Security headers | ✓ | ✓ (identical values) |
+| Cert-dir block (403) | ✓ | ✓ |
+| Method guards (405) | ✓ | ✓ |
+| HTTP fallback mode | `ALLOW_HTTP_FALLBACK=1` | Not applicable (always HTTPS) |
+| `Server:` header | `BaseHTTP/…` | Suppressed (`-Server`) |
+| Termux install | `pkg install python` | Manual binary download |
+
+---
+
 ## 🔐 Generating the self-signed certificate
+
+> **Caddy users can skip this section entirely.** `caddy trust` + `caddy run`
+> handle certificate provisioning automatically. The steps below apply only
+> to `server.py`.
 
 If `cert.pem` and `key.pem` are not present, generate them locally before
 running `server.py`:
@@ -209,8 +376,10 @@ Dino-Run-Chromatic-Edition/
 │   └── utils/
 │       └── utils.js            # Shared utilities: clamp, lerp, randomInt,
 │                               #   formatScore, deepClone
-├── server.py                   # HTTPS dev server with security headers (Python 3.6+)
+├── server.py                   # Python HTTPS dev server with security headers (Python 3.6+)
 │                               #   TLS certs live in assets/certs/ (cert.pem, key.pem)
+├── Caddyfile                   # Caddy v2 HTTPS dev server — alternative to server.py
+│                               #   Auto-provisions a trusted local cert via `caddy trust`
 ├── tests/
 │   └── all.test.mjs            # Full test suite — DB layer + game logic
 ├── .gitignore                  # Excludes cert.pem / key.pem from version control
@@ -464,7 +633,27 @@ Additional hardening:
 - **Dynamic deny list** — cert/key basenames derived at startup from the actual loaded paths (`assets/certs/`), not hardcoded strings
 - **Iterative URL decode** — path decoded in a loop until stable before basename extraction (blocks `/%2563ert.pem` and multi-encoded bypass attempts)
 
-### Client (`js/game/`, `js/db/`)
+### Server (`Caddyfile`)
+
+The `Caddyfile` enforces the same security posture as `server.py` via Caddy v2
+directives:
+
+| Header / Guard | Configured as |
+|---|---|
+| `X-Content-Type-Options` | `nosniff` |
+| `X-Frame-Options` | `DENY` |
+| `Content-Security-Policy` | Identical policy to `server.py` |
+| `Referrer-Policy` | `no-referrer` |
+| `Permissions-Policy` | camera, microphone, geolocation, payment — all disabled |
+| `Strict-Transport-Security` | `max-age=31536000` |
+| `Server:` header | Suppressed via `-Server` |
+| Method guards | `not method GET HEAD` → 405 |
+| Cert-dir block | `path /assets/certs/*` → 403 |
+
+Note: Caddy does not have a configurable per-request timeout equivalent to
+`server.py`'s 10-second timeout — rely on OS-level TCP keepalive for
+slowloris protection in the unlikely event that matters for a localhost dev
+server.
 
 - Player names rendered exclusively via `textContent` — zero `innerHTML`, zero XSS surface
 - Score validated as a finite non-negative number before storage — prevents NaN/Infinity corruption of `localStorage` and `Array.sort()`
