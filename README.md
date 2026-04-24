@@ -235,7 +235,7 @@ cd Dino-Run-Chromatic-Edition/
 
 Caddy writes its root CA to:
 
-```
+```text
 $HOME/.local/share/caddy/pki/authorities/local/root.crt
 ```
 
