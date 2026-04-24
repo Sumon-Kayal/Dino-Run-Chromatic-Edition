@@ -5,11 +5,11 @@
 localhost:1999 {
     root * .
 
+    @cert_dir path /assets/certs*
+    respond @cert_dir 403
+
     @denied_methods not method GET HEAD
     respond @denied_methods 405
-
-    @cert_dir path /assets/certs/*
-    respond @cert_dir 403
 
     header {
         X-Content-Type-Options "nosniff"
