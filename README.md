@@ -61,7 +61,7 @@ No network calls · No tracking · No image assets.
 - **Keyboard shortcuts** — `Space`/`↑` jump · `↓` duck · `P` pause · `M` mute · `F` fullscreen
 - **Reset top score** — `✕` button beside the HI display resets the high score while keeping leaderboard records
 - **Accessible** — ARIA labels, live regions, screen-reader-compatible, `prefers-reduced-motion` support
-- **HTTPS dev server** — security headers, request timeout, and HTTP method guards; Python (`server.py`) or Caddy v2 (`Caddyfile`)
+- **HTTPS dev server** — security headers and HTTP method guards for both options; per-request timeout (10-second guard) only in Python `server.py` (no direct per-request equivalent in `Caddyfile`)
 - **Modular ES module architecture** — game engine and DB layer split into focused, dependency-clean modules
 - **JSON-driven tuning** — physics, speed, obstacle geometry, and audio paths configurable without editing source code
 
@@ -213,12 +213,13 @@ pkg update && pkg upgrade -y
 pkg install curl tar -y
 
 # Download and unpack the latest Caddy release for ARM64
-curl -L https://github.com/caddyserver/caddy/releases/latest/download/caddy_linux_arm64.tar.gz \
+TAG=$(curl -s https://api.github.com/repos/caddyserver/caddy/releases/latest | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+curl -L "https://github.com/caddyserver/caddy/releases/download/${TAG}/caddy_${TAG}_linux_arm64.tar.gz" \
   | tar -xz caddy
 chmod +x caddy
 ```
 
-> **ARMv7 device?** Replace `arm64` with `armv7` in the URL above.  
+> **ARMv7 device?** Replace both occurrences of `arm64` (in the filename and tag variable) with `armv7` in the script above.  
 > Latest release URL: <https://github.com/caddyserver/caddy/releases/latest>
 
 #### Trust the local CA on Android
