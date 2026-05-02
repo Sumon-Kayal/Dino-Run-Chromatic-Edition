@@ -110,13 +110,18 @@ window.addEventListener('db:quotaFull', function () {
   DOM.dbStatus.style.setProperty('color', 'var(--danger)');
 });
 
-window.addEventListener('db:criticalFailure', function () {
+window.addEventListener('db:criticalFailure', function (e) {
   DOM.dbStatus.textContent = 'STORAGE FULL \u26A0 \u2014 Score not saved';
   DOM.dbStatus.style.setProperty('color', 'var(--danger)');
+
+  // Read the specific failure message from the event detail, if available
+  const failureMessage = (e && e.detail && e.detail.message)
+    ? e.detail.message
+    : 'Your score could not be saved because your browser\u2019s local storage is completely full.';
+
   alert(
     '\u26A0\uFE0F  STORAGE FULL\n\n' +
-    'Your score could not be saved because your browser\u2019s ' +
-    'local storage is completely full.\n\n' +
+    failureMessage + '\n\n' +
     'To fix this:\n' +
     '  1. Clear browser data for this site\n' +
     '  2. Click \u201CCLEAR\u201D to wipe the leaderboard\n' +

@@ -1144,9 +1144,17 @@ describe('css/ui.css — ce-pulse animation and speed-bar transition (PR change)
   test('ui.css animates .go-newbest:not(.hidden) with ce-pulse', async () => {
     const { readFileSync } = await import('node:fs');
     const css = readFileSync(path.join(ROOT, 'css/ui.css'), 'utf8');
+
+    // Parse CSS to locate the .go-newbest:not(.hidden) rule
+    const selectorPattern = /\.go-newbest:not\(\.hidden\)\s*\{([^}]+)\}/;
+    const match = css.match(selectorPattern);
+    assert.ok(match, 'ui.css must contain .go-newbest:not(.hidden) rule');
+
+    const ruleBody = match[1];
+    // Assert that the rule body contains an animation declaration referencing ce-pulse
     assert.ok(
-      css.includes('.go-newbest:not(.hidden)'),
-      'ui.css must scope animation to .go-newbest:not(.hidden)'
+      /animation\s*:\s*[^;]*ce-pulse/.test(ruleBody),
+      'Rule body must contain animation declaration referencing ce-pulse'
     );
   });
 
@@ -1195,20 +1203,66 @@ describe('css/accessibility.css — focus ring and reduced-motion (PR change)', 
   test('accessibility.css reduced-motion block suppresses .go-newbest:not(.hidden)', async () => {
     const { readFileSync } = await import('node:fs');
     const css = readFileSync(path.join(ROOT, 'css/accessibility.css'), 'utf8');
-    // The PR updated the reduced-motion block to include .go-newbest:not(.hidden)
+
+    // Parse the @media (prefers-reduced-motion: reduce) block using brace counting
+    const startPattern = /@media\s*\(prefers-reduced-motion\s*:\s*reduce\)\s*\{/;
+    const startMatch = css.match(startPattern);
+    assert.ok(startMatch, 'accessibility.css must contain @media (prefers-reduced-motion: reduce) block');
+
+    const startPos = startMatch.index + startMatch[0].length;
+    let braceCount = 1;
+    let endPos = startPos;
+    for (let i = startPos; i < css.length && braceCount > 0; i++) {
+      if (css[i] === '{') braceCount++;
+      else if (css[i] === '}') braceCount--;
+      if (braceCount === 0) {
+        endPos = i;
+        break;
+      }
+    }
+    const mediaBody = css.substring(startPos, endPos);
+
+    // Look for .go-newbest:not(.hidden) rule inside the media block
+    const goNewbestPattern = /\.go-newbest:not\(\.hidden\)\s*\{([^}]+)\}/;
+    const ruleMatch = mediaBody.match(goNewbestPattern);
+    assert.ok(ruleMatch, 'reduced-motion block must contain .go-newbest:not(.hidden) rule');
+
+    const ruleBody = ruleMatch[1];
+    // Assert that the rule body sets animation: none
     assert.ok(
-      css.includes('.go-newbest:not(.hidden)'),
-      'reduced-motion must suppress .go-newbest:not(.hidden) animation'
+      /animation\s*:\s*none/.test(ruleBody),
+      'Rule body must contain animation: none declaration'
     );
   });
 
   test('accessibility.css reduced-motion block uses animation: none for .go-newbest', async () => {
     const { readFileSync } = await import('node:fs');
     const css = readFileSync(path.join(ROOT, 'css/accessibility.css'), 'utf8');
-    // Check that the ce-pulse comment is updated
-    assert.ok(
-      css.includes('ce-pulse') || css.includes('go-newbest'),
-      'reduced-motion block must reference go-newbest or ce-pulse'
-    );
+
+    // Parse the @media (prefers-reduced-motion: reduce) block using brace counting
+    const startPattern = /@media\s*\(prefers-reduced-motion\s*:\s*reduce\)\s*\{/;
+    const startMatch = css.match(startPattern);
+    assert.ok(startMatch, 'accessibility.css must contain @media (prefers-reduced-motion: reduce) block');
+
+    const startPos = startMatch.index + startMatch[0].length;
+    let braceCount = 1;
+    let endPos = startPos;
+    for (let i = startPos; i < css.length && braceCount > 0; i++) {
+      if (css[i] === '{') braceCount++;
+      else if (css[i] === '}') braceCount--;
+      if (braceCount === 0) {
+        endPos = i;
+        break;
+      }
+    }
+    const mediaBody = css.substring(startPos, endPos);
+
+    // Check for both .go-newbest and .go-newbest:not(.hidden) selectors
+    const hasGoNewbest = /\.go-newbest/.test(mediaBody);
+    assert.ok(hasGoNewbest, 'reduced-motion block must reference .go-newbest');
+
+    // Verify that animation: none is set
+    const hasAnimationNone = /animation\s*:\s*none/.test(mediaBody);
+    assert.ok(hasAnimationNone, 'reduced-motion block must set animation: none');
   });
 });

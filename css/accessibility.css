@@ -30,7 +30,7 @@
    and must not play when the user has indicated motion sensitivity. */
 @media (prefers-reduced-motion: reduce) {
   .blink      { animation: none; opacity: 1; }
-  .go-newbest,
+  .go-newbest { animation: none; }
   .go-newbest:not(.hidden) { animation: none; }
   .db-dot     { animation: none; opacity: 1; }
 }
