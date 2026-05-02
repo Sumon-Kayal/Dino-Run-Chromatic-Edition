@@ -311,7 +311,7 @@ function toggleFullscreen() {
   const isFs = document.fullscreenElement || document.webkitFullscreenElement;
   if (!isFs) {
     const req = el.requestFullscreen
-
+      ? el.requestFullscreen()
       : el.webkitRequestFullscreen
         ? el.webkitRequestFullscreen()
         : null;
@@ -450,11 +450,11 @@ function renderLeaderboard(lb) {
     const tr    = document.createElement('tr');
     const color = medals[i] || null;
 
-    const cols  = [String(i + 1), entry.name || 'ANON', String(entry.score).padStart(5, '0'), entry.when];
+    const cols  = [String(i + 1), entry.name || 'ANON', String(entry.score).padStart(5, '0'), entry.when || entry.date || '--'];
 
     cols.forEach((val, ci) => {
       const td = document.createElement('td');
-      if (ci === 0) {
+
         const badge       = document.createElement('span');
         badge.className   = 'rank-badge';
         badge.textContent = val;

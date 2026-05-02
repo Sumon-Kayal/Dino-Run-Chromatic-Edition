@@ -400,7 +400,7 @@ Dino-Run-Chromatic-Edition/
 │   │   ├── renderer.js         # Three-layer canvas renderer (bgCanvas / gameCanvas / uiCanvas)
 │   │   └── input.js            # Keyboard + mobile touch controls; full listener teardown
 │   ├── db/
-│   │   ├── database.js         # Core entry point: dbGet / dbSet + barrel re-exports for all db sub-modules
+│   │   ├── database.js         # dbGet / dbSet (localStorage + in-memory fallback)
 │   │   ├── storage.js          # Quota tracking + db:quota / db:criticalFailure events
 │   │   ├── leaderboard.js      # Top-10 leaderboard with pruning fallback
 │   │   └── stats.js            # Stats, player name, schema migration
@@ -736,7 +736,7 @@ and `runtime.js`. Prefer importing directly from those source modules.
 
 | Module | Concern | Key detail |
 |-------------|------------------------|------------|
-| `database.js` | Backend + entry point | Try/catch probe at load; `dbGet` / `dbSet` API; re-exports all public symbols from `leaderboard`, `stats`, `storage` |
+| `database.js` | Backend | Try/catch probe at load; `dbGet` / `dbSet` API |
 | `storage.js` | Quota | Debounced 2 s polling; `navigator.storage.persist()` at startup |
 | `leaderboard.js` | Scores | `pruneAndSave` falls back to top-5; dispatches `db:criticalFailure` on total failure |
 | `stats.js` | Stats & migration | `migrate()` IIFE at boot; v0→v1 backfills missing `recordId` fields |
