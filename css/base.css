@@ -36,6 +36,27 @@
   --overlay-bg:    rgba(255, 255, 255, 0.93); /* semi-transparent game overlays */
   --separator:     rgba(224, 224, 224, 0.6);  /* stat-row / table row dividers  */
   --controls-overlay-bg: rgba(0, 0, 0, 0.45); /* fullscreen bottom controls bar */
+
+  /* ── Chromatic Edition theme tokens ────────────────────── */
+  /* Day palette (mirrors js/game/renderer.js day values) */
+  --ce-day-bg:    #ffffff;
+  --ce-day-fg:    #535353;
+  --ce-day-dim:   #d4d4d4;
+
+  /* Night palette */
+  --ce-night-bg:  #404040;
+  --ce-night-fg:  #f0f0f0;
+  --ce-night-dim: #606060;
+
+  /* Speed-bar accent ramp (matches SPEED_BAR_LUTS in renderer.js) */
+  --ce-blue:      #1a73e8;
+  --ce-orange:    #e67e22;
+  --ce-red:       #c0392b;
+
+  /* Leaderboard medal colours */
+  --ce-gold:      #ffd700;
+  --ce-silver:    #c0c0c0;
+  --ce-bronze:    #cd7f32;
 }
 
 /* ── RESET ───────────────────────────────────────────────── */
@@ -44,6 +65,18 @@
   padding: 0;
   box-sizing: border-box;
 }
+
+/* ── TEXT SELECTION ──────────────────────────────────────── */
+::selection {
+  background: var(--ce-blue);
+  color: #fff;
+}
+
+/* ── CUSTOM SCROLLBAR (Chromium / WebKit) ────────────────── */
+::-webkit-scrollbar             { width: 6px; height: 6px; }
+::-webkit-scrollbar-track       { background: transparent; }
+::-webkit-scrollbar-thumb       { background: var(--ce-day-dim); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--ce-day-fg); }
 
 /* ── BODY ────────────────────────────────────────────────── */
 body {

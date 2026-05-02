@@ -67,7 +67,16 @@
   font-size: 10px;
   color: var(--gold);
   letter-spacing: 0.1em;
-  animation: pulse 1s infinite;
+}
+
+.go-newbest:not(.hidden) {
+  animation: ce-pulse 0.9s ease-in-out infinite;
+}
+
+/* ── NEW BEST badge pulse ────────────────────────────────── */
+@keyframes ce-pulse {
+  0%, 100% { opacity: 1;   transform: scale(1);    }
+  50%       { opacity: 0.7; transform: scale(1.08); }
 }
 
 /* Shared button style */
@@ -166,6 +175,7 @@
   background: linear-gradient(90deg, var(--blue), var(--danger));
   border-radius: 2px;
   width: 0%;
+  transition: width 80ms linear;
 }
 
 /* ── DB BADGE ────────────────────────────────────────────── */
