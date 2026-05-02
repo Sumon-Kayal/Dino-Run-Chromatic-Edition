@@ -52,17 +52,19 @@ function pruneAndSave(newLb, knownExisting) {
   }
 
   // Only attempt a prune if it would actually reduce the payload size.
+  let prunedToFive = false;
   if (combined.length > 5) {
     combined = combined.slice(0, 5);
+    prunedToFive = true;
     if (dbSet(KEY, JSON.stringify(combined))) {
       console.warn('[DB] Storage critical: pruned to top 5');
       return combined;
     }
   }
 
-   const message = (combined.length > 5)
-     ? 'Storage completely full — even top-5 pruning failed'
-     : 'Storage completely full — leaderboard payload (<=5) failed to save';
+  const message = prunedToFive
+    ? 'Storage completely full — even top-5 pruning failed'
+    : 'Storage completely full — leaderboard payload (<=5) failed to save';
    window.dispatchEvent(new CustomEvent('db:criticalFailure', {
      detail: { message, key: KEY },
    }));
