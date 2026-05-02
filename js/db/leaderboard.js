@@ -51,7 +51,8 @@ function pruneAndSave(newLb, knownExisting) {
     if (dbSet(KEY, JSON.stringify(combined))) return combined;
   }
 
-  // Only attempt a prune if it would actually reduce the payload size.
+  // Prune to top-5 if the payload is too large; otherwise attempt the
+  // ≤5 write directly (initial top-10 write was skipped via knownExisting).
   let prunedToFive = false;
   if (combined.length > 5) {
     combined = combined.slice(0, 5);
@@ -60,6 +61,10 @@ function pruneAndSave(newLb, knownExisting) {
       console.warn('[DB] Storage critical: pruned to top 5');
       return combined;
     }
+  } else {
+    // Payload already ≤5 but the caller skipped the initial write (knownExisting
+    // path). Attempt the write here before giving up.
+    if (dbSet(KEY, JSON.stringify(combined))) return combined;
   }
 
   const message = prunedToFive
