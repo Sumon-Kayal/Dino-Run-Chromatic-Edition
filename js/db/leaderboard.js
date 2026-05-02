@@ -65,9 +65,9 @@ function pruneAndSave(newLb, knownExisting) {
   const message = prunedToFive
     ? 'Storage completely full — even top-5 pruning failed'
     : 'Storage completely full — leaderboard payload (<=5) failed to save';
-   window.dispatchEvent(new CustomEvent('db:criticalFailure', {
-     detail: { message, key: KEY },
-   }));
+  window.dispatchEvent(new CustomEvent('db:criticalFailure', {
+    detail: { message, key: KEY },
+  }));
   return null;
 }
 

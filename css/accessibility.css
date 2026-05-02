@@ -31,5 +31,6 @@
 @media (prefers-reduced-motion: reduce) {
   .blink      { animation: none; opacity: 1; }
   .go-newbest,
-  .go-newbest:not(.hidden) { animation: none; }   .db-dot     { animation: none; opacity: 1; }
+  .go-newbest:not(.hidden) { animation: none; }
+  .db-dot     { animation: none; opacity: 1; }
 }
