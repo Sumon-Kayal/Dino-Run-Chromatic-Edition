@@ -26,14 +26,14 @@ function makeId() {
 }
 
 /**
- * Merge + prune leaderboard to fit under quota.
- * Falls back from top-10 to top-5. Returns saved array or null.
+ * Merge incoming leaderboard entries into the stored leaderboard, trim to capacity, and persist with a top-10 → top-5 fallback.
  *
- * When knownExisting is supplied (called from saveLeaderboard after a
- * failed dbSet) the top-10 attempt is skipped — the caller already tried
- * that.  For leaderboards already at ≤5 entries there is nothing left to
- * prune, so skip straight to the criticalFailure event rather than making
- * an identical second write that is guaranteed to fail.
+ * If `knownExisting` is provided it is used instead of reading storage and the initial top-10 write attempt is skipped.
+ * On successful save returns the saved leaderboard (trimmed to either 10 or 5 entries); on failure dispatches a `db:criticalFailure` event and returns `null`.
+ *
+ * @param {Array<object>} newLb - New leaderboard entries to merge (objects with at least `recordId` and `score` properties).
+ * @param {Array<object>} [knownExisting] - Optional existing leaderboard to use instead of reading from storage; when supplied the initial top-10 save attempt is not performed.
+ * @returns {Array<object>|null} The saved leaderboard array (top-10 or top-5) on success, or `null` if persisting failed.
  */
 function pruneAndSave(newLb, knownExisting) {
   const existing = knownExisting || (function () {

@@ -129,9 +129,14 @@ window.addEventListener('db:criticalFailure', function () {
 const engine     = new Engine(update, draw);
 let   idleRafId  = null;
 
-/* ───────────────────────────────────────────────────────────
-   INIT / RESET
-   ─────────────────────────────────────────────────────────── */
+/**
+ * Reset runtime game state to initial values and initialize gameplay subsystems for a new run.
+ *
+ * Resets score, speed, timers, counters, flags, and environmental state; repositions the moon;
+ * initializes player and obstacle systems; clears any active duck input state; generates
+ * cloud and star collections used by the renderer; and rebuilds the sky layer to reflect the
+ * new environment.
+ */
 function initGame() {
   cancelSoundTimers();
   G.score           = 0;
@@ -203,6 +208,13 @@ function restart() {
   engine.start();
 }
 
+/**
+ * Transition the game into the "dead" state and finalize the run.
+ *
+ * Stops gameplay, records session and persistent statistics (score, time, deaths, obstacles),
+ * attempts to add the score to the leaderboard and save DB stats, rolls back persistent changes
+ * on storage failure, and updates leaderboard and game-over UI elements accordingly.
+ */
 function gameOver() {
   if (G.state === 'dead') return;
   G.state = 'dead';
@@ -554,6 +566,13 @@ async function loadJSON(path) {
     DOM.loadingBar.style.width  = pct + '%';
     if (hint) DOM.loadingHint.textContent = hint;
   }
+  /**
+   * Hide the loading screen and reveal the start screen.
+   *
+   * Updates UI state by adding the `hidden` class to the loading screen, removing the
+   * `hidden` class from the start screen, and setting the start screen's `aria-hidden`
+   * attribute to `"false"` for accessibility.
+   */
   function hideLoading() {
     DOM.loadingScreen.classList.add('hidden');
     DOM.startScreen.classList.remove('hidden');

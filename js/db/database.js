@@ -39,10 +39,12 @@ export function dbGet(key) {
 }
 
 /**
- * Write a value to storage.
- * @param {string} key
- * @param {string} val  - must be a string (JSON.stringify first)
- * @returns {boolean} true = success, false = quota exceeded / error
+ * Store a string value under the given key in the selected storage backend.
+ *
+ * If the storage quota is exceeded, dispatches a `db:quotaFull` CustomEvent on window.
+ * @param {string} key - The storage key.
+ * @param {string} val - The string value to store; call `JSON.stringify` first for non-strings.
+ * @returns {boolean} `true` if the value was stored, `false` if an error occurred or the quota was exceeded.
  */
 export function dbSet(key, val) {
   if (useLocalStorage) {

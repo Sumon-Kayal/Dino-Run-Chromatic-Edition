@@ -99,7 +99,13 @@ function _loadAllBuffers() {
     });
 }
 
-// ── Playback ─────────────────────────────────────────────
+/**
+ * Play a cached AudioBuffer corresponding to the provided sound key.
+ * Attempts to schedule playback using the shared AudioContext; if the specific buffer is still loading, returns `null` to indicate a deferred fallback should be used.
+ * @param {string} key - Sound key identifying the cached buffer (e.g., "jump", "die", "milestone").
+ * @param {number} [vol] - Playback gain multiplier (defaults to 1.0 when omitted).
+ * @returns {true | null | false} `true` if playback was successfully scheduled, `null` if the requested buffer is still loading, `false` if muted, no audio context, the buffer is missing, or scheduling failed.
+ */
 function _playBuffer(key, vol) {
   if (soundMuted || !audioCtx) return false;
   // Per-key check first: if this buffer loaded successfully, play it regardless
