@@ -735,6 +735,7 @@ describe('input.js — mute-toggle emoji fix (PR fix)', () => {
     // Verify that setupInput attaches a click handler to muteBtn and that clicking
     // it toggles the mute state.
     const clickHandlers = [];
+    const removeEventListenerCalls = [];
     const muteBtnStub = {
       textContent: '',
       classList: { toggle() {}, add() {}, remove() {} },
@@ -742,7 +743,9 @@ describe('input.js — mute-toggle emoji fix (PR fix)', () => {
       addEventListener(evt, fn) {
         if (evt === 'click') clickHandlers.push(fn);
       },
-      removeEventListener() {},
+      removeEventListener(evt, fn) {
+        if (evt === 'click') removeEventListenerCalls.push({ evt, fn });
+      },
     };
 
     const makeDOMStub = () => ({
@@ -791,9 +794,11 @@ describe('input.js — mute-toggle emoji fix (PR fix)', () => {
     // Call teardownInput to remove handlers
     teardownInput();
 
-    // Verify no extra handlers remain by checking that clickHandlers array is stable
-    const handlerCountAfterTeardown = clickHandlers.length;
-    assert.equal(handlerCountAfterTeardown, 1, 'teardownInput should clean up listeners');
+    // Verify that removeEventListener was called with the expected handler
+    assert.ok(removeEventListenerCalls.length > 0, 'teardownInput should call removeEventListener');
+    const muteBtnRemoveCalls = removeEventListenerCalls.filter(call => call.evt === 'click');
+    assert.ok(muteBtnRemoveCalls.length > 0, 'removeEventListener should be called for click event');
+    assert.equal(muteBtnRemoveCalls[0].fn, clickHandlers[0], 'removeEventListener should be called with the original handler');
 
     // Restore mute state
     setSoundMuted(false);
@@ -915,8 +920,24 @@ describe('main.js — renderLeaderboard medal CSS custom properties (PR fix)', (
   // The PR changed medals from hardcoded hex strings to CSS custom properties.
   // Before: ['#ffd700', '#c0c0c0', '#cd7f32']
   // After:  ['var(--ce-gold)', 'var(--ce-silver)', 'var(--ce-bronze)']
+  // These tests verify the actual source code in js/main.js to catch regressions.
 
-  const medals = ['var(--ce-gold)', 'var(--ce-silver)', 'var(--ce-bronze)'];
+  let medals;
+  before(async () => {
+    // Read and parse the medals array from js/main.js source
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(path.join(ROOT, 'js/main.js'), 'utf8');
+
+    // Extract the medals array definition from the renderLeaderboard function
+    // Pattern: const medals = ['...', '...', '...'];
+    const medalsPattern = /const medals\s*=\s*\[([^\]]+)\]/;
+    const match = src.match(medalsPattern);
+    assert.ok(match, 'js/main.js must contain medals array definition');
+
+    // Parse the array literal by evaluating it
+    const medalsArrayLiteral = '[' + match[1] + ']';
+    medals = eval(medalsArrayLiteral);
+  });
 
   test('medals array uses CSS custom properties, not hardcoded hex', () => {
     medals.forEach((m) => {
