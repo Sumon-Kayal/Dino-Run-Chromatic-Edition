@@ -455,7 +455,8 @@ function renderLeaderboard(lb) {
     cols.forEach((val, ci) => {
       const td = document.createElement('td');
 
-        const badge       = document.createElement('span');
+      if (ci === 0) {
+              const badge       = document.createElement('span');
         badge.className   = 'rank-badge';
         badge.textContent = val;
         td.appendChild(badge);
