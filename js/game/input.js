@@ -63,7 +63,7 @@ export function setupInput(DOM, handlers) {
       const muted = !getSoundMuted();
       setSoundMuted(muted);
       initAudio();
-      DOM.muteBtn.textContent = muted ? '\uD83D\uDD07' : '\uD83D\uDD06';
+      DOM.muteBtn.textContent = muted ? '\uD83D\uDD07' : '\uD83D\uDD0A';
       DOM.muteBtn.classList.toggle('active', muted);
       DOM.muteBtn.setAttribute('aria-pressed', String(muted));
     }
@@ -132,7 +132,7 @@ export function setupInput(DOM, handlers) {
     const muted = !getSoundMuted();
     setSoundMuted(muted);
     initAudio();
-    this.textContent = muted ? '\uD83D\uDD07' : '\uD83D\uDD06';
+    this.textContent = muted ? '\uD83D\uDD07' : '\uD83D\uDD0A';
     this.classList.toggle('active', muted);
     this.setAttribute('aria-pressed', String(muted));
   });

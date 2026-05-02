@@ -102,8 +102,10 @@ function _loadAllBuffers() {
 // ── Playback ─────────────────────────────────────────────
 function _playBuffer(key, vol) {
   if (soundMuted || !audioCtx) return false;
-  if (_loadState === 'failed') return false;
-  if (_loadState === 'loading') return null;
+  // Per-key check first: if this buffer loaded successfully, play it regardless
+  // of whether other files failed. _loadState==='failed' only means at least one
+  // OTHER key failed — it should not silence a successfully-loaded buffer.
+  if (_loadState === 'loading' && !_buffers[key]) return null;
   if (!_buffers[key]) return false;
   resumeAudio();
   try {
