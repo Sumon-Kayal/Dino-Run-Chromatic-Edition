@@ -1206,6 +1206,33 @@ describe('css/ui.css — ce-pulse animation and speed-bar transition (PR change)
 // ═══════════════════════════════════════════════════════════════
 
 describe('css/accessibility.css — focus ring and reduced-motion (PR change)', () => {
+  /**
+   * Helper function to extract the @media (prefers-reduced-motion: reduce) block
+   * from a CSS string using brace counting.
+   * @param {string} css - The CSS content to parse
+   * @returns {string} The media block body (content between the outer braces)
+   * @throws {Error} If the media block is not found
+   */
+  function getMediaBlock(css) {
+    const startPattern = /@media\s*\(prefers-reduced-motion\s*:\s*reduce\)\s*\{/;
+    const startMatch = css.match(startPattern);
+    assert.ok(startMatch, 'accessibility.css must contain @media (prefers-reduced-motion: reduce) block');
+
+    const startPos = startMatch.index + startMatch[0].length;
+    let braceCount = 1;
+    let endPos = startPos;
+    for (let i = startPos; i < css.length && braceCount > 0; i++) {
+      if (css[i] === '{') braceCount++;
+      else if (css[i] === '}') braceCount--;
+      if (braceCount === 0) {
+        endPos = i;
+        break;
+      }
+    }
+    const mediaBody = css.substring(startPos, endPos);
+    return mediaBody;
+  }
+
   test('accessibility.css contains :focus-visible rule', async () => {
     const { readFileSync } = await import('node:fs');
     const css = readFileSync(path.join(ROOT, 'css/accessibility.css'), 'utf8');
@@ -1225,23 +1252,7 @@ describe('css/accessibility.css — focus ring and reduced-motion (PR change)', 
     const { readFileSync } = await import('node:fs');
     const css = readFileSync(path.join(ROOT, 'css/accessibility.css'), 'utf8');
 
-    // Parse the @media (prefers-reduced-motion: reduce) block using brace counting
-    const startPattern = /@media\s*\(prefers-reduced-motion\s*:\s*reduce\)\s*\{/;
-    const startMatch = css.match(startPattern);
-    assert.ok(startMatch, 'accessibility.css must contain @media (prefers-reduced-motion: reduce) block');
-
-    const startPos = startMatch.index + startMatch[0].length;
-    let braceCount = 1;
-    let endPos = startPos;
-    for (let i = startPos; i < css.length && braceCount > 0; i++) {
-      if (css[i] === '{') braceCount++;
-      else if (css[i] === '}') braceCount--;
-      if (braceCount === 0) {
-        endPos = i;
-        break;
-      }
-    }
-    const mediaBody = css.substring(startPos, endPos);
+    const mediaBody = getMediaBlock(css);
 
     // Look for .go-newbest:not(.hidden) rule inside the media block
     const goNewbestPattern = /\.go-newbest:not\(\.hidden\)\s*\{([^}]+)\}/;
@@ -1260,23 +1271,7 @@ describe('css/accessibility.css — focus ring and reduced-motion (PR change)', 
     const { readFileSync } = await import('node:fs');
     const css = readFileSync(path.join(ROOT, 'css/accessibility.css'), 'utf8');
 
-    // Parse the @media (prefers-reduced-motion: reduce) block using brace counting
-    const startPattern = /@media\s*\(prefers-reduced-motion\s*:\s*reduce\)\s*\{/;
-    const startMatch = css.match(startPattern);
-    assert.ok(startMatch, 'accessibility.css must contain @media (prefers-reduced-motion: reduce) block');
-
-    const startPos = startMatch.index + startMatch[0].length;
-    let braceCount = 1;
-    let endPos = startPos;
-    for (let i = startPos; i < css.length && braceCount > 0; i++) {
-      if (css[i] === '{') braceCount++;
-      else if (css[i] === '}') braceCount--;
-      if (braceCount === 0) {
-        endPos = i;
-        break;
-      }
-    }
-    const mediaBody = css.substring(startPos, endPos);
+    const mediaBody = getMediaBlock(css);
 
     // Check for both .go-newbest and .go-newbest:not(.hidden) selectors
     const hasGoNewbest = /\.go-newbest/.test(mediaBody);
