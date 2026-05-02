@@ -68,7 +68,7 @@ export function dbSet(key, val) {
       return false;
     }
   }
-  memStore[key] = val;
+  memStore[key] = String(val);
   return true;
 }
 
