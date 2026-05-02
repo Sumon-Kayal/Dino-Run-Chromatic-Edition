@@ -411,10 +411,13 @@ Dino-Run-Chromatic-Edition/
 │                               #   TLS certs live in assets/certs/ (cert.pem, key.pem)
 ├── Caddyfile                   # Caddy v2 HTTPS dev server — alternative to server.py
 │                               #   Auto-provisions a trusted local cert via `caddy trust`
+├── tests/
+│   └── all.test.mjs            # Node --test regression suite — DB layer, audio, input,
+│                               #   leaderboard pruning, and game-logic changes (v0.8.0-beta)
 ├── .gitignore                  # Excludes cert.pem / key.pem from version control
 ├── README.md                   # Project documentation (this file)
 ├── CHANGELOG.md                # Full release history with per-fix root-cause analysis
-├── THIRD_PARTY.md              # Third-party license attributions (Chromium BSD-3-Clause)
+
 └── LICENSE                     # MIT
 
 ```
