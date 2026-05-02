@@ -450,7 +450,7 @@ function renderLeaderboard(lb) {
     const tr    = document.createElement('tr');
     const color = medals[i] || null;
 
-    const cols  = [String(i + 1), entry.name || 'ANON', String(entry.score).padStart(5, '0'), when];
+    const cols  = [String(i + 1), entry.name || 'ANON', String(entry.score).padStart(5, '0'), entry.when];
 
     cols.forEach((val, ci) => {
       const td = document.createElement('td');
