@@ -650,7 +650,7 @@ Every HTTP response includes the following security headers:
 |--------|-------|
 | `X-Content-Type-Options` | `nosniff` — blocks MIME sniffing |
 | `X-Frame-Options` | `DENY` — blocks clickjacking via iframe |
-| `Content-Security-Policy` | `default-src 'self'`; `img-src 'self' data:` for SVG favicon |
+| `Content-Security-Policy` | `default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; media-src 'self'; object-src 'none'; frame-ancestors 'none'` |
 | `Referrer-Policy` | `no-referrer` — no URL leakage |
 | `Permissions-Policy` | camera, microphone, geolocation, payment — all disabled |
 | `Strict-Transport-Security` | `max-age=31536000` — HTTPS-only for 1 year |
