@@ -26,14 +26,14 @@ function makeId() {
 }
 
 /**
- * Merge + prune leaderboard to fit under quota.
- * Falls back from top-10 to top-5. Returns saved array or null.
+ * Merge incoming leaderboard entries into the stored leaderboard, trim to capacity, and persist with a top-10 → top-5 fallback.
  *
- * When knownExisting is supplied (called from saveLeaderboard after a
- * failed dbSet) the top-10 attempt is skipped — the caller already tried
- * that.  For leaderboards already at ≤5 entries there is nothing left to
- * prune, so skip straight to the criticalFailure event rather than making
- * an identical second write that is guaranteed to fail.
+ * If `knownExisting` is provided it is used instead of reading storage and the initial top-10 write attempt is skipped.
+ * On successful save returns the saved leaderboard (trimmed to either 10 or 5 entries); on failure dispatches a `db:criticalFailure` event and returns `null`.
+ *
+ * @param {Array<object>} newLb - New leaderboard entries to merge (objects with at least `recordId` and `score` properties).
+ * @param {Array<object>} [knownExisting] - Optional existing leaderboard to use instead of reading from storage; when supplied the initial top-10 save attempt is not performed.
+ * @returns {Array<object>|null} The saved leaderboard array (top-10 or top-5) on success, or `null` if persisting failed.
  */
 function pruneAndSave(newLb, knownExisting) {
   const existing = knownExisting || (function () {
@@ -52,20 +52,25 @@ function pruneAndSave(newLb, knownExisting) {
   }
 
   // Only attempt a prune if it would actually reduce the payload size.
+  let prunedToFive = false;
   if (combined.length > 5) {
     combined = combined.slice(0, 5);
+    prunedToFive = true;
     if (dbSet(KEY, JSON.stringify(combined))) {
       console.warn('[DB] Storage critical: pruned to top 5');
       return combined;
     }
+  } else {
+    // combined is already <=5 entries — attempt the write before declaring failure.
+    if (dbSet(KEY, JSON.stringify(combined))) return combined;
   }
 
-   const message = (combined.length > 5)
-     ? 'Storage completely full — even top-5 pruning failed'
-     : 'Storage completely full — leaderboard payload (<=5) failed to save';
-   window.dispatchEvent(new CustomEvent('db:criticalFailure', {
-     detail: { message, key: KEY },
-   }));
+  const message = prunedToFive
+    ? 'Storage completely full — even top-5 pruning failed'
+    : 'Storage completely full — leaderboard payload (<=5) failed to save';
+  window.dispatchEvent(new CustomEvent('db:criticalFailure', {
+    detail: { message, key: KEY },
+  }));
   return null;
 }
 

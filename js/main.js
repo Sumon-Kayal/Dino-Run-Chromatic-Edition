@@ -98,6 +98,7 @@ const DOM = {
 DOM.dbStatus.textContent = backendName;
 
 window.addEventListener('db:quota', function (e) {
+  if (!e || !e.detail) return;
   const pct    = e.detail.total > 0 ? ((e.detail.used / e.detail.total) * 100).toFixed(1) : '?';
   const usedKB = (e.detail.used / 1024).toFixed(0);
   DOM.dbStatus.textContent = backendName + ' \xB7 ' + usedKB + 'KB (' + pct + '%)';
@@ -109,13 +110,18 @@ window.addEventListener('db:quotaFull', function () {
   DOM.dbStatus.style.setProperty('color', 'var(--danger)');
 });
 
-window.addEventListener('db:criticalFailure', function () {
+window.addEventListener('db:criticalFailure', function (e) {
   DOM.dbStatus.textContent = 'STORAGE FULL \u26A0 \u2014 Score not saved';
   DOM.dbStatus.style.setProperty('color', 'var(--danger)');
+
+  // Read the specific failure message from the event detail, if available
+  const failureMessage = (e && e.detail && e.detail.message)
+    ? e.detail.message
+    : 'Your score could not be saved because your browser\u2019s local storage is completely full.';
+
   alert(
     '\u26A0\uFE0F  STORAGE FULL\n\n' +
-    'Your score could not be saved because your browser\u2019s ' +
-    'local storage is completely full.\n\n' +
+    failureMessage + '\n\n' +
     'To fix this:\n' +
     '  1. Clear browser data for this site\n' +
     '  2. Click \u201CCLEAR\u201D to wipe the leaderboard\n' +
@@ -129,9 +135,14 @@ window.addEventListener('db:criticalFailure', function () {
 const engine     = new Engine(update, draw);
 let   idleRafId  = null;
 
-/* ───────────────────────────────────────────────────────────
-   INIT / RESET
-   ─────────────────────────────────────────────────────────── */
+/**
+ * Reset runtime game state to initial values and initialize gameplay subsystems for a new run.
+ *
+ * Resets score, speed, timers, counters, flags, and environmental state; repositions the moon;
+ * initializes player and obstacle systems; clears any active duck input state; generates
+ * cloud and star collections used by the renderer; and rebuilds the sky layer to reflect the
+ * new environment.
+ */
 function initGame() {
   cancelSoundTimers();
   G.score           = 0;
@@ -142,7 +153,7 @@ function initGame() {
   G.lastMilestone   = 0;
   G.groundScrollX   = 0;
   G._lastSpeedPct   = -1;
-  G.gapCoefficient  = 0.6;
+  G.gapCoefficient  = GAP_COEFF_INITIAL;
   G.moonX = MOON_SPAWN_MIN + Math.random() * MOON_SPAWN_RNG;
 
   initPlayer();
@@ -203,13 +214,18 @@ function restart() {
   engine.start();
 }
 
+/**
+ * Transition the game into the "dead" state and finalize the run.
+ *
+ * Stops gameplay, records session and persistent statistics (score, time, deaths, obstacles),
+ * attempts to add the score to the leaderboard and save DB stats, rolls back persistent changes
+ * on storage failure, and updates leaderboard and game-over UI elements accordingly.
+ */
 function gameOver() {
   if (G.state === 'dead') return;
   G.state = 'dead';
   engine.stop();
   soundDie();
-
-  const prevSessionBest = G.dbStats.bestScore;
 
   G.sessionStats.games++;
   G.sessionStats.deaths++;
@@ -261,7 +277,7 @@ function gameOver() {
 
   DOM.goScore.textContent = 'SCORE ' + String(s).padStart(5, '0');
   DOM.goHi.textContent    = 'HI: '   + String(G.hiScore).padStart(5, '0');
-  if (s > prevBest && prevBest > 0 && lb) {
+  if (s > prevBest && lb) {
     DOM.goNewBest.classList.remove('hidden');
   } else {
     DOM.goNewBest.classList.add('hidden');
@@ -296,7 +312,7 @@ function togglePause() {
 }
 
 function toggleFullscreen() {
-  const el   = document.querySelector('.game-frame');
+  const el   = DOM.gameFrame;
   const isFs = document.fullscreenElement || document.webkitFullscreenElement;
   if (!isFs) {
     const req = el.requestFullscreen
@@ -434,15 +450,16 @@ function renderLeaderboard(lb) {
     return;
   }
 
-  const medals = ['#ffd700', '#c0c0c0', '#cd7f32'];
+  const medals = ['var(--ce-gold)', 'var(--ce-silver)', 'var(--ce-bronze)'];
   lb.forEach((entry, i) => {
     const tr    = document.createElement('tr');
     const color = medals[i] || null;
-    const when  = entry.when || entry.date || '--';
-    const cols  = [String(i + 1), entry.name || 'ANON', String(entry.score).padStart(5, '0'), when];
+
+    const cols  = [String(i + 1), entry.name || 'ANON', String(entry.score).padStart(5, '0'), entry.when || entry.date || '--'];
 
     cols.forEach((val, ci) => {
       const td = document.createElement('td');
+
       if (ci === 0) {
         const badge       = document.createElement('span');
         badge.className   = 'rank-badge';
@@ -532,6 +549,11 @@ document.addEventListener('visibilitychange', function () {
       engine.start();
     } else if (G.state === 'idle') {
       idleRafId = requestAnimationFrame(idleLoop);
+    } else {
+      // 'paused' or 'dead' — some browsers discard the canvas backing store
+      // when a tab is backgrounded; repaint so the game-over / pause screen
+      // doesn't appear blank on return.
+      draw();
     }
   }
 });
@@ -551,13 +573,21 @@ async function loadJSON(path) {
     DOM.loadingBar.style.width  = pct + '%';
     if (hint) DOM.loadingHint.textContent = hint;
   }
+  /**
+   * Hide the loading screen and reveal the start screen.
+   *
+   * Updates UI state by adding the `hidden` class to the loading screen, removing the
+   * `hidden` class from the start screen, and setting the start screen's `aria-hidden`
+   * attribute to `"false"` for accessibility.
+   */
   function hideLoading() {
     DOM.loadingScreen.classList.add('hidden');
     DOM.startScreen.classList.remove('hidden');
     DOM.startScreen.setAttribute('aria-hidden', 'false');
   }
 
-  loadProgress(10, 'Loading config\u2026');
+  try {
+    loadProgress(10, 'Loading config\u2026');
 
   // Load tunable values from data/config.json before anything touches CONFIG
   try {
@@ -621,4 +651,12 @@ async function loadJSON(path) {
 
   draw();
   idleRafId = requestAnimationFrame(idleLoop);
+
+  } catch (err) {
+    // Any uncaught error in the boot sequence would otherwise leave the
+    // loading screen up forever with no feedback. Surface it visibly.
+    console.error('[boot] Fatal error — game could not start:', err);
+    DOM.loadingHint.textContent = 'ERROR: ' + (err && err.message ? err.message : String(err));
+    DOM.loadingBar.style.background = 'var(--danger)';
+  }
 }());

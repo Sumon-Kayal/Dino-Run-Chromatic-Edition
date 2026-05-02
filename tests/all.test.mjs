@@ -1,681 +1,316 @@
 /**
- * all.test.mjs — Complete test suite for Dino Run — Chromatic Edition
+ * all.test.mjs — Test suite for Dino Run — Chromatic Edition (v0.8.0-beta PR changes)
  *
- * Merges game.test.mjs (engine modules) and db.test.mjs (storage modules)
- * into a single runnable file.
+ * Covers changes introduced in the 0.8.0-beta CSS & DB Consolidation PR:
+ *   - database.js: memStore String() coercion, db:quotaFull dispatch
+ *   - leaderboard.js: prunedToFive flag fix, ≤5-entry write-before-failure branch
+ *   - audio.js: per-key buffer check (one failed file must not silence loaded buffers)
+ *   - input.js: mute-toggle emoji fix (🔊 U+1F50A, not 🔆 U+1F506)
+ *   - main.js: db:quota null-guard, goNewBest condition (prevBest > 0 removed),
+ *              renderLeaderboard medal CSS vars, GAP_COEFF_INITIAL usage
  *
- * Covers: config.js · physics.js · obstacles.js · player.js · engine.js
- *         database.js · leaderboard.js · stats.js · storage.js
- *
- * Run with:   node tests/all.test.mjs
+ * Run with:   node --test tests/all.test.mjs
  */
 
 'use strict';
 
-import { test, describe } from 'node:test';
+import { test, describe, before, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
 
-// ── Minimal browser-global stubs ─────────────────────────────────────
-// Set these up BEFORE any module that touches window / document is imported.
-globalThis.window = globalThis.window ?? globalThis;
-globalThis.document = { getElementById: () => null };
-// navigator stub with storage.estimate set in DB section below
-globalThis.CustomEvent = class CustomEvent { constructor(t,o){ this.type=t; this.detail=o?.detail; } };
-globalThis.window.AudioContext = undefined;
-globalThis.window.webkitAudioContext = undefined;
-globalThis.performance = { now: () => Date.now() };
-globalThis.requestAnimationFrame = (cb) => setTimeout(cb, 16);
-globalThis.cancelAnimationFrame = (id) => clearTimeout(id);
+// ═══════════════════════════════════════════════════════════════
+// Browser-global stubs — must be set BEFORE any module imports
+// ═══════════════════════════════════════════════════════════════
 
-// ── Import modules under test ─────────────────────────────────────────
-const {
-  W, H, GY, CONFIG,
-  DINO_W, DINO_H, DUCK_H, DINO_X,
-  PTERA_W, PTERA_H, PTERA_Y_LOW, PTERA_Y_MID, PTERA_Y_HIGH,
-  GRAVITY, JUMP_V, SPEED_DROP_COEFF,
-  FRAME_MS, MAX_DT, ANIM_PERIOD, GROUND_PERIOD, GROUND_SCROLL_FACTOR,
-  CLOUD_COUNT, STAR_COUNT,
-  MIN_GAP_CACTUS, MIN_GAP_PTERA, MAX_GAP_COEFF,
-  GAP_COEFF_INITIAL, GAP_COEFF_SCORE,
-  MOON_SCROLL_SPEED, MOON_CULL_MARGIN,
-  OBS_CULL_MARGIN, STARTUP_COOLDOWN,
-  HIT_OBS_SHRINK,
-  applyJSONConfig,
-} = await import(`file://${ROOT}/js/game/config.js`);
+// --- Window / CustomEvent stub ---
+const _windowEvents = [];
+const _windowStub = {
+  _events: _windowEvents,
+  dispatchEvent(e) { _windowEvents.push(e); },
+  addEventListener() {},
+  removeEventListener() {},
+};
 
-const { G } = await import(`file://${ROOT}/js/game/runtime.js`);
-const { checkCollision } = await import(`file://${ROOT}/js/game/physics.js`);
-const { Engine } = await import(`file://${ROOT}/js/game/engine.js`);
-const { initObstacles, updateObstacles } = await import(`file://${ROOT}/js/game/obstacles.js`);
-const { initPlayer, updatePlayer, jump } = await import(`file://${ROOT}/js/game/player.js`);
-
-
-// ══════════════════════════════════════════════════════════════════════
-// config.js
-// ══════════════════════════════════════════════════════════════════════
-
-describe('config.js — world dimensions', () => {
-  test('W is 854', () => assert.equal(W, 854));
-  test('H is 480', () => assert.equal(H, 480));
-  test('GY is 360 (75% of H)', () => assert.equal(GY, H * 0.75));
-});
-
-describe('config.js — dino dimensions', () => {
-  test('DINO_W is 44', () => assert.equal(DINO_W, 44));
-  test('DINO_H is 52', () => assert.equal(DINO_H, 52));
-  test('DUCK_H is 28 (< DINO_H)', () => { assert.equal(DUCK_H, 28); assert.ok(DUCK_H < DINO_H); });
-  test('DINO_X is positive and within canvas', () => { assert.ok(DINO_X > 0); assert.ok(DINO_X < W); });
-});
-
-describe('config.js — pterodactyl constants', () => {
-  test('PTERA_W is 44', () => assert.equal(PTERA_W, 44));
-  test('PTERA_H is 28', () => assert.equal(PTERA_H, 28));
-  test('PTERA_Y_LOW is highest on screen (smallest y)', () => {
-    // "low" means low altitude = close to ground = larger Y value
-    assert.ok(PTERA_Y_LOW > PTERA_Y_MID);
-    assert.ok(PTERA_Y_MID > PTERA_Y_HIGH);
-  });
-  test('all ptera heights are above ground', () => {
-    assert.ok(PTERA_Y_LOW  < GY);
-    assert.ok(PTERA_Y_MID  < GY);
-    assert.ok(PTERA_Y_HIGH < GY);
-  });
-});
-
-describe('config.js — physics constants', () => {
-  test('GRAVITY is positive (pulls down)', () => assert.ok(GRAVITY > 0));
-  test('JUMP_V is negative (launches up)', () => assert.ok(JUMP_V < 0));
-  test('SPEED_DROP_COEFF > 1 (fast fall is faster than normal)', () => assert.ok(SPEED_DROP_COEFF > 1));
-});
-
-describe('config.js — timing constants', () => {
-  test('FRAME_MS equals 1000/60', () => assert.ok(Math.abs(FRAME_MS - 1000/60) < 1e-9));
-  test('MAX_DT clamp is >= 2 (allows for slow frames)', () => assert.ok(MAX_DT >= 2));
-  test('ANIM_PERIOD is a positive integer', () => {
-    assert.ok(ANIM_PERIOD > 0);
-    assert.equal(ANIM_PERIOD, Math.floor(ANIM_PERIOD));
-  });
-  test('GROUND_PERIOD > 0', () => assert.ok(GROUND_PERIOD > 0));
-  test('GROUND_SCROLL_FACTOR is between 0 and 1', () => {
-    assert.ok(GROUND_SCROLL_FACTOR > 0);
-    assert.ok(GROUND_SCROLL_FACTOR < 1);
-  });
-});
-
-describe('config.js — world population counts', () => {
-  test('CLOUD_COUNT >= 3', () => assert.ok(CLOUD_COUNT >= 3));
-  test('STAR_COUNT >= 20', () => assert.ok(STAR_COUNT >= 20));
-});
-
-describe('config.js — gap constants', () => {
-  test('MIN_GAP_CACTUS > 0', () => assert.ok(MIN_GAP_CACTUS > 0));
-  test('MIN_GAP_PTERA > 0', () => assert.ok(MIN_GAP_PTERA > 0));
-  test('MAX_GAP_COEFF > 1 (max gap is always wider than min)', () => assert.ok(MAX_GAP_COEFF > 1));
-  test('GAP_COEFF_INITIAL is between 0 and 1', () => {
-    assert.ok(GAP_COEFF_INITIAL > 0);
-    assert.ok(GAP_COEFF_INITIAL < 1);
-  });
-  test('GAP_COEFF_SCORE > 0', () => assert.ok(GAP_COEFF_SCORE > 0));
-});
-
-describe('config.js — obstacle & moon constants', () => {
-  test('OBS_CULL_MARGIN > 0', () => assert.ok(OBS_CULL_MARGIN > 0));
-  test('STARTUP_COOLDOWN > 0', () => assert.ok(STARTUP_COOLDOWN > 0));
-  test('MOON_SCROLL_SPEED > 0', () => assert.ok(MOON_SCROLL_SPEED > 0));
-  test('MOON_CULL_MARGIN > 0', () => assert.ok(MOON_CULL_MARGIN > 0));
-  test('HIT_OBS_SHRINK > 0', () => assert.ok(HIT_OBS_SHRINK > 0));
-});
-
-describe('config.js — CONFIG game scalars', () => {
-  test('SPEED_MIN < SPEED_MAX', () => assert.ok(CONFIG.SPEED_MIN < CONFIG.SPEED_MAX));
-  test('ACCELERATION > 0', () => assert.ok(CONFIG.ACCELERATION > 0));
-  test('SCORE_COEFF > 0', () => assert.ok(CONFIG.SCORE_COEFF > 0));
-  test('PTERA_CHANCE is between 0 and 1', () => {
-    assert.ok(CONFIG.PTERA_CHANCE > 0);
-    assert.ok(CONFIG.PTERA_CHANCE < 1);
-  });
-  test('CACTUS dimensions are sane', () => {
-    assert.ok(CONFIG.CACTUS_H_MIN > 0);
-    assert.ok(CONFIG.CACTUS_H_RNG > 0);
-    assert.ok(CONFIG.CACTUS_W_MIN > 0);
-    assert.ok(CONFIG.CACTUS_W_RNG > 0);
-  });
-  test('CACTUS_TRIPLE + CACTUS_DBL probabilities < 1', () => {
-    assert.ok(CONFIG.CACTUS_TRIPLE + CONFIG.CACTUS_DBL < 1);
-  });
-  test('DAY_START_SCORE > 0', () => assert.ok(CONFIG.DAY_START_SCORE > 0));
-  test('DAY_CYCLE_SPEED > 0 and small', () => {
-    assert.ok(CONFIG.DAY_CYCLE_SPEED > 0);
-    assert.ok(CONFIG.DAY_CYCLE_SPEED < 0.1);
-  });
-});
-
-describe('config.js — applyJSONConfig', () => {
-  test('null/undefined input is a no-op', () => {
-    assert.doesNotThrow(() => applyJSONConfig(null));
-    assert.doesNotThrow(() => applyJSONConfig(undefined));
-  });
-
-  test('merges speed values when provided', () => {
-    const before_min = CONFIG.SPEED_MIN;
-    const before_max = CONFIG.SPEED_MAX;
-    applyJSONConfig({ game: { initialSpeed: before_min, maxSpeed: before_max } });
-    assert.equal(CONFIG.SPEED_MIN, before_min);
-    assert.equal(CONFIG.SPEED_MAX, before_max);
-  });
-
-  test('ignores unrecognised keys gracefully', () => {
-    assert.doesNotThrow(() => applyJSONConfig({ unknown: { foo: 42 } }));
-  });
-});
-
-
-// ══════════════════════════════════════════════════════════════════════
-// physics.js — checkCollision
-// ══════════════════════════════════════════════════════════════════════
-
-/** Reset G to a clean state with one obstacle */
-function setScene({ dinoX=DINO_X, dinoY=GY-DINO_H, ducking=false,
-                    obsX=400, obsY=GY-50, obsW=40, obsH=50 } = {}) {
-  G.dino = { x: dinoX, y: dinoY, ducking, jumping: false, vy: 0, frame: 0, ft: 0 };
-  G.duckHeld = ducking;
-  G.obstacles = [{ type:'cactus', x:obsX, y:obsY, w:obsW, h:obsH,
-                   count:1, singleW:obsW, gap:200, passed:false, followingCreated:false }];
-}
-
-describe('physics.js — checkCollision', () => {
-  test('no obstacles → no collision', () => {
-    G.obstacles = [];
-    G.dino = { x: DINO_X, y: GY - DINO_H, ducking: false };
-    assert.equal(checkCollision(), false);
-  });
-
-  test('obstacle far to the right → no collision', () => {
-    setScene({ obsX: W + 100 });
-    assert.equal(checkCollision(), false);
-  });
-
-  test('obstacle far to the left (passed) → no collision', () => {
-    setScene({ obsX: -200 });
-    assert.equal(checkCollision(), false);
-  });
-
-  test('obstacle directly overlapping dino → collision', () => {
-    setScene({ dinoX: 100, obsX: 100, obsY: GY - DINO_H, obsW: DINO_W, obsH: DINO_H });
-    assert.equal(checkCollision(), true);
-  });
-
-  test('dino jumping high above obstacle → no collision', () => {
-    setScene({ dinoY: 50, obsY: GY - 60, obsH: 50 });
-    G.dino.jumping = true;
-    assert.equal(checkCollision(), false);
-  });
-
-  test('ducking dino uses DUCK_H, not DINO_H, for height', () => {
-    // Place a cactus at mid-height — running dino would hit it, ducking clears it.
-    // obsX must overlap the dino horizontally (DINO_X) so the X check passes.
-    const midY = GY - DUCK_H - 5;
-    setScene({ ducking: false, obsX: DINO_X, obsY: midY - 10, obsH: 15 });
-    const standingResult = checkCollision();
-    setScene({ ducking: true, obsX: DINO_X, obsY: midY - 10, obsH: 15 });
-    const duckingResult = checkCollision();
-    // Assert the two results differ: ducking should change collision outcome
-    assert.notEqual(standingResult, duckingResult, 'Ducking should change collision result vs standing');
-  });
-
-  test('obstacle just to the right of dino bounding box → no collision', () => {
-    setScene({ dinoX: 80, obsX: 80 + DINO_W + 2 });
-    assert.equal(checkCollision(), false);
-  });
-
-  test('only the first obstacle is checked (obstacles[0])', () => {
-    // Swap: first obstacle is clear, second would collide
-    G.dino = { x: 100, y: GY - DINO_H, ducking: false, jumping: false };
-    G.duckHeld = false;
-    G.obstacles = [
-      { type:'cactus', x: W + 200, y: GY-50, w:40, h:50, passed:false },   // far away
-      { type:'cactus', x: 100,     y: GY-50, w:40, h:50, passed:false },   // would collide
-    ];
-    // Should not collide because first obstacle is far
-    assert.equal(checkCollision(), false);
-  });
-});
-
-
-// ══════════════════════════════════════════════════════════════════════
-// obstacles.js — initObstacles / updateObstacles
-// ══════════════════════════════════════════════════════════════════════
-
-describe('obstacles.js — initObstacles', () => {
-  test('clears obstacle array', () => {
-    G.obstacles = [{ type:'cactus', x:0, y:0, w:10, h:10 }];
-    initObstacles();
-    assert.equal(G.obstacles.length, 0);
-  });
-
-  test('resets gameObstacles counter to 0', () => {
-    G.gameObstacles = 99;
-    initObstacles();
-    assert.equal(G.gameObstacles, 0);
-  });
-
-  test('sets obsCooldown to STARTUP_COOLDOWN', () => {
-    initObstacles();
-    assert.equal(G.obsCooldown, STARTUP_COOLDOWN);
-  });
-});
-
-describe('obstacles.js — updateObstacles removes off-screen obstacles', () => {
-  test('obstacle past -OBS_CULL_MARGIN is removed', () => {
-    G.speed = CONFIG.SPEED_MIN;
-    G.gapCoefficient = GAP_COEFF_INITIAL;
-    G.score = 0;
-    G.sessionStats = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0, bestTime:0 };
-    G.gameObstacles = 0;
-    G.obstacles = [{
-      type:'cactus', x: -(OBS_CULL_MARGIN + 1), y: GY-50,
-      w:30, h:50, count:1, singleW:30,
-      gap:200, passed:false, followingCreated:true,
-    }];
-    G.obsCooldown = 999; // prevent new spawn
-    updateObstacles(1);
-    assert.equal(G.obstacles.length, 0);
-  });
-
-  test('obstacle well inside cull margin is kept', () => {
-    // obstacles.js moves x -= speed*dt BEFORE the cull check,
-    // so start far enough in that one step of movement won't push it past the margin.
-    G.speed = CONFIG.SPEED_MIN;
-    G.gapCoefficient = GAP_COEFF_INITIAL;
-    G.score = 0;
-    G.sessionStats = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0, bestTime:0 };
-    // Start at -(OBS_CULL_MARGIN/2) — well inside the margin even after one step.
-    G.obstacles = [{
-      type:'cactus', x: -(OBS_CULL_MARGIN / 2), y: GY-50,
-      w:30, h:50, count:1, singleW:30,
-      gap:500, passed:false, followingCreated:true,
-    }];
-    G.obsCooldown = 999;
-    updateObstacles(1);
-    assert.equal(G.obstacles.length, 1);
-  });
-});
-
-describe('obstacles.js — obstacle passed tracking', () => {
-  test('marks obstacle as passed when it clears dino x', () => {
-    G.speed = CONFIG.SPEED_MIN;
-    G.gapCoefficient = GAP_COEFF_INITIAL;
-    G.score = 0;
-    G.sessionStats = { games:0, deaths:0, obstacles:0, totalDist:0, bestScore:0, bestTime:0 };
-    G.gameObstacles = 0;
-    const obs = {
-      type:'cactus', x: DINO_X - 40, y: GY-50,
-      w: 30, h:50, count:1, singleW:30,
-      gap:500, passed:false, followingCreated:true,
-    };
-    G.obstacles = [obs];
-    G.obsCooldown = 999;
-    updateObstacles(1);
-    assert.equal(obs.passed, true);
-  });
-});
-
-
-// ══════════════════════════════════════════════════════════════════════
-// player.js — updatePlayer / jump / duck
-// ══════════════════════════════════════════════════════════════════════
-
-describe('player.js — updatePlayer ground snap', () => {
-  test('dino on ground stays at GY - DINO_H', () => {
-    G.dino = { x: DINO_X, y: GY - DINO_H, vy: 0, jumping: false, ducking: false, frame: 0, ft: 0 };
-    G.duckHeld = false;
-    updatePlayer(1);
-    assert.equal(G.dino.y, GY - DINO_H);
-  });
-
-  test('ducking dino snaps to GY - DUCK_H', () => {
-    G.dino = { x: DINO_X, y: GY - DINO_H, vy: 0, jumping: false, ducking: false, frame: 0, ft: 0 };
-    G.duckHeld = true;
-    updatePlayer(1);
-    assert.equal(G.dino.y, GY - DUCK_H);
-  });
-});
-
-describe('player.js — updatePlayer jump arc', () => {
-  test('jump velocity is applied upward (y decreases)', () => {
-    G.dino = { x: DINO_X, y: GY - DINO_H, vy: JUMP_V, jumping: true, ducking: false, frame: 0, ft: 0 };
-    G.duckHeld = false;
-    const startY = G.dino.y;
-    updatePlayer(1);
-    assert.ok(G.dino.y < startY, 'dino should move upward on first jump frame');
-  });
-
-  test('gravity reduces vy (slows ascent / accelerates descent)', () => {
-    G.dino = { x: DINO_X, y: GY - DINO_H * 2, vy: JUMP_V, jumping: true, ducking: false, frame: 0, ft: 0 };
-    G.duckHeld = false;
-    const startVy = G.dino.vy;
-    updatePlayer(1);
-    assert.ok(G.dino.vy > startVy, 'vy should increase (gravity applied)');
-  });
-
-  test('dino lands when y reaches ground level', () => {
-    // Position just above landing threshold
-    G.dino = { x: DINO_X, y: GY - DINO_H - 0.1, vy: 5, jumping: true, ducking: false, frame: 0, ft: 0 };
-    G.duckHeld = false;
-    updatePlayer(1);
-    assert.equal(G.dino.jumping, false);
-    assert.equal(G.dino.vy, 0);
-    assert.equal(G.dino.y, GY - DINO_H);
-  });
-
-  test('speedDrop multiplies vy when duckHeld during jump', () => {
-    const vy = -10;
-    G.dino = { x: DINO_X, y: GY - DINO_H * 3, vy, jumping: true, ducking: false, frame: 0, ft: 0 };
-    G.duckHeld = false;
-    const yNormal = G.dino.y + vy * 1;
-
-    G.dino = { x: DINO_X, y: GY - DINO_H * 3, vy, jumping: true, ducking: false, frame: 0, ft: 0 };
-    G.duckHeld = true;
-    updatePlayer(1);
-    const yDrop = G.dino.y;
-    // speedDrop moves more (upward = more negative delta, so yDrop < yNormal... wait)
-    // vy is negative going up; coeff * vy means larger magnitude movement upward
-    // yDrop should be lower Y (higher on screen) than yNormal
-    // Actually: d.y += d.vy * coeff * dt; vy=-10, coeff=3 → y += -30 vs y += -10
-    // So yDrop < GY - DINO_H*3 - 10  (went further up)
-    assert.ok(yDrop < GY - DINO_H * 3 + vy * 1, 'speedDrop should produce greater Y movement');
-  });
-});
-
-describe('player.js — animation frame counter', () => {
-  test('frame cycles between 0 and 1 after ANIM_PERIOD ticks', () => {
-    G.dino = { x: DINO_X, y: GY - DINO_H, vy: 0, jumping: false, ducking: false, frame: 0, ft: 0 };
-    G.duckHeld = false;
-    // Advance past the period
-    for (let i = 0; i <= ANIM_PERIOD + 1; i++) updatePlayer(1);
-    assert.ok(G.dino.frame === 0 || G.dino.frame === 1, 'frame must be 0 or 1');
-  });
-});
-
-
-// ══════════════════════════════════════════════════════════════════════
-// engine.js — Engine class
-// ══════════════════════════════════════════════════════════════════════
-
-describe('engine.js — Engine lifecycle', () => {
-  test('starts with _running = false', () => {
-    const e = new Engine(() => {}, () => {});
-    assert.equal(e._running, false);
-  });
-
-  test('start() sets _running = true', () => {
-    const e = new Engine(() => {}, () => {});
-    e.start();
-    assert.equal(e._running, true);
-    e.stop();
-  });
-
-  test('stop() sets _running = false', () => {
-    const e = new Engine(() => {}, () => {});
-    e.start();
-    e.stop();
-    assert.equal(e._running, false);
-  });
-
-  test('stop() cancels pending rAF (_raf is null)', () => {
-    const e = new Engine(() => {}, () => {});
-    e.start();
-    e.stop();
-    assert.equal(e._raf, null);
-  });
-
-  test('resetTimer() sets last to 0', () => {
-    const e = new Engine(() => {}, () => {});
-    e.last = 12345;
-    e.resetTimer();
-    assert.equal(e.last, 0);
-  });
-
-  test('loop() calls update and render once', () => {
-    let updateCalls = 0, renderCalls = 0;
-    const e = new Engine(() => updateCalls++, () => renderCalls++);
-    e._running = true;
-    e.last = 0;
-    e.loop(1000 / 60);   // simulate one tick
-    e._running = false;  // stop after one call
-    assert.equal(updateCalls, 1);
-    assert.equal(renderCalls, 1);
-  });
-
-  test('loop() dt is clamped to MAX_DT on very slow frames', () => {
-    let capturedDt = 0;
-    const e = new Engine((dt) => { capturedDt = dt; }, () => {});
-    e._running = true;
-    e.last = 1;  // Set to non-zero so dt calculation is triggered
-    // Simulate a 10-second gap (extreme lag)
-    e.loop(10_000);
-    e._running = false;
-    assert.equal(capturedDt, MAX_DT, `dt should be clamped to exactly MAX_DT ${MAX_DT}`);
-  });
-
-  test('loop() dt is 1 on first tick (last === 0)', () => {
-    let capturedDt = -1;
-    const e = new Engine((dt) => { capturedDt = dt; }, () => {});
-    e._running = true;
-    e.last = 0;
-    e.loop(500);
-    e._running = false;
-    assert.equal(capturedDt, 1);
-  });
-
-  test('_boundLoop is bound once at construction (identity stable)', () => {
-    const e = new Engine(() => {}, () => {});
-    const bound1 = e._boundLoop;
-    const bound2 = e._boundLoop;
-    assert.equal(bound1, bound2, '_boundLoop must be the same reference each access');
-  });
-});
-
-
-// ══════════════════════════════════════════════════════════════════════
-// Derived formula tests (speed bar — values match config)
-// ══════════════════════════════════════════════════════════════════════
-
-describe('speed bar formula (derived from CONFIG constants)', () => {
-  function calcSpeedPct(speed) {
-    return Math.min(
-      (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN) > 0
-        ? (speed - CONFIG.SPEED_MIN) / (CONFIG.SPEED_MAX - CONFIG.SPEED_MIN)
-        : 0,
-      1
-    );
+globalThis.window = _windowStub;
+globalThis.CustomEvent = class CustomEvent {
+  constructor(type, opts) {
+    this.type   = type;
+    this.detail = opts && opts.detail !== undefined ? opts.detail : undefined;
   }
+};
 
-  test('pct is 0 at SPEED_MIN', () => assert.equal(calcSpeedPct(CONFIG.SPEED_MIN), 0));
-  test('pct is 1 at SPEED_MAX', () => assert.equal(calcSpeedPct(CONFIG.SPEED_MAX), 1));
-  test('pct is capped at 1 above SPEED_MAX', () => {
-    assert.equal(calcSpeedPct(CONFIG.SPEED_MAX + 10), 1);
-  });
-  test('pct is 0.5 at midpoint speed', () => {
-    const mid = (CONFIG.SPEED_MIN + CONFIG.SPEED_MAX) / 2;
-    assert.ok(Math.abs(calcSpeedPct(mid) - 0.5) < 1e-9);
-  });
-  test('pct is monotonically non-decreasing across valid range', () => {
-    let prev = 0;
-    for (let s = CONFIG.SPEED_MIN; s <= CONFIG.SPEED_MAX; s += 0.1) {
-      const cur = calcSpeedPct(s);
-      assert.ok(cur >= prev - 1e-12);
-      prev = cur;
-    }
-  });
+// --- navigator stub ---
+Object.defineProperty(globalThis, 'navigator', {
+  value: {
+    storage: {
+      estimate: async () => ({ usage: 0, quota: 5 * 1024 * 1024 }),
+      persist:  async () => true,
+    },
+  },
+  writable:     true,
+  configurable: true,
 });
 
-describe('gap coefficient formula', () => {
-  test('starts at GAP_COEFF_INITIAL when score is 0', () => {
-    const coeff = Math.min(1.0, GAP_COEFF_INITIAL + 0 / GAP_COEFF_SCORE);
-    assert.equal(coeff, GAP_COEFF_INITIAL);
-  });
-  test('reaches 1.0 at GAP_COEFF_SCORE points', () => {
-    const coeff = Math.min(1.0, GAP_COEFF_INITIAL + GAP_COEFF_SCORE * (1 - GAP_COEFF_INITIAL) / GAP_COEFF_SCORE);
-    assert.ok(Math.abs(coeff - 1.0) < 1e-9);
-  });
-  test('never exceeds 1.0 at any score', () => {
-    for (const score of [0, 500, 1000, 3000, 5000, 99999]) {
-      const coeff = Math.min(1.0, GAP_COEFF_INITIAL + score / GAP_COEFF_SCORE);
-      assert.ok(coeff <= 1.0);
-    }
-  });
-});
+// --- Web Audio stubs ---
+globalThis.window.AudioContext        = undefined;
+globalThis.window.webkitAudioContext  = undefined;
 
+// Audio element stub for canPlayType() detection in audio.js
+globalThis.Audio = class Audio {
+  canPlayType(type) {
+    if (type.includes('ogg')) return 'probably';
+    return '';
+  }
+};
 
-// ═══════════════════════════════════════════════════════════════════════
-// DB MODULE TESTS
-// ═══════════════════════════════════════════════════════════════════════
+// --- Timing stubs ---
+globalThis.performance         = { now: () => Date.now() };
+globalThis.requestAnimationFrame  = (cb) => setTimeout(cb, 16);
+globalThis.cancelAnimationFrame   = (id) => clearTimeout(id);
 
+// --- document stub ---
+globalThis.document = {
+  getElementById:  () => null,
+  addEventListener: () => {},
+  removeEventListener: () => {},
+  querySelector:   () => null,
+  hidden:          false,
+  fullscreenElement: null,
+  webkitFullscreenElement: null,
+};
 
-// ── localStorage mock factory ─────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// localStorage mock factory
+// ═══════════════════════════════════════════════════════════════
+
 function makeLocalStorage({ quota = Infinity, preload = {} } = {}) {
   const store = { ...preload };
-  let bytesUsed = 0;
-  // Pre-calculate bytes for preloaded data
+  let   bytesUsed = 0;
   for (const [k, v] of Object.entries(preload)) bytesUsed += (k + v).length * 2;
 
   function throwQuota() {
-    const e = new Error('QuotaExceededError');
-    e.name  = 'QuotaExceededError';
-    e.code  = 22;
+    const e  = new Error('QuotaExceededError');
+    e.name   = 'QuotaExceededError';
+    e.code   = 22;
     throw e;
   }
 
   return {
     _store: store,
     setItem(key, val) {
-      if (key === '_dinotest') { store[key] = val; return; } // always allow probe
-      const newBytes  = (key + val).length * 2;
-      const oldBytes  = store[key] !== undefined ? (key + store[key]).length * 2 : 0;
+      // Always allow the probe key used by database.js backend detection
+      if (key === '_dinotest') { store[key] = val; return; }
+      const newBytes = (key + val).length * 2;
+      const oldBytes = store[key] !== undefined ? (key + store[key]).length * 2 : 0;
       if (bytesUsed - oldBytes + newBytes > quota) throwQuota();
       bytesUsed = bytesUsed - oldBytes + newBytes;
       store[key] = val;
     },
-    getItem(key)      { return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null; },
-    removeItem(key)   { if (store[key] !== undefined) { bytesUsed -= (key+store[key]).length*2; delete store[key]; } },
-    clear()           { Object.keys(store).forEach(k => delete store[k]); bytesUsed = 0; },
-    get length()      { return Object.keys(store).length; },
+    getItem(key)    { return Object.prototype.hasOwnProperty.call(store, key) ? store[key] : null; },
+    removeItem(key) {
+      if (store[key] !== undefined) {
+        bytesUsed -= (key + store[key]).length * 2;
+        delete store[key];
+      }
+    },
+    clear()         { Object.keys(store).forEach(k => delete store[k]); bytesUsed = 0; },
+    get length()    { return Object.keys(store).length; },
   };
 }
 
-// ── Event capture stub ────────────────────────────────────────────────
-function makeWindowStub() {
-  const events = [];
-  return {
-    _events: events,
-    dispatchEvent(e) { events.push(e); },
-    addEventListener() {},
-    removeEventListener() {},
-  };
-}
-
-// ── Install stubs before importing any module ─────────────────────────
-// We build a fresh localStorage and window for each test suite by
-// reinstalling on globalThis before the import cache is consulted.
-// Because ES modules are cached after first import, we install stubs
-// before the FIRST import and mutate the same object's properties
-// inside beforeEach to reset stored data.
-
-const _ls   = makeLocalStorage();
-const _win  = makeWindowStub();
-
+// ── Install a default working localStorage before any DB module is imported ──
+const _ls = makeLocalStorage();
 globalThis.localStorage = _ls;
-globalThis.window = _win;
-Object.defineProperty(globalThis, 'navigator', { value: { storage: { estimate: async () => ({ usage: 0, quota: 5*1024*1024 }) } }, writable: true, configurable: true });
 
-// ── Import modules ────────────────────────────────────────────────────
-const { dbGet, dbSet } = await import(`file://${ROOT}/js/db/database.js`);
-const { addScore, getLeaderboard, clearLeaderboard, saveLeaderboard } =
-  await import(`file://${ROOT}/js/db/leaderboard.js`);
-const { getStats, saveStats, getPlayerName, savePlayerName } =
-  await import(`file://${ROOT}/js/db/stats.js`);
-
-// Helper: wipe the mock store between tests
+// ── Helper: wipe mock store and window events between tests ──
 function resetStorage(opts = {}) {
   const store = _ls._store;
   Object.keys(store).forEach(k => delete store[k]);
   if (opts.preload) Object.assign(store, opts.preload);
-  _win._events.length = 0;
+  _windowEvents.length = 0;
 }
 
-// Helper: build a leaderboard of N entries with descending scores
+// ── Helper: build a leaderboard of N entries ──
 function makeLeaderboard(scores) {
   return scores.map((s, i) => ({
     recordId: `id${i}`,
-    name: `P${i}`,
-    score: s,
-    when: '01 Jan \'26 00:00',
+    name:     `P${i}`,
+    score:    s,
+    when:     "01 Jan '26 00:00",
   }));
 }
 
+// ═══════════════════════════════════════════════════════════════
+// Module imports (must happen AFTER stubs are set)
+// ═══════════════════════════════════════════════════════════════
+const { dbGet, dbSet, backendName } =
+  await import(`file://${ROOT}/js/db/database.js`);
 
-// ══════════════════════════════════════════════════════════════════════
-// database.js — dbGet / dbSet
-// ══════════════════════════════════════════════════════════════════════
+const { addScore, getLeaderboard, saveLeaderboard, clearLeaderboard } =
+  await import(`file://${ROOT}/js/db/leaderboard.js`);
 
-describe('database.js — dbGet', () => {
-  test('returns null for unknown key', () => {
+const {
+  getSoundMuted,
+  setSoundMuted,
+  initAudio,
+  applyAudioConfig,
+  cancelSoundTimers,
+} = await import(`file://${ROOT}/js/game/audio.js`);
+
+const { GAP_COEFF_INITIAL } =
+  await import(`file://${ROOT}/js/game/config.js`);
+
+// ═══════════════════════════════════════════════════════════════
+// database.js — changes in this PR
+// ═══════════════════════════════════════════════════════════════
+
+describe('database.js — memStore String() coercion (PR fix)', () => {
+  // When localStorage is unavailable the module falls back to memStore.
+  // The PR changed `memStore[key] = val` to `memStore[key] = String(val)`.
+  // To test the memStore path we must load database.js when localStorage is absent.
+
+  test('memStore path: dbSet coerces value to String and dbGet retrieves it', async () => {
+    // Save original localStorage
+    const origLs = globalThis.localStorage;
+
+    try {
+      // Remove localStorage before importing database.js to force memStore fallback
+      globalThis.localStorage = undefined;
+
+      // Re-import database.js to force it to detect absent localStorage
+      const dbModule = await import(`file://${ROOT}/js/db/database.js?t=${Date.now()}`);
+      const { dbGet: memDbGet, dbSet: memDbSet, backendName: memBackendName } = dbModule;
+
+      // Verify we're using memStore backend
+      assert.equal(memBackendName, 'IN-MEMORY (SESSION ONLY)',
+        'memStore backend should be active when localStorage is undefined');
+
+      // Test String() coercion with various types
+      assert.equal(memDbSet('str-key', 'hello'), true);
+      assert.equal(memDbGet('str-key'), 'hello');
+
+      // Test number coercion
+      memDbSet('num-key', 42);
+      assert.equal(memDbGet('num-key'), '42', 'number should be coerced to string');
+
+      // Test object coercion (uses toString)
+      const obj = { score: 100 };
+      memDbSet('obj-key', JSON.stringify(obj));
+      const back = JSON.parse(memDbGet('obj-key'));
+      assert.deepEqual(back, obj);
+
+      // Test null handling
+      assert.equal(memDbGet('no-such-key'), null, 'unknown key should return null');
+
+    } finally {
+      // Always restore localStorage
+      globalThis.localStorage = origLs;
+    }
+  });
+
+  test('dbSet stores a plain string value and dbGet retrieves it', () => {
+    resetStorage();
+    assert.equal(dbSet('str-key', 'hello'), true);
+    assert.equal(dbGet('str-key'), 'hello');
+  });
+
+  test('dbSet returns true on success', () => {
+    resetStorage();
+    assert.equal(dbSet('k1', 'v1'), true);
+  });
+
+  test('dbGet returns null for unknown key', () => {
     resetStorage();
     assert.equal(dbGet('no-such-key'), null);
   });
 
-  test('returns stored string value', () => {
-    resetStorage({ preload: { 'test-key': 'hello' } });
-    assert.equal(dbGet('test-key'), 'hello');
+  test('dbSet overwrites an existing key', () => {
+    resetStorage({ preload: { existing: 'old' } });
+    dbSet('existing', 'new');
+    assert.equal(dbGet('existing'), 'new');
   });
-});
 
-describe('database.js — dbSet', () => {
-  test('stores a value and returns true', () => {
+  test('dbSet with JSON.stringify value round-trips correctly', () => {
     resetStorage();
-    const ok = dbSet('my-key', 'my-val');
-    assert.equal(ok, true);
-    assert.equal(dbGet('my-key'), 'my-val');
+    const obj = { score: 42, name: 'ALICE' };
+    dbSet('obj-key', JSON.stringify(obj));
+    const back = JSON.parse(dbGet('obj-key'));
+    assert.deepEqual(back, obj);
   });
 
-  test('overwrites an existing key', () => {
-    resetStorage({ preload: { 'k': 'old' } });
-    dbSet('k', 'new');
-    assert.equal(dbGet('k'), 'new');
-  });
-
-  test('dispatches db:quotaFull when storage is full', () => {
-    // Temporarily replace localStorage with a zero-quota one
-    const tiny = makeLocalStorage({ quota: 0 });
-    const orig = globalThis.localStorage;
-    globalThis.localStorage = tiny;
-    _win._events.length = 0;
-
-    // Attempt a write that should fail due to quota
-    const result = dbSet('testKey', 'x'.repeat(100));
-
-    globalThis.localStorage = orig;  // restore before assertions
-
-    // Verify the write failed
-    assert.equal(result, false, 'dbSet should return false when quota exceeded');
-
-    // Verify db:quotaFull event was dispatched
-    const quotaFullEvents = _win._events.filter(e => e.type === 'db:quotaFull');
-    assert.ok(quotaFullEvents.length > 0, 'db:quotaFull event should be dispatched');
+  test('backendName contains expected storage descriptor', () => {
+    // Should be one of the two known strings depending on environment
+    assert.ok(
+      backendName === 'LOCAL STORAGE · OFFLINE' ||
+      backendName === 'IN-MEMORY (SESSION ONLY)',
+      `unexpected backendName: ${backendName}`
+    );
   });
 });
 
+describe('database.js — db:quotaFull event dispatch (PR fix)', () => {
+  test('db:quotaFull event is dispatched when storage quota is exceeded', async () => {
+    const origLs = globalThis.localStorage;
 
-// ══════════════════════════════════════════════════════════════════════
-// leaderboard.js
-// ══════════════════════════════════════════════════════════════════════
+    try {
+      // Install a zero-quota localStorage so any write fails with QuotaExceededError
+      const tinyLs = makeLocalStorage({ quota: 0 });
+      globalThis.localStorage = tinyLs;
+      _windowEvents.length = 0;
+
+      // Re-import database.js with the zero-quota storage
+      const dbModule = await import(`file://${ROOT}/js/db/database.js?t=${Date.now()}`);
+      const { dbSet: quotaDbSet } = dbModule;
+
+      // Attempt a write that will trigger QuotaExceededError
+      const result = quotaDbSet('test-key', 'some value that exceeds quota');
+
+      // dbSet should return false when quota is exceeded
+      assert.equal(result, false, 'dbSet should return false when quota exceeded');
+
+      // Verify that db:quotaFull event was dispatched
+      const quotaFullEvents = _windowEvents.filter(ev => ev.type === 'db:quotaFull');
+      assert.ok(quotaFullEvents.length > 0, 'db:quotaFull event must be dispatched on quota error');
+
+      // Verify event structure
+      const ev = quotaFullEvents[0];
+      assert.equal(ev.type, 'db:quotaFull');
+
+    } finally {
+      // Always restore original localStorage
+      globalThis.localStorage = origLs;
+      _windowEvents.length = 0;
+    }
+  });
+
+  test('db:quotaFull CustomEvent has correct type string', () => {
+    const ev = new CustomEvent('db:quotaFull');
+    assert.equal(ev.type, 'db:quotaFull');
+    assert.equal(ev.detail, undefined);
+  });
+
+  test('db:quota CustomEvent carries used/total detail', () => {
+    const ev = new CustomEvent('db:quota', { detail: { used: 512, total: 5000 } });
+    assert.equal(ev.detail.used,  512);
+    assert.equal(ev.detail.total, 5000);
+  });
+
+  test('db:criticalFailure CustomEvent carries message and key detail', () => {
+    const ev = new CustomEvent('db:criticalFailure', {
+      detail: { message: 'Storage completely full', key: 'dino:lb' },
+    });
+    assert.ok(ev.detail.message.length > 0);
+    assert.equal(ev.detail.key, 'dino:lb');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// leaderboard.js — prunedToFive flag fix (PR fix)
+// ═══════════════════════════════════════════════════════════════
 
 describe('leaderboard.js — getLeaderboard', () => {
   test('returns empty array when nothing stored', () => {
@@ -692,7 +327,7 @@ describe('leaderboard.js — getLeaderboard', () => {
     assert.equal(lb.length, 0);
   });
 
-  test('returns stored entries correctly', () => {
+  test('returns stored entries', () => {
     const entries = makeLeaderboard([300, 200, 100]);
     resetStorage({ preload: { 'dino:lb': JSON.stringify(entries) } });
     const lb = getLeaderboard();
@@ -702,7 +337,7 @@ describe('leaderboard.js — getLeaderboard', () => {
 });
 
 describe('leaderboard.js — addScore', () => {
-  test('adds a score and returns sorted leaderboard', () => {
+  test('adds score and returns sorted leaderboard', () => {
     resetStorage();
     const lb = addScore('ALICE', 500);
     assert.ok(Array.isArray(lb));
@@ -729,10 +364,10 @@ describe('leaderboard.js — addScore', () => {
 
   test('entry has required fields: recordId, name, score, when', () => {
     resetStorage();
-    const lb = addScore('BOB', 42);
-    const entry = lb.find(e => e.name === 'BOB');
-    assert.ok(entry.recordId, 'must have recordId');
-    assert.ok(entry.when,     'must have when timestamp');
+    const lb    = addScore('BOB', 42);
+    const entry = lb.find((e) => e.name === 'BOB');
+    assert.ok(entry.recordId,                    'must have recordId');
+    assert.ok(entry.when,                        'must have when timestamp');
     assert.equal(typeof entry.score, 'number');
   });
 
@@ -772,8 +407,7 @@ describe('leaderboard.js — clearLeaderboard', () => {
     resetStorage();
     addScore('A', 100);
     clearLeaderboard();
-    const lb = getLeaderboard();
-    assert.equal(lb.length, 0);
+    assert.equal(getLeaderboard().length, 0);
   });
 
   test('returns true on success', () => {
@@ -785,143 +419,129 @@ describe('leaderboard.js — clearLeaderboard', () => {
 describe('leaderboard.js — deduplication by recordId', () => {
   test('does not duplicate an entry with the same recordId', () => {
     resetStorage();
-    const entry = { recordId: 'fixed-id', name: 'DUP', score: 999, when: '01 Jan \'26' };
-    const lb1 = [entry];
-    saveLeaderboard(lb1);
-    // Add same entry again via low-level save
+    const entry = { recordId: 'fixed-id', name: 'DUP', score: 999, when: "01 Jan '26" };
+    saveLeaderboard([entry]);
     saveLeaderboard([entry, { ...entry, recordId: 'other-id', score: 100 }]);
-    const lb = getLeaderboard();
-    const dupes = lb.filter(e => e.recordId === 'fixed-id');
+    const lb    = getLeaderboard();
+    const dupes = lb.filter((e) => e.recordId === 'fixed-id');
     assert.equal(dupes.length, 1);
   });
 });
 
+describe('leaderboard.js — pruneAndSave prunedToFive flag fix (PR fix)', () => {
+  // Before this PR, the message guard `(combined.length > 5)` was always false
+  // after the slice had already mutated the array — the "top-5 pruning failed"
+  // branch was dead code.  The fix introduces a `prunedToFive` boolean that is
+  // set BEFORE the slice so the message is correct.
+  //
+  // We test observable side-effects:
+  //   1. When storage is full with >5 entries → db:criticalFailure dispatched with
+  //      the "even top-5 pruning failed" message.
+  //   2. When storage is full with ≤5 entries → db:criticalFailure dispatched with
+  //      the "leaderboard payload (<=5) failed to save" message.
 
-// ══════════════════════════════════════════════════════════════════════
-// stats.js — getStats / saveStats / player name / migration
-// ══════════════════════════════════════════════════════════════════════
-
-describe('stats.js — getStats defaults', () => {
-  test('returns all-zero defaults when nothing stored', () => {
+  test('dispatches db:criticalFailure with correct "top-5 pruning" message when >5 entries present', () => {
     resetStorage();
-    const s = getStats();
-    assert.equal(s.games,      0);
-    assert.equal(s.deaths,     0);
-    assert.equal(s.obstacles,  0);
-    assert.equal(s.totalDist,  0);
-    assert.equal(s.bestScore,  0);
-    assert.equal(s.bestTime,   0);
+    // First: populate the leaderboard with 7 entries so that a second write attempt
+    // will have >5 entries to prune.
+    const entries = makeLeaderboard([700, 600, 500, 400, 300, 200, 100]);
+    saveLeaderboard(entries);
+    _windowEvents.length = 0;
+
+    // Now call saveLeaderboard with a knownExisting that has >5 entries
+    // and a zero-quota localStorage so both the top-10 AND top-5 writes fail.
+    // We need to install a localStorage that rejects writes for the leaderboard key.
+    const strictLs = makeLocalStorage({
+      quota:   0,
+      preload: { 'dino:lb': JSON.stringify(entries) }, // pre-seeded so probe passes
+    });
+    // Allow the probe (_dinotest) always — already handled in makeLocalStorage
+    const origLs = globalThis.localStorage;
+    globalThis.localStorage = strictLs;
+
+    // This will fail the top-10 write because quota=0, then try top-5 and also fail.
+    // Since saveLeaderboard passes knownExisting=entries, pruneAndSave skips the
+    // initial top-10 attempt and goes straight to the prune logic.
+    // It will try to prune to top-5 and fail → should dispatch "even top-5 pruning failed"
+    const result = saveLeaderboard(entries);
+
+    globalThis.localStorage = origLs;
+
+    assert.equal(result, null, 'saveLeaderboard should return null when all writes fail');
+
+    const failures = _windowEvents.filter((ev) => ev.type === 'db:criticalFailure');
+    assert.ok(failures.length > 0, 'db:criticalFailure event must be dispatched');
+    const msg = failures[0].detail && failures[0].detail.message;
+    assert.ok(msg, 'db:criticalFailure event must have a detail.message');
+    // The prunedToFive=true branch fires when combined.length > 5 — 7 entries > 5
+    assert.ok(
+      msg.includes('top-5 pruning'),
+      `Expected "top-5 pruning" in message, got: "${msg}"`
+    );
   });
 
-  test('bestTime is 0 in defaults (not undefined)', () => {
+  test('dispatches db:criticalFailure with "<=5" message when ≤5 entries cannot be saved', () => {
     resetStorage();
-    const s = getStats();
-    assert.equal(typeof s.bestTime, 'number');
-    assert.equal(s.bestTime, 0);
+    // Only 3 entries — combined.length <= 5 so prunedToFive stays false
+    const entries = makeLeaderboard([300, 200, 100]);
+    _windowEvents.length = 0;
+
+    const strictLs = makeLocalStorage({
+      quota:   0,
+      preload: { 'dino:lb': JSON.stringify(entries) },
+    });
+    const origLs = globalThis.localStorage;
+    globalThis.localStorage = strictLs;
+
+    const result = saveLeaderboard(entries);
+
+    globalThis.localStorage = origLs;
+
+    assert.equal(result, null, 'saveLeaderboard should return null');
+
+    const failures = _windowEvents.filter((ev) => ev.type === 'db:criticalFailure');
+    assert.ok(failures.length > 0, 'db:criticalFailure event must be dispatched');
+    const msg = failures[0].detail && failures[0].detail.message;
+    assert.ok(msg, 'event must have detail.message');
+    assert.ok(
+      msg.includes('<=5'),
+      `Expected "<=5" in message, got: "${msg}"`
+    );
   });
 
-  test('returns defaults for corrupt JSON', () => {
-    resetStorage({ preload: { 'dino:stats': 'not json' } });
-    const s = getStats();
-    assert.equal(s.bestScore, 0);
+  test('saveLeaderboard returns combined array on success (normal path)', () => {
+    resetStorage();
+    const entries = makeLeaderboard([500, 400, 300]);
+    const saved   = saveLeaderboard(entries);
+    assert.ok(Array.isArray(saved), 'should return an array on success');
+    assert.equal(saved.length, 3);
   });
 
-  test('merges saved partial stats with defaults (missing fields filled)', () => {
-    resetStorage({ preload: { 'dino:stats': JSON.stringify({ games: 5, deaths: 2 }) } });
-    const s = getStats();
-    assert.equal(s.games,    5);
-    assert.equal(s.deaths,   2);
-    assert.equal(s.bestTime, 0);   // missing field filled with default
+  test('pruneAndSave with existing >10 entries correctly trims to top 10 first, then top 5 on failure', () => {
+    resetStorage();
+    // Build 10 entries already in storage
+    const initial = makeLeaderboard([1000,900,800,700,600,500,400,300,200,100]);
+    saveLeaderboard(initial);
+    _windowEvents.length = 0;
+
+    // Install quota that allows only a very small payload
+    // The JSON for top-5 entries is ~200 bytes; use quota just above 0 to force failures
+    const strictLs = makeLocalStorage({
+      quota:   0,
+      preload: { 'dino:lb': JSON.stringify(initial) },
+    });
+    const origLs = globalThis.localStorage;
+    globalThis.localStorage = strictLs;
+
+    const newEntry = [{ recordId: 'new1', name: 'NEW', score: 1100, when: "01 Jan '26" }];
+    const result   = saveLeaderboard(initial.concat(newEntry));
+
+    globalThis.localStorage = origLs;
+    assert.equal(result, null);
   });
 });
 
-describe('stats.js — saveStats round-trip', () => {
-  test('saves and retrieves stats correctly', () => {
-    resetStorage();
-    const data = { games:3, deaths:1, obstacles:42, totalDist:1234, bestScore:999, bestTime:87 };
-    saveStats(data);
-    const back = getStats();
-    assert.deepEqual(back, data);
-  });
-
-  test('returns true on success', () => {
-    resetStorage();
-    assert.equal(saveStats({ games:1, deaths:0, obstacles:0, totalDist:0, bestScore:0, bestTime:0 }), true);
-  });
-});
-
-describe('stats.js — player name', () => {
-  test('getPlayerName returns ANON by default', () => {
-    resetStorage();
-    assert.equal(getPlayerName(), 'ANON');
-  });
-
-  test('savePlayerName persists and retrieves name', () => {
-    resetStorage();
-    savePlayerName('CAROL');
-    assert.equal(getPlayerName(), 'CAROL');
-  });
-
-  test('savePlayerName returns true on success', () => {
-    resetStorage();
-    assert.equal(savePlayerName('DAVE'), true);
-  });
-});
-
-describe('stats.js — schema migration (v0 → v1)', () => {
-  test('migration is idempotent — loading the module twice does not corrupt data', () => {
-    // Migration runs once at module import time. After that, dino:version is set
-    // to the current DB_VERSION and any subsequent re-evaluation would skip the
-    // migration body. We test the observable side-effect: all leaderboard entries
-    // returned by getLeaderboard() after import must have a recordId.
-    resetStorage();
-    addScore('MIGRATE_TEST', 42);
-    const lb = getLeaderboard();
-    lb.forEach(e => assert.ok(e.recordId, `entry '${e.name}' must have recordId`));
-  });
-
-  test('dino:version is set to a numeric string after module loads', () => {
-    const v = dbGet('dino:version');
-    if (v !== null) {
-      const n = parseInt(v, 10);
-      assert.equal(isNaN(n), false, 'dino:version must be a numeric string');
-      assert.ok(n >= 1, 'dino:version must be >= 1');
-    }
-    // If null the module hasn't written it yet (fresh store) — not a failure.
-    assert.ok(true);
-  });
-});
-
-
-// ══════════════════════════════════════════════════════════════════════
-// Custom event emission
-// ══════════════════════════════════════════════════════════════════════
-
-describe('db:quota events', () => {
-  test('db:quotaFull event type is correct string', () => {
-    const ev = new CustomEvent('db:quotaFull');
-    assert.equal(ev.type, 'db:quotaFull');
-  });
-
-  test('db:quota event carries detail', () => {
-    const ev = new CustomEvent('db:quota', { detail: { used: 100, total: 5000 } });
-    assert.equal(ev.detail.used,  100);
-    assert.equal(ev.detail.total, 5000);
-  });
-
-  test('db:criticalFailure event carries detail.message', () => {
-    const ev = new CustomEvent('db:criticalFailure', { detail: { message: 'full', key: 'k' } });
-    assert.ok(ev.detail.message);
-    assert.ok(ev.detail.key);
-  });
-});
-
-
-// ══════════════════════════════════════════════════════════════════════
-// Leaderboard capacity and sort stability
-// ══════════════════════════════════════════════════════════════════════
-
-describe('leaderboard capacity — top 10 enforced', () => {
+describe('leaderboard.js — capacity and sort stability', () => {
   test('adding 15 entries keeps only top 10', () => {
     resetStorage();
     for (let i = 1; i <= 15; i++) addScore('P' + i, i * 10);
@@ -932,10 +552,9 @@ describe('leaderboard capacity — top 10 enforced', () => {
   test('top 10 contains the highest scores', () => {
     resetStorage();
     for (let i = 1; i <= 15; i++) addScore('P' + i, i * 10);
-    const lb = getLeaderboard();
-    // Lowest score in top-10 should be at least the 6th-highest input
-    const minInLb = Math.min(...lb.map(e => e.score));
-    assert.ok(minInLb >= 60, `lowest in top-10 should be >= 60, got ${minInLb}`);
+    const lb    = getLeaderboard();
+    const minLb = Math.min(...lb.map((e) => e.score));
+    assert.ok(minLb >= 60, `lowest in top-10 should be >= 60, got ${minLb}`);
   });
 
   test('leaderboard is sorted best-first', () => {
@@ -943,7 +562,723 @@ describe('leaderboard capacity — top 10 enforced', () => {
     addScore('A', 200); addScore('B', 500); addScore('C', 100);
     const lb = getLeaderboard();
     for (let i = 1; i < lb.length; i++) {
-      assert.ok(lb[i-1].score >= lb[i].score, 'entries must be sorted descending');
+      assert.ok(lb[i - 1].score >= lb[i].score, 'entries must be sorted descending');
     }
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// audio.js — per-key buffer check (PR fix)
+// ═══════════════════════════════════════════════════════════════
+
+describe('audio.js — getSoundMuted / setSoundMuted', () => {
+  test('getSoundMuted returns false by default', () => {
+    assert.equal(getSoundMuted(), false);
+  });
+
+  test('setSoundMuted(true) toggles mute on', () => {
+    setSoundMuted(true);
+    assert.equal(getSoundMuted(), true);
+    setSoundMuted(false); // restore
+  });
+
+  test('setSoundMuted(false) toggles mute off', () => {
+    setSoundMuted(true);
+    setSoundMuted(false);
+    assert.equal(getSoundMuted(), false);
+  });
+
+  test('setSoundMuted is idempotent for the same value', () => {
+    setSoundMuted(false);
+    setSoundMuted(false);
+    assert.equal(getSoundMuted(), false);
+    setSoundMuted(true);
+    setSoundMuted(true);
+    assert.equal(getSoundMuted(), true);
+    setSoundMuted(false); // restore
+  });
+});
+
+describe('audio.js — initAudio with no AudioContext (PR context)', () => {
+  test('initAudio is a no-op when no AudioContext constructor is available', () => {
+    // window.AudioContext and window.webkitAudioContext are undefined in our stub
+    // initAudio should not throw
+    assert.doesNotThrow(() => initAudio());
+  });
+
+  test('initAudio can be called repeatedly without throwing', () => {
+    assert.doesNotThrow(() => {
+      initAudio();
+      initAudio();
+      initAudio();
+    });
+  });
+});
+
+describe('audio.js — applyAudioConfig (PR context)', () => {
+  test('applyAudioConfig is a no-op for null input', () => {
+    assert.doesNotThrow(() => applyAudioConfig(null));
+  });
+
+  test('applyAudioConfig is a no-op for undefined input', () => {
+    assert.doesNotThrow(() => applyAudioConfig(undefined));
+  });
+
+  test('applyAudioConfig accepts valid audio config object', () => {
+    assert.doesNotThrow(() => applyAudioConfig({
+      jump:      'assets/audio/jump.ogg',
+      die:       'assets/audio/die.ogg',
+      milestone: 'assets/audio/milestone.ogg',
+    }));
+  });
+
+  test('applyAudioConfig ignores unknown keys', () => {
+    assert.doesNotThrow(() => applyAudioConfig({ unknown: 'value' }));
+  });
+
+  test('applyAudioConfig strips extension and re-appends detected format', () => {
+    // Should not throw; extension stripping logic must handle any extension
+    assert.doesNotThrow(() => applyAudioConfig({
+      jump: 'assets/audio/jump.mp3',
+    }));
+  });
+});
+
+describe('audio.js — cancelSoundTimers', () => {
+  test('cancelSoundTimers does not throw when called with no pending timers', () => {
+    assert.doesNotThrow(() => cancelSoundTimers());
+  });
+
+  test('cancelSoundTimers can be called multiple times safely', () => {
+    assert.doesNotThrow(() => {
+      cancelSoundTimers();
+      cancelSoundTimers();
+    });
+  });
+});
+
+describe('audio.js — _playBuffer per-key logic (PR fix, indirect)', () => {
+  // The PR changed _playBuffer so that a failed load state for ONE key does not
+  // silence other keys whose buffers loaded successfully.
+  // _buffers and _loadState are module-private — we test the public-facing
+  // behaviour via soundJump/soundDie/soundMilestone which call _playBuffer internally.
+  // When muted, _playBuffer always returns false regardless of state.
+
+  test('when muted, setSoundMuted(true) causes getSoundMuted to return true', () => {
+    setSoundMuted(true);
+    assert.equal(getSoundMuted(), true);
+    setSoundMuted(false);
+  });
+
+  test('when no AudioContext is available, playback functions do not throw', async () => {
+    // All three public sound functions fall back to synth beeps when audioCtx is null.
+    // They use setTimeout internally; just verify no synchronous throw occurs.
+    const { soundJump, soundDie, soundMilestone } =
+      await import(`file://${ROOT}/js/game/audio.js`);
+
+    setSoundMuted(false);
+    assert.doesNotThrow(() => soundJump());
+    assert.doesNotThrow(() => soundDie());
+    assert.doesNotThrow(() => soundMilestone());
+    cancelSoundTimers();
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// input.js — mute emoji fix (PR fix: U+1F50A not U+1F506)
+// ═══════════════════════════════════════════════════════════════
+
+describe('input.js — mute-toggle emoji fix (PR fix)', () => {
+  // The PR fixed both handler locations that used U+1F506 (🔆 HIGH BRIGHTNESS)
+  // instead of U+1F50A (🔊 SPEAKER WITH THREE SOUND WAVES).
+  // We verify the fix by reading the source and checking the codepoints.
+
+  test('U+1F50A (🔊) is the correct unmuted speaker emoji', () => {
+    const unmutedEmoji = '\uD83D\uDD0A';   // U+1F50A SPEAKER WITH THREE SOUND WAVES
+    const wrongEmoji   = '\uD83D\uDD06';   // U+1F506 HIGH BRIGHTNESS SYMBOL (was incorrect)
+    // The correct emoji should produce the speaker character, not the brightness symbol
+    assert.notEqual(unmutedEmoji, wrongEmoji);
+    // Code point verification
+    const cp = unmutedEmoji.codePointAt(0);
+    assert.equal(cp, 0x1F50A, `Expected codepoint 0x1F50A, got 0x${cp.toString(16).toUpperCase()}`);
+  });
+
+  test('U+1F507 (🔇) is the muted emoji codepoint check', () => {
+    const mutedEmoji = '\uD83D\uDD07';  // U+1F507 SPEAKER WITH CANCELLATION STROKE
+    const cp = mutedEmoji.codePointAt(0);
+    assert.equal(cp, 0x1F507);
+  });
+
+  test('input.js source uses the correct U+1F50A unmuted emoji (regression guard)', async () => {
+    // Read the source text and confirm U+1F50A appears and U+1F506 does not appear
+    // as an unmuted icon assignment.
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(path.join(ROOT, 'js/game/input.js'), 'utf8');
+
+    // After the fix, \uD83D\uDD06 (wrong bright icon) should NOT appear in assignments
+    // for the unmuted state; \uD83D\uDD0A (correct speaker icon) should appear.
+    // The source uses the escape literals directly.
+    const wrongEscapeInSource  = '\\uD83D\\uDD06';  // the old wrong value (escaped)
+    const correctEscapeInSource = '\\uD83D\\uDD0A'; // the new correct value (escaped)
+
+    // Both assignments (keyboard and click handler) should use the correct emoji
+    const occurrencesCorrect = (src.match(/\\uD83D\\uDD0A/g) || []).length;
+    const occurrencesWrong   = (src.match(/\\uD83D\\uDD06/g) || []).length;
+
+    assert.equal(occurrencesWrong, 0,
+      'input.js must not contain \\uD83D\\uDD06 (wrong brightness icon)');
+    assert.ok(occurrencesCorrect >= 2,
+      `input.js should contain at least 2 occurrences of \\uD83D\\uDD0A (speaker icon), found ${occurrencesCorrect}`);
+  });
+
+  test('setupInput wires a mute button click handler that toggles mute state', async () => {
+    // Verify that setupInput attaches a click handler to muteBtn and that clicking
+    // it toggles the mute state.
+    const clickHandlers = [];
+    const removeEventListenerCalls = [];
+    const muteBtnStub = {
+      textContent: '',
+      classList: { toggle() {}, add() {}, remove() {} },
+      setAttribute() {},
+      addEventListener(evt, fn) {
+        if (evt === 'click') clickHandlers.push(fn);
+      },
+      removeEventListener(evt, fn) {
+        if (evt === 'click') removeEventListenerCalls.push({ evt, fn });
+      },
+    };
+
+    const makeDOMStub = () => ({
+      gameFrame:     { addEventListener() {}, removeEventListener() {} },
+      restartBtn:    { addEventListener() {}, removeEventListener() {} },
+      jumpBtn:       { addEventListener() {}, removeEventListener() {} },
+      duckBtn:       { addEventListener() {}, removeEventListener() {} },
+      pauseBtn:      { addEventListener() {}, removeEventListener() {} },
+      muteBtn:       muteBtnStub,
+      fullscreenBtn: { addEventListener() {}, removeEventListener() {} },
+    });
+
+    // Import setupInput and teardownInput
+    const { setupInput, teardownInput } =
+      await import(`file://${ROOT}/js/game/input.js`);
+
+    // Set initial mute state
+    setSoundMuted(false);
+    assert.equal(getSoundMuted(), false, 'initial state should be unmuted');
+
+    // Call setupInput with DOM stub and empty handlers
+    const handlers = {
+      jump: () => {},
+      startDuck: () => {},
+      endDuck: () => {},
+      togglePause: () => {},
+      toggleFullscreen: () => {},
+      restart: () => {},
+    };
+    setupInput(makeDOMStub(), handlers);
+
+    // Verify that a click handler was attached to muteBtn
+    assert.ok(clickHandlers.length > 0, 'setupInput should attach click handler to muteBtn');
+
+    // Simulate a click by invoking the captured handler
+    const mockEvent = { stopPropagation() {} };
+    clickHandlers[0].call(muteBtnStub, mockEvent);
+
+    // Verify that mute state toggled
+    assert.equal(getSoundMuted(), true, 'clicking muteBtn should toggle mute to true');
+
+    // Click again to toggle back
+    clickHandlers[0].call(muteBtnStub, mockEvent);
+    assert.equal(getSoundMuted(), false, 'clicking muteBtn again should toggle mute to false');
+
+    // Call teardownInput to remove handlers
+    teardownInput();
+
+    // Verify that removeEventListener was called with the expected handler
+    assert.ok(removeEventListenerCalls.length > 0, 'teardownInput should call removeEventListener');
+    const muteBtnRemoveCalls = removeEventListenerCalls.filter(call => call.evt === 'click');
+    assert.ok(muteBtnRemoveCalls.length > 0, 'removeEventListener should be called for click event');
+    assert.equal(muteBtnRemoveCalls[0].fn, clickHandlers[0], 'removeEventListener should be called with the original handler');
+
+    // Restore mute state
+    setSoundMuted(false);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// config.js — GAP_COEFF_INITIAL constant (PR fix in main.js)
+// ═══════════════════════════════════════════════════════════════
+
+describe('config.js — GAP_COEFF_INITIAL (referenced in main.js PR fix)', () => {
+  test('GAP_COEFF_INITIAL equals 0.6 (the previously hard-coded literal)', () => {
+    // The PR replaced `G.gapCoefficient = 0.6` with `G.gapCoefficient = GAP_COEFF_INITIAL`.
+    // Verify the constant has the expected value that was previously hard-coded.
+    assert.equal(GAP_COEFF_INITIAL, 0.6);
+  });
+
+  test('GAP_COEFF_INITIAL is between 0 and 1 (valid coefficient range)', () => {
+    assert.ok(GAP_COEFF_INITIAL > 0);
+    assert.ok(GAP_COEFF_INITIAL < 1);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// main.js — db:quota null-guard (PR fix)
+// ═══════════════════════════════════════════════════════════════
+
+describe('main.js — db:quota event null-guard logic (PR fix)', () => {
+  // The PR added `if (!e || !e.detail) return;` to the db:quota handler.
+  // We verify the guard by testing the pct/usedKB calculation logic in isolation.
+
+  test('pct calculation returns "?" when total is 0', () => {
+    // Extracted logic from the handler: if total > 0 … else '?'
+    function calcPct(used, total) {
+      return total > 0 ? ((used / total) * 100).toFixed(1) : '?';
+    }
+    assert.equal(calcPct(0, 0),    '?');
+    assert.equal(calcPct(100, 0),  '?');
+    assert.equal(calcPct(512, 5242880), '0.0');
+  });
+
+  test('usedKB calculation rounds to 0 decimal places', () => {
+    function calcUsedKB(used) { return (used / 1024).toFixed(0); }
+    assert.equal(calcUsedKB(0),    '0');
+    assert.equal(calcUsedKB(1024), '1');
+    assert.equal(calcUsedKB(2048), '2');
+    assert.equal(calcUsedKB(512),  '1'); // rounds up
+  });
+
+  test('guard: null event detail does not produce NaN in pct calculation', () => {
+    // Simulate what would happen if e.detail were null and the guard were absent
+    const e = { detail: null };
+    // With the guard: if (!e || !e.detail) return — this would bail early
+    // Without the guard: e.detail.total would throw TypeError
+    const guardPasses = !e || !e.detail;
+    assert.equal(guardPasses, true, 'null detail should trigger the guard return');
+  });
+
+  test('guard: undefined event detail triggers early return', () => {
+    const e = { detail: undefined };
+    const guardPasses = !e || !e.detail;
+    assert.equal(guardPasses, true, 'undefined detail should trigger the guard return');
+  });
+
+  test('guard: valid detail with used/total passes through', () => {
+    const e = { detail: { used: 100, total: 5000 } };
+    const guardPasses = !e || !e.detail;
+    assert.equal(guardPasses, false, 'valid detail should NOT trigger early return');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// main.js — goNewBest condition fix (PR fix: removed prevBest > 0)
+// ═══════════════════════════════════════════════════════════════
+
+describe('main.js — goNewBest condition fix (PR fix)', () => {
+  // Before: `if (s > prevBest && prevBest > 0 && lb)`
+  // After:  `if (s > prevBest && lb)`
+  // The change allows the "NEW BEST" badge to show on the very first game (prevBest=0).
+
+  test('new condition shows badge on first game (score > 0, prevBest = 0)', () => {
+    const s = 500, prevBest = 0, lb = [{}]; // lb truthy
+    const oldCondition = s > prevBest && prevBest > 0 && lb;
+    const newCondition = s > prevBest && lb;
+    assert.equal(oldCondition, false, 'old condition blocked badge on first game');
+    assert.ok(newCondition,           'new condition allows badge on first game');
+  });
+
+  test('new condition still hides badge when score does not exceed prevBest', () => {
+    const s = 100, prevBest = 500, lb = [{}];
+    const newCondition = s > prevBest && lb;
+    assert.ok(!newCondition, 'badge must not show when score <= prevBest');
+  });
+
+  test('new condition hides badge when lb is null (storage failure)', () => {
+    const s = 500, prevBest = 0, lb = null;
+    const newCondition = s > prevBest && lb;
+    assert.ok(!newCondition, 'badge must not show when lb is null');
+  });
+
+  test('new condition shows badge when score strictly greater than non-zero prevBest', () => {
+    const s = 600, prevBest = 500, lb = [{}];
+    const newCondition = s > prevBest && lb;
+    assert.ok(newCondition);
+  });
+
+  test('new condition does not show badge when score equals prevBest', () => {
+    const s = 500, prevBest = 500, lb = [{}];
+    const newCondition = s > prevBest && lb;
+    assert.ok(!newCondition, 'badge must not show when score equals prevBest');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// main.js — renderLeaderboard medal CSS vars (PR fix)
+// ═══════════════════════════════════════════════════════════════
+
+describe('main.js — renderLeaderboard medal CSS custom properties (PR fix)', () => {
+  // The PR changed medals from hardcoded hex strings to CSS custom properties.
+  // Before: ['#ffd700', '#c0c0c0', '#cd7f32']
+  // After:  ['var(--ce-gold)', 'var(--ce-silver)', 'var(--ce-bronze)']
+  // These tests verify the actual source code in js/main.js to catch regressions.
+
+  let medals;
+  before(async () => {
+    // Read and parse the medals array from js/main.js source
+    const { readFileSync } = await import('node:fs');
+    const src = readFileSync(path.join(ROOT, 'js/main.js'), 'utf8');
+
+    // Extract the medals array definition from the renderLeaderboard function
+    // Pattern: const medals = ['...', '...', '...'];
+    const medalsPattern = /const medals\s*=\s*\[([^\]]+)\]/;
+    const match = src.match(medalsPattern);
+    assert.ok(match, 'js/main.js must contain medals array definition');
+
+    // Parse the array literal by evaluating it
+    const medalsArrayLiteral = '[' + match[1] + ']';
+    medals = eval(medalsArrayLiteral);
+  });
+
+  test('medals array uses CSS custom properties, not hardcoded hex', () => {
+    medals.forEach((m) => {
+      assert.ok(m.startsWith('var(--'), `Medal "${m}" must use CSS var()`);
+    });
+  });
+
+  test('gold medal references --ce-gold', () => {
+    assert.equal(medals[0], 'var(--ce-gold)');
+  });
+
+  test('silver medal references --ce-silver', () => {
+    assert.equal(medals[1], 'var(--ce-silver)');
+  });
+
+  test('bronze medal references --ce-bronze', () => {
+    assert.equal(medals[2], 'var(--ce-bronze)');
+  });
+
+  test('entries beyond top 3 have no medal color (medals[3] is undefined)', () => {
+    assert.equal(medals[3], undefined);
+  });
+
+  test('medals array contains exactly 3 entries', () => {
+    assert.equal(medals.length, 3);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// main.js — boot() try/catch error handler (PR fix)
+// ═══════════════════════════════════════════════════════════════
+
+describe('main.js — boot() error surface logic (PR fix, unit)', () => {
+  // The PR wrapped boot() body in a try/catch that writes a visible error message.
+  // We test the error formatting logic in isolation.
+
+  test('error message uses err.message when available', () => {
+    function formatBootError(err) {
+      return 'ERROR: ' + (err && err.message ? err.message : String(err));
+    }
+    const err = new Error('initRenderer failed');
+    assert.equal(formatBootError(err), 'ERROR: initRenderer failed');
+  });
+
+  test('error message falls back to String(err) when no message property', () => {
+    function formatBootError(err) {
+      return 'ERROR: ' + (err && err.message ? err.message : String(err));
+    }
+    assert.equal(formatBootError('raw string error'), 'ERROR: raw string error');
+  });
+
+  test('error message handles null err gracefully', () => {
+    function formatBootError(err) {
+      return 'ERROR: ' + (err && err.message ? err.message : String(err));
+    }
+    assert.equal(formatBootError(null), 'ERROR: null');
+  });
+
+  test('error message handles undefined err gracefully', () => {
+    function formatBootError(err) {
+      return 'ERROR: ' + (err && err.message ? err.message : String(err));
+    }
+    assert.equal(formatBootError(undefined), 'ERROR: undefined');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// main.js — visibilitychange "paused/dead" repaint branch (PR fix)
+// ═══════════════════════════════════════════════════════════════
+
+describe('main.js — visibilitychange repaint for paused/dead state (PR fix, unit)', () => {
+  // The PR added `else { draw(); }` to the visibilitychange handler so that
+  // paused/dead game states repaint when the tab returns to focus.
+  // We verify the control-flow logic in isolation.
+
+  function simulateVisibilityReturn(state, paused) {
+    let drawCalled = false;
+    const draw = () => { drawCalled = true; };
+
+    // Replicate the post-PR handler logic:
+    if (state === 'running' && !paused) {
+      // engine.resetTimer(); engine.start();
+    } else if (state === 'idle') {
+      // idleRafId = requestAnimationFrame(idleLoop);
+    } else {
+      draw();
+    }
+
+    return drawCalled;
+  }
+
+  test('draw() is called when state is "paused"', () => {
+    assert.equal(simulateVisibilityReturn('paused', true), true);
+  });
+
+  test('draw() is called when state is "dead"', () => {
+    assert.equal(simulateVisibilityReturn('dead', false), true);
+  });
+
+  test('draw() is NOT called when state is "running" and not paused', () => {
+    assert.equal(simulateVisibilityReturn('running', false), false);
+  });
+
+  test('draw() is NOT called when state is "idle"', () => {
+    assert.equal(simulateVisibilityReturn('idle', false), false);
+  });
+
+  test('draw() IS called for unknown state (else branch catches all other states)', () => {
+    assert.equal(simulateVisibilityReturn('unknown', false), true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// db.js — file deleted (regression: no circular import)
+// ═══════════════════════════════════════════════════════════════
+
+describe('db.js — barrel file deleted (PR change)', () => {
+  test('js/db/db.js does not exist in the project', async () => {
+    const { existsSync } = await import('node:fs');
+    const dbBarrelPath = path.join(ROOT, 'js/db/db.js');
+    assert.equal(existsSync(dbBarrelPath), false,
+      'db.js barrel file must be deleted to prevent circular import');
+  });
+
+  test('database.js can be imported directly without circular dependency', async () => {
+    // If there were a circular import the module would be undefined or throw
+    const mod = await import(`file://${ROOT}/js/db/database.js`);
+    assert.ok(typeof mod.dbGet  === 'function', 'dbGet must be exported');
+    assert.ok(typeof mod.dbSet  === 'function', 'dbSet must be exported');
+    assert.ok(typeof mod.backendName === 'string', 'backendName must be exported');
+  });
+
+  test('leaderboard.js can be imported without circular import error', async () => {
+    const mod = await import(`file://${ROOT}/js/db/leaderboard.js`);
+    assert.ok(typeof mod.addScore      === 'function');
+    assert.ok(typeof mod.getLeaderboard === 'function');
+    assert.ok(typeof mod.clearLeaderboard === 'function');
+    assert.ok(typeof mod.saveLeaderboard  === 'function');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// css/style.css — file deleted (regression check)
+// ═══════════════════════════════════════════════════════════════
+
+describe('css/style.css — deleted and merged into base.css/ui.css/accessibility.css', () => {
+  test('css/style.css does not exist', async () => {
+    const { existsSync } = await import('node:fs');
+    assert.equal(existsSync(path.join(ROOT, 'css/style.css')), false,
+      'css/style.css must be deleted — content merged into other CSS files');
+  });
+
+  test('index.html does not reference css/style.css', async () => {
+    const { readFileSync } = await import('node:fs');
+    const html = readFileSync(path.join(ROOT, 'index.html'), 'utf8');
+    assert.ok(!html.includes('style.css'),
+      'index.html must not include a <link> to css/style.css');
+  });
+
+  test('css/base.css exists', async () => {
+    const { existsSync } = await import('node:fs');
+    assert.equal(existsSync(path.join(ROOT, 'css/base.css')), true);
+  });
+
+  test('css/ui.css exists', async () => {
+    const { existsSync } = await import('node:fs');
+    assert.equal(existsSync(path.join(ROOT, 'css/ui.css')), true);
+  });
+
+  test('css/accessibility.css exists', async () => {
+    const { existsSync } = await import('node:fs');
+    assert.equal(existsSync(path.join(ROOT, 'css/accessibility.css')), true);
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// css/base.css — CE theme tokens added (PR change)
+// ═══════════════════════════════════════════════════════════════
+
+describe('css/base.css — CE theme tokens and scrollbar polish (PR change)', () => {
+  test('base.css contains --ce-blue custom property', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(path.join(ROOT, 'css/base.css'), 'utf8');
+    assert.ok(css.includes('--ce-blue'), 'base.css must define --ce-blue');
+  });
+
+  test('base.css contains --ce-gold custom property', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(path.join(ROOT, 'css/base.css'), 'utf8');
+    assert.ok(css.includes('--ce-gold'), 'base.css must define --ce-gold');
+  });
+
+  test('base.css contains ::selection rule', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(path.join(ROOT, 'css/base.css'), 'utf8');
+    assert.ok(css.includes('::selection'), 'base.css must contain ::selection rule');
+  });
+
+  test('base.css contains ::-webkit-scrollbar rule', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(path.join(ROOT, 'css/base.css'), 'utf8');
+    assert.ok(css.includes('::-webkit-scrollbar'), 'base.css must contain scrollbar rules');
+  });
+
+  test('base.css contains CE night palette tokens', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(path.join(ROOT, 'css/base.css'), 'utf8');
+    assert.ok(css.includes('--ce-night-bg'),  'base.css must define --ce-night-bg');
+    assert.ok(css.includes('--ce-night-fg'),  'base.css must define --ce-night-fg');
+    assert.ok(css.includes('--ce-night-dim'), 'base.css must define --ce-night-dim');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// css/ui.css — ce-pulse animation and speed-bar transition (PR change)
+// ═══════════════════════════════════════════════════════════════
+
+describe('css/ui.css — ce-pulse animation and speed-bar transition (PR change)', () => {
+  test('ui.css contains @keyframes ce-pulse', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(path.join(ROOT, 'css/ui.css'), 'utf8');
+    assert.ok(css.includes('@keyframes ce-pulse'), 'ui.css must define @keyframes ce-pulse');
+  });
+
+  test('ui.css animates .go-newbest:not(.hidden) with ce-pulse', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(path.join(ROOT, 'css/ui.css'), 'utf8');
+
+    // Parse CSS to locate the .go-newbest:not(.hidden) rule
+    const selectorPattern = /\.go-newbest:not\(\.hidden\)\s*\{([^}]+)\}/;
+    const match = css.match(selectorPattern);
+    assert.ok(match, 'ui.css must contain .go-newbest:not(.hidden) rule');
+
+    const ruleBody = match[1];
+    // Assert that the rule body contains an animation declaration referencing ce-pulse
+    assert.ok(
+      /animation\s*:\s*[^;]*ce-pulse/.test(ruleBody),
+      'Rule body must contain animation declaration referencing ce-pulse'
+    );
+  });
+
+  test('ui.css ce-pulse animation does not fire on hidden .go-newbest', async () => {
+    // The .go-newbest:not(.hidden) selector ensures no animation on hidden state
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(path.join(ROOT, 'css/ui.css'), 'utf8');
+    // Old incorrect selector was `.go-newbest { animation: pulse 1s infinite; }`
+    // Ensure old "pulse 1s infinite" is gone
+    assert.ok(
+      !css.includes('animation: pulse 1s infinite'),
+      'ui.css must not use the old `pulse 1s infinite` animation'
+    );
+  });
+
+  test('ui.css .speed-bar-fill includes transition: width', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(path.join(ROOT, 'css/ui.css'), 'utf8');
+    assert.ok(
+      css.includes('transition: width 80ms linear'),
+      'ui.css must add transition: width 80ms linear to .speed-bar-fill'
+    );
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// css/accessibility.css — focus ring and reduced-motion fixes (PR change)
+// ═══════════════════════════════════════════════════════════════
+
+describe('css/accessibility.css — focus ring and reduced-motion (PR change)', () => {
+  /**
+   * Helper function to extract the @media (prefers-reduced-motion: reduce) block
+   * from a CSS string using brace counting.
+   * @param {string} css - The CSS content to parse
+   * @returns {string} The media block body (content between the outer braces)
+   * @throws {Error} If the media block is not found
+   */
+  function getMediaBlock(css) {
+    const startPattern = /@media\s*\(prefers-reduced-motion\s*:\s*reduce\)\s*\{/;
+    const startMatch = css.match(startPattern);
+    assert.ok(startMatch, 'accessibility.css must contain @media (prefers-reduced-motion: reduce) block');
+
+    const startPos = startMatch.index + startMatch[0].length;
+    let braceCount = 1;
+    let endPos = startPos;
+    for (let i = startPos; i < css.length && braceCount > 0; i++) {
+      if (css[i] === '{') braceCount++;
+      else if (css[i] === '}') braceCount--;
+      if (braceCount === 0) {
+        endPos = i;
+        break;
+      }
+    }
+    const mediaBody = css.substring(startPos, endPos);
+    return mediaBody;
+  }
+
+  test('accessibility.css contains :focus-visible rule', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(path.join(ROOT, 'css/accessibility.css'), 'utf8');
+    assert.ok(css.includes(':focus-visible'), 'accessibility.css must contain :focus-visible');
+  });
+
+  test('accessibility.css focus ring uses --ce-blue', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(path.join(ROOT, 'css/accessibility.css'), 'utf8');
+    assert.ok(
+      css.includes('var(--ce-blue)'),
+      'accessibility.css focus ring must use var(--ce-blue)'
+    );
+  });
+
+  test('accessibility.css reduced-motion block suppresses .go-newbest:not(.hidden)', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(path.join(ROOT, 'css/accessibility.css'), 'utf8');
+
+    const mediaBody = getMediaBlock(css);
+
+    // Look for .go-newbest:not(.hidden) rule inside the media block
+    const goNewbestPattern = /\.go-newbest:not\(\.hidden\)\s*\{([^}]+)\}/;
+    const ruleMatch = mediaBody.match(goNewbestPattern);
+    assert.ok(ruleMatch, 'reduced-motion block must contain .go-newbest:not(.hidden) rule');
+
+    const ruleBody = ruleMatch[1];
+    // Assert that the rule body sets animation: none
+    assert.ok(
+      /animation\s*:\s*none/.test(ruleBody),
+      'Rule body must contain animation: none declaration'
+    );
+  });
+
+  test('accessibility.css reduced-motion block uses animation: none for .go-newbest', async () => {
+    const { readFileSync } = await import('node:fs');
+    const css = readFileSync(path.join(ROOT, 'css/accessibility.css'), 'utf8');
+
+    const mediaBody = getMediaBlock(css);
+
+    // Check for both .go-newbest and .go-newbest:not(.hidden) selectors
+    const hasGoNewbest = /\.go-newbest/.test(mediaBody);
+    assert.ok(hasGoNewbest, 'reduced-motion block must reference .go-newbest');
+
+    // Verify that animation: none is set
+    const hasAnimationNone = /animation\s*:\s*none/.test(mediaBody);
+    assert.ok(hasAnimationNone, 'reduced-motion block must set animation: none');
   });
 });

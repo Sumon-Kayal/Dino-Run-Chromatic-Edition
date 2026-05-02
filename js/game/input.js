@@ -28,16 +28,27 @@ export function teardownInput() {
 }
 
 /**
- * Wire all input handlers.
+ * Attach keyboard, pointer/touch, and UI button event handlers to the provided DOM elements and record them for later removal.
  *
- * @param {object} DOM        - Cached DOM element references from main.js
- * @param {object} handlers   - Callback functions from main.js:
- *   { jump, startDuck, endDuck, togglePause, toggleFullscreen }
+ * @param {object} DOM - Cached DOM references required by the input handlers. Expected properties: `gameFrame`, `restartBtn`, `jumpBtn`, `duckBtn`, `pauseBtn`, `muteBtn`, `fullscreenBtn`.
+ * @param {object} handlers - Callback functions invoked by input events. Expected properties: `jump`, `startDuck`, `endDuck`, `togglePause`, `toggleFullscreen`, `restart`.
  */
 export function setupInput(DOM, handlers) {
   const { jump, startDuck, endDuck, togglePause, toggleFullscreen } = handlers;
 
-  // ── Keyboard ────────────────────────────────────────────
+  /**
+   * Handle keydown events for game input controls.
+   *
+   * Ignores events originating from interactive elements and ignores auto-repeated events.
+   * Maps keys to game actions:
+   * - `Space` or `ArrowUp`: trigger jump
+   * - `ArrowDown`: start ducking
+   * - `KeyP`: toggle pause
+   * - `KeyM`: toggle sound mute and update the mute button's UI
+   * - `KeyF`: toggle fullscreen
+   *
+   * @param {KeyboardEvent} e - The keydown event to handle.
+   */
   function onKeyDown(e) {
     // Bail out if focus is in an interactive control
     if (e.target) {
@@ -63,7 +74,7 @@ export function setupInput(DOM, handlers) {
       const muted = !getSoundMuted();
       setSoundMuted(muted);
       initAudio();
-      DOM.muteBtn.textContent = muted ? '\uD83D\uDD07' : '\uD83D\uDD06';
+      DOM.muteBtn.textContent = muted ? '\uD83D\uDD07' : '\uD83D\uDD0A';
       DOM.muteBtn.classList.toggle('active', muted);
       DOM.muteBtn.setAttribute('aria-pressed', String(muted));
     }
@@ -132,7 +143,7 @@ export function setupInput(DOM, handlers) {
     const muted = !getSoundMuted();
     setSoundMuted(muted);
     initAudio();
-    this.textContent = muted ? '\uD83D\uDD07' : '\uD83D\uDD06';
+    this.textContent = muted ? '\uD83D\uDD07' : '\uD83D\uDD0A';
     this.classList.toggle('active', muted);
     this.setAttribute('aria-pressed', String(muted));
   });

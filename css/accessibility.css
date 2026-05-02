@@ -16,12 +16,21 @@
   border: 0;
 }
 
+/* ── FOCUS RING ──────────────────────────────────────────── */
+/* Visible keyboard-focus indicator using the brand blue accent.
+   Only shown for keyboard navigation — mouse clicks are excluded. */
+:focus-visible {
+  outline: 2px solid var(--ce-blue);
+  outline-offset: 2px;
+}
+
 /* ── REDUCED MOTION ──────────────────────────────────────── */
 /* WCAG 2.1 §2.3.3 — respect the OS "reduce motion" preference.
-   The blink, pulse, and go-newbest animations are purely decorative
+   The blink, ce-pulse, and go-newbest animations are purely decorative
    and must not play when the user has indicated motion sensitivity. */
 @media (prefers-reduced-motion: reduce) {
   .blink      { animation: none; opacity: 1; }
   .go-newbest { animation: none; }
+  .go-newbest:not(.hidden) { animation: none; }
   .db-dot     { animation: none; opacity: 1; }
 }
