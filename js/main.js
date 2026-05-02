@@ -98,6 +98,7 @@ const DOM = {
 DOM.dbStatus.textContent = backendName;
 
 window.addEventListener('db:quota', function (e) {
+  if (!e || !e.detail) return;
   const pct    = e.detail.total > 0 ? ((e.detail.used / e.detail.total) * 100).toFixed(1) : '?';
   const usedKB = (e.detail.used / 1024).toFixed(0);
   DOM.dbStatus.textContent = backendName + ' \xB7 ' + usedKB + 'KB (' + pct + '%)';
@@ -444,11 +445,11 @@ function renderLeaderboard(lb) {
     return;
   }
 
-  const medals = ['#ffd700', '#c0c0c0', '#cd7f32'];
+  const medals = ['var(--ce-gold)', 'var(--ce-silver)', 'var(--ce-bronze)'];
   lb.forEach((entry, i) => {
     const tr    = document.createElement('tr');
     const color = medals[i] || null;
-    const when  = entry.when || entry.date || '--';
+
     const cols  = [String(i + 1), entry.name || 'ANON', String(entry.score).padStart(5, '0'), when];
 
     cols.forEach((val, ci) => {

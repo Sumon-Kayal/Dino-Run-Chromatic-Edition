@@ -96,7 +96,7 @@ function _loadAllBuffers() {
     })
   ).then(function(results) {
     _loadState = results.every(Boolean) ? 'ready' : 'failed';
-    });
+  });
 }
 
 /**
