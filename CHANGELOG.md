@@ -5,6 +5,125 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [0.8.0-beta] — CSS & DB Consolidation 2026-05-01
+
+### Changed
+
+- **`db.js` deleted** (`js/db/db.js`)  
+  `db.js` was a thin barrel file re-exporting every public symbol from the four `js/db/`
+  sub-modules. `main.js` already imported directly from each sub-module (`database.js`,
+  `leaderboard.js`, `stats.js`) and never consumed the barrel — making `db.js` entirely
+  unreferenced dead code. File deleted with no other changes required.
+
+- **`style.css` features integrated into `base.css`, `ui.css`, `accessibility.css`; `style.css` deleted** (`css/`)  
+  `style.css` was loaded last as a patch layer containing six feature groups that logically
+  belonged in the four existing sheets. Each group moved to its correct home:
+
+  - **CE colour tokens → `base.css` `:root`** — Chromatic Edition custom properties
+    (`--ce-day-bg/fg/dim`, `--ce-night-bg/fg/dim`, `--ce-blue`, `--ce-orange`, `--ce-red`,
+    `--ce-gold`, `--ce-silver`, `--ce-bronze`) appended to the existing `:root` block under
+    a `── Chromatic Edition theme tokens` comment, co-locating all design tokens in one place.
+
+  - **`::selection` → `base.css`** — text selection highlight (`background: var(--ce-blue)`)
+    added after the reset block alongside the other global base rules.
+
+  - **Scrollbar polish → `base.css`** — the four `::-webkit-scrollbar` rules (width/height,
+    track, thumb, thumb:hover) added after `::selection`, using `--ce-day-dim` and
+    `--ce-day-fg` which are now available in the same file.
+
+  - **`@keyframes ce-pulse` + `.go-newbest` animation upgrade → `ui.css`** — the weak
+    opacity-only `pulse` keyframe driving `.go-newbest` replaced with `ce-pulse`, which adds
+    a `scale(1.08)` transform at the 50 % mark alongside the `opacity: 0.7` dip. `.go-newbest`
+    updated from `animation: pulse 1s infinite` to `animation: ce-pulse 0.9s ease-in-out
+    infinite`. The `accessibility.css` reduced-motion block continues to suppress it.
+
+  - **`.speed-bar-fill` smooth transition → `ui.css`** — `transition: width 80ms linear`
+    added to the existing `.speed-bar-fill` rule so the bar animates smoothly between
+    game-loop updates rather than jumping discretely.
+
+  - **`:focus-visible` focus ring → `accessibility.css`** — `outline: 2px solid var(--ce-blue);
+    outline-offset: 2px` added above the reduced-motion block. Scoped to `:focus-visible` so
+    mouse clicks do not trigger the ring; only keyboard navigation receives it
+    (WCAG 2.4.7 — Focus Visible).
+
+  `css/style.css` deleted. `<link rel="stylesheet" href="css/style.css">` removed from
+  `index.html`. README file tree updated: `style.css` entry removed; `base.css`, `ui.css`,
+  and `accessibility.css` descriptions updated to reflect their expanded responsibilities.
+
+### Fixed
+
+- **`database.js` barrel re-exports created circular import — UI stuck on loading screen** (`js/db/database.js`) — **CRITICAL**  
+  An initial implementation of the db.js → database.js merge appended re-exports of
+  `leaderboard.js`, `stats.js`, and `storage.js` to the bottom of `database.js`. Both
+  `leaderboard.js` and `stats.js` import `dbGet`/`dbSet` from `database.js`, creating a cycle:
+  `database.js → leaderboard.js → database.js`. In affected browsers this stalled ES module
+  graph evaluation before `boot()` ran — `hideLoading()` was never called and the loading screen
+  never dismissed. Fixed by removing the barrel re-exports entirely; `main.js` already imports
+  directly from each sub-module and never needed a barrel in `database.js`.
+
+- **`boot()` IIFE had no top-level error handler — any throw left the loading screen frozen** (`js/main.js`) — **MEDIUM**  
+  The async boot IIFE had no outer `try/catch` and no `.catch()` on the returned Promise.
+  Any unhandled throw between the JSON-loading blocks and `hideLoading()` (e.g. from
+  `initRenderer()` or `initGame()`) would silently reject the Promise, leaving the loading
+  screen up with no user-visible feedback and no diagnostic. Wrapped the entire boot body in a
+  `try/catch` that writes a red error message into the loading hint on failure so the cause is
+  immediately visible without opening DevTools.
+
+- **`pruneAndSave` error message always showed the wrong branch** (`js/db/leaderboard.js`) — **MEDIUM**  
+  After slicing `combined` down to 5 entries and failing the `dbSet`, the message guard
+  `(combined.length > 5)` was always `false` because the slice had already mutated the array.
+  The "even top-5 pruning failed" branch was dead code; every full-storage failure reported
+  the wrong string. Fixed by introducing a `prunedToFive` boolean flag set before the slice so
+  the message correctly reflects whether top-5 pruning was attempted.
+
+- **One failed audio file silenced all buffered sounds** (`js/game/audio.js`) — **MEDIUM**  
+  `_loadState` is set to `'failed'` if any of the three OGG/MP3 files fails to load. The guard
+  `if (_loadState === 'failed') return false` short-circuited before the per-key buffer check,
+  so if e.g. `milestone.ogg` 404'd but `jump.ogg` loaded fine, `soundJump()` fell back to the
+  synth beep even though its buffer was populated. Fixed by replacing the global `_loadState`
+  guard with per-key logic: check `_buffers[key]` first; only return `null` (loading) when the
+  specific buffer is absent and the state is still `'loading'`.
+
+- **Mute button showed 🔆 (brightness/sun) instead of 🔊 when toggling back to unmuted** (`js/game/input.js`) — **LOW**  
+  Both the `M` keyboard shortcut and the click handler assigned `\uD83D\uDD06` (U+1F506,
+  HIGH BRIGHTNESS SYMBOL) as the unmuted icon — four codepoints short of the correct
+  `\uD83D\uDD0A` (U+1F50A, SPEAKER WITH THREE SOUND WAVES), which matches the `&#128266;`
+  used in `index.html` for the initial button state. Fixed in both handler locations.
+
+- **`.go-newbest` pulse animation fired while element was hidden** (`css/ui.css`) — **LOW**  
+  The `style.css` → `ui.css` merge dropped the `:not(.hidden)` guard from `.go-newbest`,
+  so `ce-pulse` ran on the element even when it carried the `hidden` class — a redundant
+  compositor animation loop on every idle and dead frame. Selector restored to
+  `.go-newbest:not(.hidden) { animation: ce-pulse … }` with base typography rules kept on the
+  plain `.go-newbest` selector.
+
+- **`initGame` hardcoded `0.6` instead of `GAP_COEFF_INITIAL`** (`js/main.js`) — **LOW**  
+  `G.gapCoefficient = 0.6` ignored the imported `GAP_COEFF_INITIAL` constant from `config.js`.
+  If the constant were ever tuned or overridden at runtime via `applyJSONConfig`, `initGame`
+  would silently reset to the stale literal. Changed to `G.gapCoefficient = GAP_COEFF_INITIAL`.
+
+- **Dead variable `prevSessionBest` in `gameOver()`** (`js/main.js`) — **LOW**  
+  `const prevSessionBest = G.dbStats.bestScore` was assigned at the top of `gameOver()` and
+  never referenced again anywhere in the function. Removed.
+
+- **Canvas not repainted on tab-return when paused or dead** (`js/main.js`) — **LOW**  
+  The `visibilitychange` handler restarted the engine for `'running'` and re-queued the idle
+  loop for `'idle'`, but had no branch for `'paused'` or `'dead'`. Some mobile browsers and
+  PWA contexts discard the canvas backing store when a tab is backgrounded, leaving the canvas
+  blank on return even though the DOM overlay was still visible. Added `else { draw(); }` so
+  the game-over and pause screens repaint immediately on tab focus.
+
+### Added
+
+- **Live demo link — GitHub Pages** (`README.md`)  
+  Added a `▶ Play Now` shield badge to the README header linking to
+  `https://sumon-kayal.github.io/Dino-Run-Chromatic-Edition/`. Added a `## 🌐 Live Demo`
+  section covering: prominent play link, feature-status table (gameplay, day/night, Web Audio,
+  leaderboard, fullscreen, mobile touch, reduced-motion), and notes on localStorage scope,
+  HTTPS, audio autoplay gate, and private/incognito fallback behaviour.
+
+---
+
 ## [0.7.5-beta] — Modular Architecture 2026-04-12 
 
 ### Changed

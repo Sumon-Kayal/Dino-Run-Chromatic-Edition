@@ -6,9 +6,10 @@ A fully offline Chrome-style endless runner with day/night cycle,
 pterodactyls, persistent local leaderboard, and session stats.  
 No network calls · No tracking · No image assets.
 
+[![Live Demo](https://img.shields.io/badge/▶%20Play%20Now-GitHub%20Pages-4CAF50?style=flat-square&logo=github)](https://sumon-kayal.github.io/Dino-Run-Chromatic-Edition/)
 [![GitHub Stars](https://img.shields.io/github/stars/Sumon-Kayal/Dino-Run-Chromatic-Edition?style=flat-square&logo=github)](https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition/stargazers)
 [![License](https://img.shields.io/github/license/Sumon-Kayal/Dino-Run-Chromatic-Edition?style=flat-square)](LICENSE)
-[![Version](https://img.shields.io/badge/version-0.7.5--beta-blue?style=flat-square)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-0.8.0--beta-blue?style=flat-square)](CHANGELOG.md)
 [![CodeRabbit Reviews](https://img.shields.io/coderabbit/prs/github/Sumon-Kayal/Dino-Run-Chromatic-Edition?utm_source=oss&utm_medium=github&utm_campaign=Sumon-Kayal%2FDino-Run-Chromatic-Edition&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews&style=flat-square)](https://coderabbit.ai)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition/pulls)
 
@@ -23,6 +24,7 @@ No network calls · No tracking · No image assets.
 ## 📋 Table of Contents
 
 - [✨ Features](#-features)
+- [🌐 Live Demo](#-live-demo)
 - [🚀 Quick Start](#-quick-start)
 - [🖥️ Platform Setup Guide](#-platform-setup-guide)
 - [🔐 Generating the self-signed certificate](#-generating-the-self-signed-certificate)
@@ -64,6 +66,35 @@ No network calls · No tracking · No image assets.
 - **HTTPS dev server** — security headers and HTTP method guards for both options; per-request timeout (10-second guard) only in Python `server.py` (no direct per-request equivalent in `Caddyfile`)
 - **Modular ES module architecture** — game engine and DB layer split into focused, dependency-clean modules
 - **JSON-driven tuning** — physics, speed, obstacle geometry, and audio paths configurable without editing source code
+
+---
+
+## 🌐 Live Demo
+
+**▶ [Play instantly in your browser — no install required](https://sumon-kayal.github.io/Dino-Run-Chromatic-Edition/)**
+
+> Hosted on **GitHub Pages** · No server needed · Runs entirely client-side
+
+The live build is deployed directly from the `main` branch and reflects the latest stable release. Because the game uses the **Web Audio API** and **ES modules**, it requires a modern browser — see [Browser Compatibility](#-browser-compatibility) for the full matrix.
+
+### What works on GitHub Pages
+
+| Feature | Status |
+|---|---|
+| Full gameplay (jump, duck, pterodactyls) | ✅ |
+| Day / night colour cycle | ✅ |
+| Web Audio sound effects (`.ogg`) | ✅ |
+| Persistent leaderboard & stats | ✅ via `localStorage` |
+| Fullscreen mode (`F` key / button) | ✅ |
+| Mobile touch controls | ✅ |
+| `prefers-reduced-motion` support | ✅ |
+
+### Notes
+
+- **Storage** — scores and stats are saved to the browser's `localStorage`. They persist across sessions on the same device and browser, but are not shared between devices. Clearing site data removes them.
+- **No HTTPS cert required** — unlike the local dev server (`server.py` / Caddy), GitHub Pages serves over HTTPS automatically so no self-signed certificate setup is needed.
+- **Audio autoplay** — browsers require a user gesture before starting audio. The first `Space` / tap will unlock the audio context; sound plays normally from that point on.
+- **Private / incognito mode** — `localStorage` is blocked in most browsers when in private mode; the game falls back to in-memory session storage and all scores are lost on tab close.
 
 ---
 
@@ -336,12 +367,13 @@ Dino-Run-Chromatic-Edition/
 │       ├── press-start-2p.woff2   # Pixel heading font
 │       └── vt323.woff2            # Monospace stats / leaderboard font
 ├── css/
-│   ├── base.css                # Reset, custom properties, layout primitives
+│   ├── base.css                # Reset, custom properties (base + CE theme tokens),
+│   │                           #   ::selection, scrollbar polish, layout primitives
 │   ├── game.css                # Canvas stack, overlays, HUD bar
-│   ├── ui.css                  # Buttons, leaderboard, stats panel, name input
-│   ├── accessibility.css       # Screen-reader utilities, reduced-motion overrides
-│   └── style.css               # Chromatic Edition theme tokens (CSS custom properties),
-│                               #   NEW BEST pulse animation, scrollbar polish, focus rings
+│   ├── ui.css                  # Buttons, leaderboard, stats panel, name input,
+│   │                           #   NEW BEST ce-pulse animation, speed-bar transition
+│   └── accessibility.css       # Screen-reader utilities, :focus-visible ring,
+│                               #   reduced-motion overrides
 ├── data/
 │   ├── config.json             # Physics & speed tuning (gravity, jumpVelocity,
 │   │                           #   acceleration, initialSpeed, maxSpeed)
@@ -368,8 +400,7 @@ Dino-Run-Chromatic-Edition/
 │   │   ├── renderer.js         # Three-layer canvas renderer (bgCanvas / gameCanvas / uiCanvas)
 │   │   └── input.js            # Keyboard + mobile touch controls; full listener teardown
 │   ├── db/
-│   │   ├── db.js               # Barrel re-export for db sub-modules
-│   │   ├── database.js         # dbGet / dbSet (localStorage + in-memory fallback)
+│   │   ├── database.js         # Core entry point: dbGet / dbSet + barrel re-exports for all db sub-modules
 │   │   ├── storage.js          # Quota tracking + db:quota / db:criticalFailure events
 │   │   ├── leaderboard.js      # Top-10 leaderboard with pruning fallback
 │   │   └── stats.js            # Stats, player name, schema migration
@@ -380,8 +411,6 @@ Dino-Run-Chromatic-Edition/
 │                               #   TLS certs live in assets/certs/ (cert.pem, key.pem)
 ├── Caddyfile                   # Caddy v2 HTTPS dev server — alternative to server.py
 │                               #   Auto-provisions a trusted local cert via `caddy trust`
-├── tests/
-│   └── all.test.mjs            # Full test suite — DB layer + game logic
 ├── .gitignore                  # Excludes cert.pem / key.pem from version control
 ├── README.md                   # Project documentation (this file)
 ├── CHANGELOG.md                # Full release history with per-fix root-cause analysis
@@ -707,8 +736,7 @@ and `runtime.js`. Prefer importing directly from those source modules.
 
 | Module | Concern | Key detail |
 |-------------|------------------------|------------|
-| `db.js` | Barrel re-export | Re-exports all public symbols from all 4 db sub-modules (`database`, `leaderboard`, `stats`, `storage`) |
-| `database.js` | Backend | Try/catch probe at load; `dbGet` / `dbSet` API |
+| `database.js` | Backend + entry point | Try/catch probe at load; `dbGet` / `dbSet` API; re-exports all public symbols from `leaderboard`, `stats`, `storage` |
 | `storage.js` | Quota | Debounced 2 s polling; `navigator.storage.persist()` at startup |
 | `leaderboard.js` | Scores | `pruneAndSave` falls back to top-5; dispatches `db:criticalFailure` on total failure |
 | `stats.js` | Stats & migration | `migrate()` IIFE at boot; v0→v1 backfills missing `recordId` fields |
