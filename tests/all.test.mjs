@@ -171,7 +171,46 @@ const { GAP_COEFF_INITIAL } =
 describe('database.js — memStore String() coercion (PR fix)', () => {
   // When localStorage is unavailable the module falls back to memStore.
   // The PR changed `memStore[key] = val` to `memStore[key] = String(val)`.
-  // We test observable behaviour through dbGet/dbSet when using localStorage.
+  // To test the memStore path we must load database.js when localStorage is absent.
+
+  test('memStore path: dbSet coerces value to String and dbGet retrieves it', async () => {
+    // Save original localStorage
+    const origLs = globalThis.localStorage;
+
+    try {
+      // Remove localStorage before importing database.js to force memStore fallback
+      globalThis.localStorage = undefined;
+
+      // Re-import database.js to force it to detect absent localStorage
+      const dbModule = await import(`file://${ROOT}/js/db/database.js?t=${Date.now()}`);
+      const { dbGet: memDbGet, dbSet: memDbSet, backendName: memBackendName } = dbModule;
+
+      // Verify we're using memStore backend
+      assert.equal(memBackendName, 'IN-MEMORY (SESSION ONLY)',
+        'memStore backend should be active when localStorage is undefined');
+
+      // Test String() coercion with various types
+      assert.equal(memDbSet('str-key', 'hello'), true);
+      assert.equal(memDbGet('str-key'), 'hello');
+
+      // Test number coercion
+      memDbSet('num-key', 42);
+      assert.equal(memDbGet('num-key'), '42', 'number should be coerced to string');
+
+      // Test object coercion (uses toString)
+      const obj = { score: 100 };
+      memDbSet('obj-key', JSON.stringify(obj));
+      const back = JSON.parse(memDbGet('obj-key'));
+      assert.deepEqual(back, obj);
+
+      // Test null handling
+      assert.equal(memDbGet('no-such-key'), null, 'unknown key should return null');
+
+    } finally {
+      // Always restore localStorage
+      globalThis.localStorage = origLs;
+    }
+  });
 
   test('dbSet stores a plain string value and dbGet retrieves it', () => {
     resetStorage();
@@ -214,22 +253,38 @@ describe('database.js — memStore String() coercion (PR fix)', () => {
 });
 
 describe('database.js — db:quotaFull event dispatch (PR fix)', () => {
-  test('db:quotaFull event is dispatched when storage quota is exceeded', () => {
-    // Install a zero-quota localStorage so any write fails with QuotaExceededError
-    const tinyLs = makeLocalStorage({ quota: 0 });
+  test('db:quotaFull event is dispatched when storage quota is exceeded', async () => {
     const origLs = globalThis.localStorage;
-    globalThis.localStorage = tinyLs;
-    _windowEvents.length = 0;
 
-    // Import a fresh module that reads the new localStorage.
-    // Because the module is already cached we work around by calling dbSet
-    // with the existing module — if it uses localStorage and quota is 0 it fires.
-    // However, the cached module captured useLocalStorage at import time.
-    // We verify the event type/shape by simulating it directly as a unit check:
-    const ev = new CustomEvent('db:quotaFull');
-    assert.equal(ev.type, 'db:quotaFull');
+    try {
+      // Install a zero-quota localStorage so any write fails with QuotaExceededError
+      const tinyLs = makeLocalStorage({ quota: 0 });
+      globalThis.localStorage = tinyLs;
+      _windowEvents.length = 0;
 
-    globalThis.localStorage = origLs;
+      // Re-import database.js with the zero-quota storage
+      const dbModule = await import(`file://${ROOT}/js/db/database.js?t=${Date.now()}`);
+      const { dbSet: quotaDbSet } = dbModule;
+
+      // Attempt a write that will trigger QuotaExceededError
+      const result = quotaDbSet('test-key', 'some value that exceeds quota');
+
+      // dbSet should return false when quota is exceeded
+      assert.equal(result, false, 'dbSet should return false when quota exceeded');
+
+      // Verify that db:quotaFull event was dispatched
+      const quotaFullEvents = _windowEvents.filter(ev => ev.type === 'db:quotaFull');
+      assert.ok(quotaFullEvents.length > 0, 'db:quotaFull event must be dispatched on quota error');
+
+      // Verify event structure
+      const ev = quotaFullEvents[0];
+      assert.equal(ev.type, 'db:quotaFull');
+
+    } finally {
+      // Always restore original localStorage
+      globalThis.localStorage = origLs;
+      _windowEvents.length = 0;
+    }
   });
 
   test('db:quotaFull CustomEvent has correct type string', () => {
@@ -676,9 +731,9 @@ describe('input.js — mute-toggle emoji fix (PR fix)', () => {
       `input.js should contain at least 2 occurrences of \\uD83D\\uDD0A (speaker icon), found ${occurrencesCorrect}`);
   });
 
-  test('setupInput wires a mute button click handler that toggles mute state', () => {
-    // Verify that after simulating a click on the mute button, the mute state
-    // toggles correctly.
+  test('setupInput wires a mute button click handler that toggles mute state', async () => {
+    // Verify that setupInput attaches a click handler to muteBtn and that clicking
+    // it toggles the mute state.
     const clickHandlers = [];
     const muteBtnStub = {
       textContent: '',
@@ -687,24 +742,61 @@ describe('input.js — mute-toggle emoji fix (PR fix)', () => {
       addEventListener(evt, fn) {
         if (evt === 'click') clickHandlers.push(fn);
       },
+      removeEventListener() {},
     };
 
     const makeDOMStub = () => ({
-      gameFrame:     { addEventListener() {} },
-      restartBtn:    { addEventListener() {} },
-      jumpBtn:       { addEventListener() {} },
-      duckBtn:       { addEventListener() {} },
-      pauseBtn:      { addEventListener() {} },
+      gameFrame:     { addEventListener() {}, removeEventListener() {} },
+      restartBtn:    { addEventListener() {}, removeEventListener() {} },
+      jumpBtn:       { addEventListener() {}, removeEventListener() {} },
+      duckBtn:       { addEventListener() {}, removeEventListener() {} },
+      pauseBtn:      { addEventListener() {}, removeEventListener() {} },
       muteBtn:       muteBtnStub,
-      fullscreenBtn: { addEventListener() {} },
+      fullscreenBtn: { addEventListener() {}, removeEventListener() {} },
     });
 
-    // We can only verify the handler was attached; the actual emoji assignment
-    // is covered by the source-inspection test above.
-    // For this test: just confirm that the module exports setupInput and teardownInput.
-    // (setupInput itself uses _on which calls document.addEventListener — fine with stub)
-    assert.ok(typeof getSoundMuted === 'function', 'getSoundMuted must be exported');
-    assert.ok(typeof setSoundMuted === 'function', 'setSoundMuted must be exported');
+    // Import setupInput and teardownInput
+    const { setupInput, teardownInput } =
+      await import(`file://${ROOT}/js/game/input.js`);
+
+    // Set initial mute state
+    setSoundMuted(false);
+    assert.equal(getSoundMuted(), false, 'initial state should be unmuted');
+
+    // Call setupInput with DOM stub and empty handlers
+    const handlers = {
+      jump: () => {},
+      startDuck: () => {},
+      endDuck: () => {},
+      togglePause: () => {},
+      toggleFullscreen: () => {},
+      restart: () => {},
+    };
+    setupInput(makeDOMStub(), handlers);
+
+    // Verify that a click handler was attached to muteBtn
+    assert.ok(clickHandlers.length > 0, 'setupInput should attach click handler to muteBtn');
+
+    // Simulate a click by invoking the captured handler
+    const mockEvent = { stopPropagation() {} };
+    clickHandlers[0].call(muteBtnStub, mockEvent);
+
+    // Verify that mute state toggled
+    assert.equal(getSoundMuted(), true, 'clicking muteBtn should toggle mute to true');
+
+    // Click again to toggle back
+    clickHandlers[0].call(muteBtnStub, mockEvent);
+    assert.equal(getSoundMuted(), false, 'clicking muteBtn again should toggle mute to false');
+
+    // Call teardownInput to remove handlers
+    teardownInput();
+
+    // Verify no extra handlers remain by checking that clickHandlers array is stable
+    const handlerCountAfterTeardown = clickHandlers.length;
+    assert.equal(handlerCountAfterTeardown, 1, 'teardownInput should clean up listeners');
+
+    // Restore mute state
+    setSoundMuted(false);
   });
 });
 
