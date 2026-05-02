@@ -142,7 +142,7 @@ function initGame() {
   G.lastMilestone   = 0;
   G.groundScrollX   = 0;
   G._lastSpeedPct   = -1;
-  G.gapCoefficient  = 0.6;
+  G.gapCoefficient  = GAP_COEFF_INITIAL;
   G.moonX = MOON_SPAWN_MIN + Math.random() * MOON_SPAWN_RNG;
 
   initPlayer();
@@ -208,8 +208,6 @@ function gameOver() {
   G.state = 'dead';
   engine.stop();
   soundDie();
-
-  const prevSessionBest = G.dbStats.bestScore;
 
   G.sessionStats.games++;
   G.sessionStats.deaths++;
@@ -532,6 +530,11 @@ document.addEventListener('visibilitychange', function () {
       engine.start();
     } else if (G.state === 'idle') {
       idleRafId = requestAnimationFrame(idleLoop);
+    } else {
+      // 'paused' or 'dead' — some browsers discard the canvas backing store
+      // when a tab is backgrounded; repaint so the game-over / pause screen
+      // doesn't appear blank on return.
+      draw();
     }
   }
 });
@@ -557,7 +560,8 @@ async function loadJSON(path) {
     DOM.startScreen.setAttribute('aria-hidden', 'false');
   }
 
-  loadProgress(10, 'Loading config\u2026');
+  try {
+    loadProgress(10, 'Loading config\u2026');
 
   // Load tunable values from data/config.json before anything touches CONFIG
   try {
@@ -621,4 +625,12 @@ async function loadJSON(path) {
 
   draw();
   idleRafId = requestAnimationFrame(idleLoop);
+
+  } catch (err) {
+    // Any uncaught error in the boot sequence would otherwise leave the
+    // loading screen up forever with no feedback. Surface it visibly.
+    console.error('[boot] Fatal error — game could not start:', err);
+    DOM.loadingHint.textContent = 'ERROR: ' + (err && err.message ? err.message : String(err));
+    DOM.loadingBar.style.background = 'var(--danger)';
+  }
 }());
