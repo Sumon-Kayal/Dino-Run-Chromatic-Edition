@@ -272,7 +272,7 @@ function gameOver() {
 
   DOM.goScore.textContent = 'SCORE ' + String(s).padStart(5, '0');
   DOM.goHi.textContent    = 'HI: '   + String(G.hiScore).padStart(5, '0');
-  if (s > prevBest && prevBest > 0 && lb) {
+  if (s > prevBest && lb) {
     DOM.goNewBest.classList.remove('hidden');
   } else {
     DOM.goNewBest.classList.add('hidden');
@@ -307,11 +307,11 @@ function togglePause() {
 }
 
 function toggleFullscreen() {
-  const el   = document.querySelector('.game-frame');
+  const el   = DOM.gameFrame;
   const isFs = document.fullscreenElement || document.webkitFullscreenElement;
   if (!isFs) {
     const req = el.requestFullscreen
-      ? el.requestFullscreen()
+
       : el.webkitRequestFullscreen
         ? el.webkitRequestFullscreen()
         : null;

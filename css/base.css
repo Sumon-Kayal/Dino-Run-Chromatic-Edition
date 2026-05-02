@@ -39,8 +39,8 @@
 
   /* ── Chromatic Edition theme tokens ────────────────────── */
   /* Day palette (mirrors js/game/renderer.js day values) */
-  --ce-day-bg:    #ffffff;
-  --ce-day-fg:    #535353;
+  --ce-day-bg:    var(--surface);  /* alias — keeps in sync with --surface */
+  --ce-day-fg:    var(--accent);   /* alias — keeps in sync with --accent  */
   --ce-day-dim:   #d4d4d4;
 
   /* Night palette */
@@ -49,12 +49,12 @@
   --ce-night-dim: #606060;
 
   /* Speed-bar accent ramp (matches SPEED_BAR_LUTS in renderer.js) */
-  --ce-blue:      #1a73e8;
+  --ce-blue:      var(--blue);     /* alias — keeps in sync with --blue    */
   --ce-orange:    #e67e22;
-  --ce-red:       #c0392b;
+  --ce-red:       var(--danger);   /* alias — keeps in sync with --danger  */
 
   /* Leaderboard medal colours */
-  --ce-gold:      #ffd700;
+  --ce-gold:      var(--gold);     /* alias — keeps in sync with --gold    */
   --ce-silver:    #c0c0c0;
   --ce-bronze:    #cd7f32;
 }

@@ -60,6 +60,9 @@ function pruneAndSave(newLb, knownExisting) {
       console.warn('[DB] Storage critical: pruned to top 5');
       return combined;
     }
+  } else {
+    // combined is already <=5 entries — attempt the write before declaring failure.
+    if (dbSet(KEY, JSON.stringify(combined))) return combined;
   }
 
   const message = prunedToFive
