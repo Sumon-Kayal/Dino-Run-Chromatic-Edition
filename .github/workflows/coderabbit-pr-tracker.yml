@@ -43,7 +43,7 @@ jobs:
           CHANGED=$(git diff --name-only "$BASE" "$HEAD")
 
           # Flag each guarded path
-          flag() { echo "$CHANGED" | grep -q "^$1" && echo "⚠️ CHANGED" || echo "✅ unchanged"; }
+          flag() { echo "$CHANGED" | grep -Fxq "$1" && echo "⚠️ CHANGED" || echo "✅ unchanged"; }
 
           echo "config_js=$(flag 'js/game/config.js')"       >> $GITHUB_OUTPUT
           echo "physics_js=$(flag 'js/game/physics.js')"     >> $GITHUB_OUTPUT
