@@ -1,0 +1,98 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# CodeQL — Static Application Security Testing
+# Dino Run — Chromatic Edition
+#
+# Scans all JavaScript source on every push to main, every PR targeting main,
+# and on a weekly schedule. Results surface in the GitHub Security tab.
+#
+# Language: javascript-typescript (covers .js and .mjs)
+# Query suite: security-and-quality — includes all security queries plus
+#   code-quality rules (unused vars, dead code, unreachable branches).
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: CodeQL
+
+on:
+  push:
+    branches: ["main"]
+    paths:
+      - "js/**"
+      - "css/**"
+      - "index.html"
+      - "server.py"
+      - "data/**"
+
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "js/**"
+      - "css/**"
+      - "index.html"
+      - "server.py"
+      - "data/**"
+
+  schedule:
+    # Weekly scan every Monday at 03:17 UTC (staggered to avoid GitHub burst)
+    - cron: "17 3 * * 1"
+
+  workflow_dispatch:  # allow manual trigger from Actions tab
+
+permissions:
+  contents: read
+  security-events: write   # required to upload SARIF results
+  actions: read            # required for private repos
+
+jobs:
+  analyse:
+    name: Analyse (${{ matrix.language }})
+    runs-on: ubuntu-latest
+
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # JavaScript / ES modules — covers js/ and tests/
+          - language: javascript-typescript
+            build-mode: none
+
+    steps:
+      # ── Checkout ────────────────────────────────────────────────────────────
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      # ── Initialise CodeQL ────────────────────────────────────────────────────
+      - name: Initialise CodeQL
+        uses: github/codeql-action/init@v3
+        with:
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.build-mode }}
+
+          # security-and-quality includes:
+          #   • All security queries (XSS, prototype pollution, path traversal,
+          #     ReDoS, open redirect, unsafe deserialization, etc.)
+          #   • Quality queries (dead code, unused imports, unreachable branches,
+          #     missing error handling)
+          queries: security-and-quality
+
+          # Only scan source under js/ and tests/ — exclude assets, fonts, certs
+          config: |
+            paths:
+              - js
+              - tests
+            paths-ignore:
+              - assets
+              - css
+              - data
+
+      # ── Autobuild (no-op for plain JS — included for future compatibility) ──
+      - name: Autobuild
+        if: matrix.build-mode == 'autobuild'
+        uses: github/codeql-action/autobuild@v3
+
+      # ── Run analysis ─────────────────────────────────────────────────────────
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v3
+        with:
+          category: "/language:${{ matrix.language }}"
+          # Upload SARIF results to GitHub Security tab
+          upload: always
