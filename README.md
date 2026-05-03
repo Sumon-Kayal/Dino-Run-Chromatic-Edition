@@ -424,9 +424,10 @@ Dino-Run-Chromatic-Edition/
 │       ├── codeql.yml              # CodeQL SAST — runs on push/PR to main and weekly
 │       └── coderabbit-pr-tracker.yml  # CodeRabbit PR tracker — posts review status on every PR
 ├── .gitignore                  # Excludes cert.pem / key.pem from version control
+├── .coderabbit.yaml            # CodeRabbit AI review config — per-path engine guards
 ├── README.md                   # Project documentation (this file)
 ├── CHANGELOG.md                # Full release history with per-fix root-cause analysis
-
+├── THIRD_PARTY.md              # Third-party license attributions (Chromium BSD-3-Clause)
 └── LICENSE                     # MIT
 
 ```
