@@ -5,7 +5,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
-## [0.8.0-beta] — CSS & DB Consolidation 2026-05-01
+## [0.8.0-beta] — CSS & DB Consolidation + Chromium Parity 2026-05-01
 
 ### Changed
 
@@ -50,10 +50,68 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   `index.html`. README file tree updated: `style.css` entry removed; `base.css`, `ui.css`,
   and `accessibility.css` descriptions updated to reflect their expanded responsibilities.
 
+- **Chromium parity — 10 constants aligned to Chromium `runner.js`** (`js/game/config.js`, `data/config.json`)  
+  All physics, speed, spawn, and hitbox constants have been aligned to the Chromium reference
+  implementation so gameplay feel matches the original exactly:
+
+  | Constant          | Before   | After   | Chromium reference source                   |
+  |-------------------|----------|---------|---------------------------------------------|
+  | `GRAVITY`         | `0.48`   | `0.6`   | `Trex.config.GRAVITY`                       |
+  | `JUMP_V`          | `-12.2`  | `-15`   | `Trex.config.INITIAL_JUMP_VELOCITY`         |
+  | `CONFIG.SPEED_MIN`| `5`      | `6`     | `Runner.config.SPEED`                       |
+  | `CONFIG.ACCELERATION` | `0.0015` | `0.001` | `Runner.config.ACCELERATION`           |
+  | `CONFIG.SCORE_COEFF`  | `0.04`   | `0.025` | `Runner.config.SCORE_COEFF`            |
+  | `CONFIG.PTERA_CHANCE` | `0.22`   | `0.06`  | Chromium per-spawn pterodactyl rate    |
+  | `CONFIG.CACTUS_TRIPLE`| `0.08`   | `0.05`  | Chromium triple-cactus probability     |
+  | `CONFIG.CACTUS_DBL`   | `0.32`   | `0.45`  | Chromium double-cactus probability     |
+  | `HIT_OBS_SHRINK`      | `8`      | `5`     | Chromium collision forgiveness margin  |
+
+  `GRAVITY` and `JUMP_V` are calibrated as a pair. `ACCELERATION` and `SCORE_COEFF` together
+  restore the reference speed ramp — max speed (`13 px/frame`) is now reached at score ~2660
+  instead of the previous ~1920. `PTERA_CHANCE` reduced from 22 % to 6 %: pteras now spawn at
+  the Chromium rate rather than 3.7× more frequently. Cactus cluster ratio rebalanced:
+  doubles increased from 32 % to 45 %, triples reduced from 8 % to 5 %. `data/config.json`
+  updated in sync: `gravity`, `jumpVelocity`, `acceleration`, and `initialSpeed` all reflect
+  the new values — runtime overrides via `applyJSONConfig()` now match the source constants.
+
+- **Test suite consolidated — `extended-gameplay.test.mjs` and `extended.test.mjs` merged into `all.test.mjs`** (`tests/`)  
+  The three test files have been merged into a single `all.test.mjs` entry point (948 → 1284
+  lines). `tests/extended-gameplay.test.mjs` and `tests/extended.test.mjs` deleted. All test
+  coverage is preserved; the merge eliminates the need to run multiple test commands and removes
+  the risk of the extended suites being skipped in CI.
+
+- **Leaderboard medal colours use CSS custom properties** (`js/main.js`)  
+  Hardcoded hex strings `'#ffd700'`, `'#c0c0c0'`, `'#cd7f32'` in the medals array replaced with
+  `'var(--ce-gold)'`, `'var(--ce-silver)'`, `'var(--ce-bronze)'`. Medal colours now respond to
+  theme changes and remain consistent with the design token layer.
+
+- **`DOM.gameFrame` replaces `document.querySelector('.game-frame')`** (`js/main.js`)  
+  The `toggleFullscreen()` function was the only place still using a raw `querySelector` to
+  look up the game frame element. Changed to use the pre-cached `DOM.gameFrame` reference,
+  consistent with all other DOM access in the file.
+
+- **`db:criticalFailure` handler reads specific message from `e.detail`** (`js/main.js`)  
+  The `window.addEventListener('db:criticalFailure', …)` handler previously hardcoded a generic
+  failure message. It now reads `e.detail.message` from the event — surfacing the specific
+  diagnosis dispatched by `pruneAndSave()` ("even top-5 pruning failed" vs "payload ≤5 failed")
+  directly in the alert shown to the player. Falls back to the generic message if `e.detail` is
+  absent. A guard `if (!e || !e.detail) return` added to the `db:quota` handler for symmetry.
+
+- **JSDoc added to key functions** (`js/main.js`, `js/game/audio.js`, `js/game/input.js`, `js/db/database.js`, `js/db/leaderboard.js`)  
+  JSDoc blocks added to: `initGame()`, `gameOver()`, `hideLoading()` in `main.js`; `_playBuffer()`
+  in `audio.js`; `initInput()` and `handleKeydown()` in `input.js`; `dbSet()` in `database.js`;
+  `pruneAndSave()` in `leaderboard.js`. Return types and parameter shapes documented; no logic
+  changes.
+
+- **`memStore` coerces values to `String`** (`js/db/database.js`)  
+  `memStore[key] = val` changed to `memStore[key] = String(val)`. `localStorage` always returns
+  strings on `getItem`; the in-memory fallback now behaves identically so callers see the same
+  type regardless of which backend is active.
+
 ### Fixed
 
 - **`database.js` barrel re-exports created circular import — UI stuck on loading screen** (`js/db/database.js`) — **CRITICAL**  
-  An initial implementation of the db.js → database.js merge appended re-exports of
+  An initial implementation of the `db.js` → `database.js` merge appended re-exports of
   `leaderboard.js`, `stats.js`, and `storage.js` to the bottom of `database.js`. Both
   `leaderboard.js` and `stats.js` import `dbGet`/`dbSet` from `database.js`, creating a cycle:
   `database.js → leaderboard.js → database.js`. In affected browsers this stalled ES module
@@ -68,6 +126,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   screen up with no user-visible feedback and no diagnostic. Wrapped the entire boot body in a
   `try/catch` that writes a red error message into the loading hint on failure so the cause is
   immediately visible without opening DevTools.
+
+- **`pruneAndSave` skipped the initial write for leaderboards already at ≤5 entries** (`js/db/leaderboard.js`) — **MEDIUM**  
+  When `knownExisting` was provided and `combined` was already ≤5 entries, the function fell
+  straight through to `dispatchEvent(db:criticalFailure)` without attempting a `dbSet` at all —
+  incorrectly treating a write that had not been tried as a failure. An `else` branch added to
+  attempt the write when no pruning was needed before declaring critical failure.
 
 - **`pruneAndSave` error message always showed the wrong branch** (`js/db/leaderboard.js`) — **MEDIUM**  
   After slicing `combined` down to 5 entries and failing the `dbSet`, the message guard
@@ -84,7 +148,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
   guard with per-key logic: check `_buffers[key]` first; only return `null` (loading) when the
   specific buffer is absent and the state is still `'loading'`.
 
-- **Mute button showed 🔆 (brightness/sun) instead of 🔊 when toggling back to unmuted** (`js/game/input.js`) — **LOW**  
+- **★ NEW BEST ★ banner never appeared on the first game ever played** (`js/main.js`) — **LOW**  
+  `gameOver()` conditioned the banner on `s > prevBest && prevBest > 0`. When `prevBest` was `0`
+  (no previous game on this device), the banner was suppressed even when the player set a
+  genuine new best. Removed the `> 0` guard — the banner now fires correctly whenever the
+  current score beats the previous best, including the first run.
+
+- **Mute button showed 🔆 (brightness / sun) instead of 🔊 when toggling back to unmuted** (`js/game/input.js`) — **LOW**  
   Both the `M` keyboard shortcut and the click handler assigned `\uD83D\uDD06` (U+1F506,
   HIGH BRIGHTNESS SYMBOL) as the unmuted icon — four codepoints short of the correct
   `\uD83D\uDD0A` (U+1F50A, SPEAKER WITH THREE SOUND WAVES), which matches the `&#128266;`
