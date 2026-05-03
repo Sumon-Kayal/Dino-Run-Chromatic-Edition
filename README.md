@@ -10,6 +10,7 @@ No network calls · No tracking · No image assets.
 [![GitHub Stars](https://img.shields.io/github/stars/Sumon-Kayal/Dino-Run-Chromatic-Edition?style=flat-square&logo=github)](https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition/stargazers)
 [![License](https://img.shields.io/github/license/Sumon-Kayal/Dino-Run-Chromatic-Edition?style=flat-square)](LICENSE)
 [![Version](https://img.shields.io/badge/version-0.8.0--beta-blue?style=flat-square)](CHANGELOG.md)
+[![CodeQL](https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition/actions/workflows/codeql.yml/badge.svg)](https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition/actions/workflows/codeql.yml)
 [![CodeRabbit Reviews](https://img.shields.io/coderabbit/prs/github/Sumon-Kayal/Dino-Run-Chromatic-Edition?utm_source=oss&utm_medium=github&utm_campaign=Sumon-Kayal%2FDino-Run-Chromatic-Edition&labelColor=171717&color=FF570A&link=https%3A%2F%2Fcoderabbit.ai&label=CodeRabbit+Reviews&style=flat-square)](https://coderabbit.ai)
 [![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square)](https://github.com/Sumon-Kayal/Dino-Run-Chromatic-Edition/pulls)
 
@@ -41,6 +42,10 @@ No network calls · No tracking · No image assets.
 - [🌐 Browser Compatibility](#-browser-compatibility)
 - [🔧 Technical Notes](#-technical-notes)
 - [🔒 Security](#-security)
+  - [Server (server.py)](#server-serverpy)
+  - [Server (Caddyfile)](#server-caddyfile)
+  - [Static Analysis (CodeQL)](#static-analysis-codeql)
+  - [PR Review Tracking (CodeRabbit)](#pr-review-tracking-coderabbit)
 - [🧩 Architecture Notes](#-architecture-notes)
 - [🧪 Tests](#-tests)
 - [🗒️ Changelog](#-changelog)
@@ -52,7 +57,7 @@ No network calls · No tracking · No image assets.
 ## ✨ Features
 
 - **Endless runner** with delta-time physics — Hz-independent at 60 / 90 / 120 / 144 Hz
-- **Speed calibrated to the original Chrome Dino** — `5 → 13 px/frame`, reaching max speed at score ~2660
+- **Speed calibrated to the original Chrome Dino** — `6 → 13 px/frame`, reaching max speed at score ~2660
 - **Chromatic day/night cycle** — colour-interpolated sky, crescent moon, stars, cloud parallax
 - **Fullscreen mode** — `F` key or `FULL` button; canvas scales to fill viewport at 16:9
 - **Top-10 local leaderboard** — persisted in `localStorage` (session-only fallback for private contexts)
@@ -414,6 +419,10 @@ Dino-Run-Chromatic-Edition/
 ├── tests/
 │   └── all.test.mjs            # Node --test regression suite — DB layer, audio, input,
 │                               #   leaderboard pruning, and game-logic changes (v0.8.0-beta)
+├── .github/
+│   └── workflows/
+│       ├── codeql.yml              # CodeQL SAST — runs on push/PR to main and weekly
+│       └── coderabbit-pr-tracker.yml  # CodeRabbit PR tracker — posts review status on every PR
 ├── .gitignore                  # Excludes cert.pem / key.pem from version control
 ├── README.md                   # Project documentation (this file)
 ├── CHANGELOG.md                # Full release history with per-fix root-cause analysis
@@ -567,7 +576,7 @@ blocking alert with recovery steps. Quota usage is read via
 - Collision uses **two-pass AABB** (matches Chrome source `checkForCollision`):
   pass 1 fast-rejects with outer entity box; pass 2 checks per-part inner boxes
   (body + head/neck for standing; single wide box for ducking) against obstacle
-  inner box shrunk 8 px per side
+  inner box shrunk 5 px per side
 
 ### JSON-driven configuration
 
@@ -601,21 +610,24 @@ falls back to the hardcoded defaults in `config.js` with a `console.warn`.
 
 | Parameter     | Value  | Notes                                           |
 |---------------|--------|-------------------------------------------------|
-| `SPEED_MIN`   | 5      | Starting speed (px/frame at 60 Hz)              |
+| `SPEED_MIN`   | 6      | Starting speed (px/frame at 60 Hz)              |
 | `SPEED_MAX`   | 13     | Cap speed (px/frame at 60 Hz)                   |
-| `ACCELERATION`| 0.0015 | Speed ramp per `dt`                             |
-| `SCORE_COEFF` | 0.04   | Score increment per `(speed × dt)`              |
+| `ACCELERATION`| 0.001  | Speed ramp per `dt`                             |
+| `SCORE_COEFF` | 0.025  | Score increment per `(speed × dt)`              |
 | `PTERA_SCORE` | 700    | Score threshold before pterodactyls can appear  |
-| `PTERA_CHANCE`| 0.22   | Per-spawn probability of a pterodactyl (22%)    |
+| `PTERA_CHANCE`| 0.06   | Per-spawn probability of a pterodactyl (6%)     |
 
 ### Obstacle spawn mix
 
 | Type          | Probability | Notes                         |
 |---------------|:-----------:|-------------------------------|
-| Single cactus | 60%         | Always                        |
-| Double cactus | 32%         | Always                        |
-| Triple cactus | 8%          | Always                        |
-| Pterodactyl   | 22%         | Only when score > `PTERA_SCORE` (700) |
+| Single cactus | 50%         | Always                        |
+| Double cactus | 45%         | Always                        |
+| Triple cactus | 5%          | Always                        |
+| Pterodactyl   | 6%          | Only when score > `PTERA_SCORE` (700) |
+
+Cactus probabilities apply only when the pterodactyl roll fails (94% of spawns when score > 700).
+Effective overall distribution: ptera 6%, single 47%, double 42.3%, triple 4.7%.
 
 ### Pterodactyl flight heights
 
@@ -687,6 +699,42 @@ Note: Caddy does not have a configurable per-request timeout equivalent to
 slowloris protection in the unlikely event that matters for a localhost dev
 server.
 
+### Static Analysis (CodeQL)
+
+All JavaScript source is scanned by **GitHub CodeQL** on every push and pull
+request targeting `main`, and on a weekly schedule.
+
+| Property | Detail |
+|---|---|
+| Workflow | `.github/workflows/codeql.yml` |
+| Language | `javascript-typescript` (covers all `.js` and `.mjs` files) |
+| Query suite | `security-and-quality` — security queries (XSS, prototype pollution, ReDoS, path traversal, unsafe deserialisation) plus quality rules (dead code, unused imports, unreachable branches, missing error handling) |
+| Scope | `js/` and `tests/` — assets, fonts, and certs excluded |
+| Triggers | Push to `main` · PR targeting `main` · Weekly (Monday 03:17 UTC) · Manual dispatch |
+| Results | GitHub **Security** tab → Code scanning alerts |
+
+CodeQL results are uploaded as SARIF and surface in the repository Security
+tab. Any high or critical severity finding blocks merge via the branch
+protection ruleset.
+
+### PR Review Tracking (CodeRabbit)
+
+Every pull request targeting `main` receives an automated tracker comment
+posted by `.github/workflows/coderabbit-pr-tracker.yml`. The comment is
+updated on every subsequent push to the PR.
+
+| Property | Detail |
+|---|---|
+| Workflow | `.github/workflows/coderabbit-pr-tracker.yml` |
+| Trigger | PR opened, synchronised, or reopened against `main` |
+| Engine guard table | Flags 11 engine-critical files — shows ✅ unchanged / ⚠️ CHANGED per file |
+| Parity checklist | Lists all 10 Chromium reference constants with required values |
+| CodeQL link | Direct link to the Security tab code-scanning results for the PR |
+| Comment behaviour | Creates on first push; updates in place on subsequent pushes (no spam) |
+
+The tracker requires only the automatic `GITHUB_TOKEN` — no additional
+secrets or third-party tokens needed.
+
 - Player names rendered exclusively via `textContent` — zero `innerHTML`, zero XSS surface
 - Score validated as a finite non-negative number before storage — prevents NaN/Infinity corruption of `localStorage` and `Array.sort()`
 - `localStorage` is origin-scoped to `https://localhost:1999` — no cross-origin contamination possible
@@ -722,7 +770,7 @@ and `runtime.js`. Prefer importing directly from those source modules.
 | `config.js` | Static constants | `CONFIG`, `W`, `H`, `GY`; `applyJSONConfig()` + `applyObstaclesConfig()` populate from `data/` at boot |
 | `runtime.js` | Mutable state | `G` object — all per-frame and per-session state |
 | `state.js` | Compatibility shim | Re-exports `config.js` + `runtime.js` — deprecated, kept for backwards compatibility |
-| `physics.js` | Collision | Two-pass AABB; reusable box objects — zero allocations per frame; obstacle box shrunk 8 px per side |
+| `physics.js` | Collision | Two-pass AABB; reusable box objects — zero allocations per frame; obstacle box shrunk 5 px per side |
 | `renderer.js` | Canvas drawing | Three-layer stack; `lerpRGB` palette cached; sprite offscreen cache; `CACTUS_INTRA_GAP` used for multi-cactus spacing; `lerp` imported from `utils.js` |
 | `obstacles.js` | Obstacle management | Gap-based spawning matching Chrome source; `CACTUS_INTRA_GAP` constant controls intra-cluster spacing |
 | `audio.js` | Sound | Browser format detection; `fetch` + `decodeAudioData` for OGG/MP3; synthesised beep fallback; `applyAudioConfig()` for JSON path overrides |

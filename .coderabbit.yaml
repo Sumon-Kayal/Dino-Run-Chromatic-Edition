@@ -1,0 +1,214 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# .coderabbit.yaml — CodeRabbit AI review configuration
+# Dino Run — Chromatic Edition
+#
+# Purpose: Guard the Chromium runner.js reference values and engine architecture
+# against accidental drift. Any PR touching the files below will receive a
+# targeted review against the constraints defined in each path_instruction.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+reviews:
+  profile: assertive
+  request_changes_workflow: true
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: false
+
+  path_instructions:
+
+    # ── Core physics & world constants ────────────────────────────────────────
+    - path: "js/game/config.js"
+      instructions: |
+        This file contains constants that must match the Chromium runner.js
+        reference implementation exactly. Flag ANY change to the following
+        values as a breaking deviation from Chromium parity:
+
+        PHYSICS (Trex.config):
+          GRAVITY          = 0.6       (Trex.config.GRAVITY)
+          JUMP_V           = -15       (Trex.config.INITIAL_JUMP_VELOCITY)
+          SPEED_DROP_COEFF = 3.0       (Trex.config.SPEED_DROP_COEFFICIENT)
+
+        WORLD / SPEED (Runner.config):
+          CONFIG.SPEED_MIN    = 6      (Runner.config.SPEED)
+          CONFIG.SPEED_MAX    = 13     (Runner.config.MAX_SPEED)
+          CONFIG.ACCELERATION = 0.001  (Runner.config.ACCELERATION)
+          CONFIG.SCORE_COEFF  = 0.025  (Runner.config.SCORE_COEFF)
+
+        OBSTACLE SPAWN MIX:
+          CONFIG.PTERA_CHANCE  = 0.06  (6% per-spawn ptera probability)
+          CONFIG.PTERA_SCORE   = 700   (score threshold for pteras)
+          CONFIG.CACTUS_TRIPLE = 0.05  (5% triple-cactus probability)
+          CONFIG.CACTUS_DBL    = 0.45  (45% double-cactus probability)
+
+        HITBOXES:
+          HIT_OBS_SHRINK = 5           (obstacle forgiveness margin px per side)
+          HIT_BODY_INSET_X  = 10
+          HIT_BODY_INSET_W  = 22
+          HIT_DUCK_INSET_X  = 10
+          HIT_DUCK_INSET_W  = 22
+
+        SPRITE DIMENSIONS (must match Chromium sprite sheet slices):
+          DINO_W = 44, DINO_H = 52, DUCK_H = 28
+          PTERA_W = 44, PTERA_H = 28
+          DINO_X = 80, GY = 360
+
+        GAP SPAWNING:
+          GAP_COEFF_INITIAL = 0.6      (Runner.config.GAP_COEFFICIENT)
+          MIN_GAP_CACTUS    = 120
+
+        Also check:
+        - applyJSONConfig() must not allow gravity outside [0.1, 2.0] or
+          jumpVelocity outside [-20, -5]. Flag any relaxed validation.
+        - CONFIG.SPEED_MIN must never exceed CONFIG.SPEED_MAX.
+        - No new exported `let` constants should be added without a paired
+          validation guard in applyJSONConfig().
+        - HIT_OBS_SHRINK must not be increased above 5 (increasing it adds
+          unearned forgiveness that breaks Chromium parity).
+
+    # ── Runtime JSON overrides ────────────────────────────────────────────────
+    - path: "data/config.json"
+      instructions: |
+        This file provides runtime overrides loaded by applyJSONConfig() at boot.
+        Values must stay in sync with the defaults in js/game/config.js.
+        Flag any value that diverges from these Chromium reference values:
+
+          physics.gravity       = 0.6
+          physics.jumpVelocity  = -15
+          physics.acceleration  = 0.001
+          game.initialSpeed     = 6
+          game.maxSpeed         = 13
+
+        Flag any new keys added to this file — each requires a corresponding
+        validation block in applyJSONConfig() in js/game/config.js.
+
+    # ── Collision detection ───────────────────────────────────────────────────
+    - path: "js/game/physics.js"
+      instructions: |
+        This file implements the two-pass AABB collision system matching
+        Chromium's checkForCollision() approach. Flag any change to:
+
+        - The two-pass structure (outer box fast-reject → inner box per-part check).
+        - The obstacle inner box formula: x += HIT_OBS_SHRINK, w -= HIT_OBS_SHRINK*2.
+          HIT_OBS_SHRINK must remain imported from config.js (never hardcoded here).
+        - The dino hitbox split: standing uses body box + head/neck box;
+          ducking uses a single wide box. Any merge or removal of these boxes
+          must be flagged.
+        - Import of HIT_OBS_SHRINK from config.js — must never be hardcoded inline.
+        - Any per-frame object allocation (new {}) inside the collision check loop.
+
+    # ── Game loop & timing ────────────────────────────────────────────────────
+    - path: "js/game/engine.js"
+      instructions: |
+        This file implements the delta-time game loop. Flag any change to:
+
+        - The dt formula: dt = elapsed / FRAME_MS (must use FRAME_MS = 1000/60).
+        - The dt clamp: dt = Math.min(dt, MAX_DT). MAX_DT must remain 3.0.
+          Removing or raising MAX_DT causes a spiral-of-death after tab switches.
+        - The rAF callback being a pre-bound method (allocated once in constructor,
+          not re-bound on each frame).
+        - Any change that causes the game loop to tick when G.state !== 'running'.
+
+    # ── Player physics ────────────────────────────────────────────────────────
+    - path: "js/game/player.js"
+      instructions: |
+        Flag any change to:
+
+        - Jump initiation: vy must be set to JUMP_V (imported from config.js).
+          Never hardcode the jump velocity here.
+        - Gravity application: vy += GRAVITY * dt each frame. GRAVITY must be
+          imported from config.js, never hardcoded.
+        - Fast-fall (duck while airborne): vy += GRAVITY * SPEED_DROP_COEFF * dt.
+          SPEED_DROP_COEFF must remain 3.0 and must be imported from config.js.
+        - Ground clamp: dino.y must be clamped to GY - DINO_H (standing) or
+          GY - DUCK_H (ducking) — never allow the dino to go below the ground line.
+        - Sub-pixel y position: dino.y must be a float; floor/round only at draw time.
+
+    # ── Obstacle spawning ─────────────────────────────────────────────────────
+    - path: "js/game/obstacles.js"
+      instructions: |
+        Flag any change to:
+
+        - Ptera roll order: isPtera check must happen BEFORE the cactus type roll.
+          If the order is swapped the effective ptera probability changes.
+        - The gap formula: gap must be derived from MIN_GAP_CACTUS / MIN_GAP_PTERA
+          and scaled by gapCoefficient. Neither minimum gap may be hardcoded inline.
+        - Ptera height selection: must choose from exactly 3 presets
+          (PTERA_Y_LOW, PTERA_Y_MID, PTERA_Y_HIGH). Adding or removing height
+          options changes gameplay balance.
+        - The CACTUS_INTRA_GAP constant usage for multi-cactus cluster spacing —
+          must be imported from config.js, never hardcoded.
+
+    # ── Speed & score update ──────────────────────────────────────────────────
+    - path: "js/main.js"
+      instructions: |
+        Flag any change to the game loop update block that affects:
+
+        - Score increment formula: G.score += G.speed * CONFIG.SCORE_COEFF * dt.
+          Neither SCORE_COEFF nor the formula structure may be changed inline.
+        - Speed ramp: G.speed = Math.min(CONFIG.SPEED_MAX, G.speed + CONFIG.ACCELERATION * dt).
+          Both SPEED_MAX and ACCELERATION must be read from CONFIG (not local vars).
+        - gapCoefficient update: must use GAP_COEFF_INITIAL and GAP_COEFF_SCORE
+          imported from config.js.
+        - The visibilitychange handler: must call draw() for 'paused'/'dead' states
+          so the canvas repaints on tab return (mobile canvas backing-store discard).
+        - The boot() try/catch wrapper: must not be removed. Its catch block surfaces
+          fatal boot errors in the loading hint UI instead of silently freezing.
+        - leaderboard renderLeaderboard(): entry.when || entry.date || '--' fallback
+          chain must be preserved — all three levels are required.
+
+    # ── DB layer ─────────────────────────────────────────────────────────────
+    - path: "js/db/database.js"
+      instructions: |
+        Flag any attempt to add barrel re-exports (re-exporting from leaderboard.js,
+        stats.js, or storage.js) to this file. Both leaderboard.js and stats.js
+        import dbGet/dbSet from database.js — any re-export of those modules here
+        creates a circular dependency that stalls ES module evaluation and leaves
+        the loading screen frozen.
+
+        Valid exports from this file: backendName, dbGet, dbSet only.
+
+    # ── Audio ─────────────────────────────────────────────────────────────────
+    - path: "js/game/audio.js"
+      instructions: |
+        Flag any change to _playBuffer() that reintroduces a global _loadState
+        guard before the per-key buffer check. The correct order is:
+          1. if (soundMuted || !audioCtx) return false
+          2. if (_loadState === 'loading' && !_buffers[key]) return null
+          3. if (!_buffers[key]) return false
+          4. resumeAudio() then play
+
+        Checking _loadState === 'failed' before _buffers[key] silences all sounds
+        when any single audio file fails to load.
+
+    # ── CSS ───────────────────────────────────────────────────────────────────
+    - path: "css/accessibility.css"
+      instructions: |
+        The reduced-motion block must suppress BOTH selectors:
+          .go-newbest { animation: none; }
+          .go-newbest:not(.hidden) { animation: none; }
+        Removing the :not(.hidden) variant means the animation runs while the
+        element is hidden, wasting compositor work on every idle frame.
+
+        The :focus-visible ring (outline: 2px solid var(--ce-blue)) must not be
+        removed or scoped to :focus — it must remain :focus-visible only so mouse
+        clicks do not trigger the ring (WCAG 2.4.7).
+
+    - path: "css/ui.css"
+      instructions: |
+        .go-newbest base typography and .go-newbest:not(.hidden) animation must
+        remain on separate selectors. Do not merge the animation back onto the
+        base .go-newbest rule — that would fire the keyframe while the element
+        is hidden.
+
+    # ── Input ─────────────────────────────────────────────────────────────────
+    - path: "js/game/input.js"
+      instructions: |
+        The mute button unmuted icon must be \uD83D\uDD0A (U+1F50A, 🔊 SPEAKER
+        WITH THREE SOUND WAVES). Flag any use of \uD83D\uDD06 (U+1F506, 🔆
+        HIGH BRIGHTNESS) — that codepoint is 4 positions short of the correct one
+        and renders as a sun/brightness symbol instead of a speaker.
+
+        Both handler locations must use the same codepoint:
+          - keydown handler (KeyM branch)
+          - muteBtn click handler
