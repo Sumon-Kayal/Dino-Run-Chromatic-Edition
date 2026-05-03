@@ -115,6 +115,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ### Added
 
+- **CodeQL static analysis** (`.github/workflows/codeql.yml`)  
+  GitHub CodeQL SAST workflow added. Scans all JavaScript source (`js/`, `tests/`) on
+  every push and pull request targeting `main`, and on a weekly schedule (Monday 03:17 UTC).
+  Uses the `security-and-quality` query suite — covers XSS, prototype pollution, ReDoS,
+  path traversal, unsafe deserialisation, dead code, unused imports, and unreachable branches.
+  Results upload as SARIF to the GitHub Security tab. Assets, fonts, and certs excluded from
+  scan scope. `security-events: write` permission scoped to the workflow only.
+
+- **CodeRabbit PR Tracker** (`.github/workflows/coderabbit-pr-tracker.yml`)  
+  GitHub Actions workflow that posts a structured tracker comment on every PR targeting `main`.
+  Comment is created on first push and updated in place on subsequent pushes — no duplicate
+  comments. Tracks:
+  - **Engine-critical file guard** — 11 guarded paths (`js/game/config.js`, `physics.js`,
+    `engine.js`, `player.js`, `obstacles.js`, `js/main.js`, `js/db/database.js`, `audio.js`,
+    `input.js`, `data/config.json`, `css/accessibility.css`) flagged ✅ unchanged or
+    ⚠️ CHANGED against the PR base commit.
+  - **Chromium parity checklist** — all 10 reference constants listed with required values;
+    shown whenever `config.js` or `data/config.json` is touched.
+  - **Review tool links** — CodeRabbit review status reminder and direct link to the
+    GitHub Security tab code-scanning results.
+  Requires only the automatic `GITHUB_TOKEN` — no additional secrets needed.
+
+- **CodeRabbit AI review configuration** (`.coderabbit.yaml`)  
+  Added `.coderabbit.yaml` to the repo root with `assertive` profile and per-path review
+  instructions covering 11 source files. Guards all Chromium reference constants by exact
+  value, enforces the two-pass AABB collision structure, prevents circular imports in the DB
+  layer, and flags the mute-button emoji codepoint regression. Any PR touching a guarded file
+  receives a targeted CodeRabbit review against the constraints defined for that path.
+
 - **Live demo link — GitHub Pages** (`README.md`)  
   Added a `▶ Play Now` shield badge to the README header linking to
   `https://sumon-kayal.github.io/Dino-Run-Chromatic-Edition/`. Added a `## 🌐 Live Demo`

@@ -80,7 +80,7 @@ export function checkCollision() {
         { x: HIT_HEAD_X, y: HIT_HEAD_Y, w: DINO_W - HIT_HEAD_W_INSET, h: HIT_HEAD_H }, // head/neck
       ];
 
-  // Obstacle inner box — shrunk 8 px per side (was 5 px).
+  // Obstacle inner box — shrunk 5 px per side (was 5 px).
   // Combined with the tighter dino body this gives ~17 px of extra forgiveness
   // on descent without affecting ground-level run-into collisions.
   const obsBoxes = [{

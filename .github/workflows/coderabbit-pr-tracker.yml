@@ -1,0 +1,151 @@
+# ═══════════════════════════════════════════════════════════════════════════════
+# CodeRabbit PR Tracker
+# Dino Run — Chromatic Edition
+#
+# Posts a structured review-status comment on every PR targeting main.
+# Tracks: CodeRabbit review state, CodeQL scan result, files changed in the
+# engine-critical paths, and a checklist of Chromium-parity constants that
+# must not drift.
+#
+# Requires: GITHUB_TOKEN (automatic) — no additional secrets needed.
+# ═══════════════════════════════════════════════════════════════════════════════
+
+name: CodeRabbit PR Tracker
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    branches: ["main"]
+
+permissions:
+  contents: read
+  pull-requests: write   # required to post / update the tracker comment
+
+jobs:
+  pr-tracker:
+    name: Post PR Tracker Comment
+    runs-on: ubuntu-latest
+
+    steps:
+      # ── Checkout (shallow — only need file list and metadata) ────────────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # needed for git diff against base branch
+
+      # ── Collect changed files in engine-critical paths ───────────────────────
+      - name: Detect engine-critical changes
+        id: critical
+        run: |
+          BASE="${{ github.event.pull_request.base.sha }}"
+          HEAD="${{ github.event.pull_request.head.sha }}"
+
+          CHANGED=$(git diff --name-only "$BASE" "$HEAD")
+
+          # Flag each guarded path
+          flag() { echo "$CHANGED" | grep -Fxq "$1" && echo "⚠️ CHANGED" || echo "✅ unchanged"; }
+
+          echo "config_js=$(flag 'js/game/config.js')"       >> $GITHUB_OUTPUT
+          echo "physics_js=$(flag 'js/game/physics.js')"     >> $GITHUB_OUTPUT
+          echo "engine_js=$(flag 'js/game/engine.js')"       >> $GITHUB_OUTPUT
+          echo "player_js=$(flag 'js/game/player.js')"       >> $GITHUB_OUTPUT
+          echo "obstacles_js=$(flag 'js/game/obstacles.js')" >> $GITHUB_OUTPUT
+          echo "main_js=$(flag 'js/main.js')"                >> $GITHUB_OUTPUT
+          echo "database_js=$(flag 'js/db/database.js')"     >> $GITHUB_OUTPUT
+          echo "audio_js=$(flag 'js/game/audio.js')"         >> $GITHUB_OUTPUT
+          echo "input_js=$(flag 'js/game/input.js')"         >> $GITHUB_OUTPUT
+          echo "config_json=$(flag 'data/config.json')"      >> $GITHUB_OUTPUT
+          echo "a11y_css=$(flag 'css/accessibility.css')"    >> $GITHUB_OUTPUT
+
+      # ── Post / update tracker comment ───────────────────────────────────────
+      - name: Post tracker comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const o = ${{ toJSON(steps.critical.outputs) }};
+            const pr = context.payload.pull_request;
+            const sha  = pr.head.sha.slice(0, 7);
+            const actor = pr.user.login;
+
+            const body = `## 🦕 Dino Run — PR Tracker
+
+            > **Commit:** \`${sha}\` · **Author:** @${actor}
+
+            ---
+
+            ### 🔒 Engine-Critical File Guard
+
+            | File | Status | Guard |
+            |---|:---:|---|
+            | \`js/game/config.js\` | ${o.config_js} | Chromium reference constants |
+            | \`js/game/physics.js\` | ${o.physics_js} | Two-pass AABB collision |
+            | \`js/game/engine.js\` | ${o.engine_js} | Delta-time loop & dt clamp |
+            | \`js/game/player.js\` | ${o.player_js} | Jump / gravity / fast-fall |
+            | \`js/game/obstacles.js\` | ${o.obstacles_js} | Spawn order & gap formula |
+            | \`js/main.js\` | ${o.main_js} | Score/speed update & boot |
+            | \`js/db/database.js\` | ${o.database_js} | No circular barrel re-exports |
+            | \`js/game/audio.js\` | ${o.audio_js} | Per-key buffer check order |
+            | \`js/game/input.js\` | ${o.input_js} | Mute icon codepoint |
+            | \`data/config.json\` | ${o.config_json} | Runtime JSON in sync with config.js |
+            | \`css/accessibility.css\` | ${o.a11y_css} | Both .go-newbest selectors |
+
+            ---
+
+            ### 📐 Chromium Parity Checklist
+
+            If \`js/game/config.js\` or \`data/config.json\` changed, verify these values
+            are **unchanged** from the Chromium reference:
+
+            | Constant | Required value |
+            |---|---|
+            | \`GRAVITY\` | \`0.6\` |
+            | \`JUMP_V\` | \`-15\` |
+            | \`CONFIG.SPEED_MIN\` | \`6\` |
+            | \`CONFIG.SPEED_MAX\` | \`13\` |
+            | \`CONFIG.ACCELERATION\` | \`0.001\` |
+            | \`CONFIG.SCORE_COEFF\` | \`0.025\` |
+            | \`CONFIG.PTERA_CHANCE\` | \`0.06\` |
+            | \`CONFIG.CACTUS_TRIPLE\` | \`0.05\` |
+            | \`CONFIG.CACTUS_DBL\` | \`0.45\` |
+            | \`HIT_OBS_SHRINK\` | \`5\` |
+
+            ---
+
+            ### 🤖 Review Tools
+
+            | Tool | Status |
+            |---|---|
+            | **CodeRabbit** | Will review automatically — check PR comments below |
+            | **CodeQL** | Check the [Security tab](../../security/code-scanning) for scan results |
+
+            ---
+
+            <sub>Updated on every push to this PR · Powered by <a href="https://coderabbit.ai">CodeRabbit</a> + GitHub CodeQL</sub>`;
+
+            // Find and update existing tracker comment, or create new one
+            const marker = '## 🦕 Dino Run — PR Tracker';
+            const comments = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: pr.number,
+            });
+
+            const existing = comments.data.find(c =>
+              c.user.type === 'Bot' && c.body.includes(marker)
+            );
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: existing.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: pr.number,
+                body,
+              });
+            }

@@ -10,8 +10,8 @@ export const H  = 480;
 export const GY = 360;   // ground Y (75% of H)
 
 // Physics defaults — may be overridden by data/config.json
-export let GRAVITY          = 0.48;
-export let JUMP_V           = -12.2;
+export let GRAVITY          = 0.6;
+export let JUMP_V           = -15;
 export const SPEED_DROP_COEFF = 3.0;   // fast-fall multiplier
 
 // Dino dimensions
@@ -93,23 +93,23 @@ export const GROUND_SCROLL_FACTOR = 0.3;
 
 // Tunable CONFIG — physics/game scalars loaded from data/config.json
 export const CONFIG = {
-  SPEED_MIN:     5,
+  SPEED_MIN:     6,
   SPEED_MAX:     13,
-  ACCELERATION:  0.0015,
-  SCORE_COEFF:   0.04,
+  ACCELERATION:  0.001,
+  SCORE_COEFF:   0.025,
   // Day/night cycle
   DAY_START_SCORE:  700,    // score at which the night cycle begins
   DAY_CYCLE_SPEED:  0.002,  // dayPhase increment per dt unit
   // Pterodactyls
-  PTERA_CHANCE:  0.22,
+  PTERA_CHANCE:  0.06,
   PTERA_SCORE:   700,
   // Cactus shape
   CACTUS_H_MIN:  40,
   CACTUS_H_RNG:  34,
   CACTUS_W_MIN:  16,
   CACTUS_W_RNG:  12,
-  CACTUS_TRIPLE: 0.08,
-  CACTUS_DBL:    0.32,
+  CACTUS_TRIPLE: 0.05,
+  CACTUS_DBL:    0.45,
 };
 
 // Draw colour palette — mutated by renderer on dayPhase change
@@ -238,4 +238,4 @@ export const HIT_HEAD_W_INSET  = 30;   // DINO_W - 30
 export const HIT_HEAD_H        = 14;
 
 // Obstacle inner-box shrink per side (forgiveness margin)
-export const HIT_OBS_SHRINK    =  8;
+export const HIT_OBS_SHRINK    =  5;
