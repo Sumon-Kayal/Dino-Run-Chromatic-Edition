@@ -31,10 +31,12 @@ export function teardownInput() {
  * Attach keyboard, pointer/touch, and UI button event handlers to the provided DOM elements and record them for later removal.
  *
  * @param {object} DOM - Cached DOM references required by the input handlers. Expected properties: `gameFrame`, `restartBtn`, `jumpBtn`, `duckBtn`, `pauseBtn`, `muteBtn`, `fullscreenBtn`.
- * @param {object} handlers - Callback functions invoked by input events. Expected properties: `jump`, `startDuck`, `endDuck`, `togglePause`, `toggleFullscreen`, `restart`.
+ * @param {object} handlers - Callback functions invoked by input events. Expected properties: `jump`, `startDuck`, `endDuck`, `togglePause`, `toggleFullscreen`, `restart`. Optional: `endJump` (jump key / touch released — enables tap-for-short-hop, hold-for-full-jump).
  */
 export function setupInput(DOM, handlers) {
   const { jump, startDuck, endDuck, togglePause, toggleFullscreen } = handlers;
+  // Optional: callers that predate variable-height jumps simply never release.
+  const endJump = typeof handlers.endJump === 'function' ? handlers.endJump : function () {};
 
   /**
    * Handle keydown events for game input controls.
@@ -92,6 +94,8 @@ export function setupInput(DOM, handlers) {
       if (e.target.closest('button, [role="button"], [contenteditable="true"]')) return;
     }
     if (e.code === 'ArrowDown') endDuck();
+    // Jump key released — shortens the hop once the minimum height is reached.
+    if (e.code === 'Space' || e.code === 'ArrowUp') endJump();
   }
 
   _on(document, 'keydown', onKeyDown);
@@ -102,6 +106,9 @@ export function setupInput(DOM, handlers) {
   _on(DOM.gameFrame, 'touchstart', function (e) {
     e.preventDefault(); jump();
   }, { passive: false });
+  // Finger lifted — same release semantics as the jump key.
+  _on(DOM.gameFrame, 'touchend',    function () { endJump(); });
+  _on(DOM.gameFrame, 'touchcancel', function () { endJump(); });
 
   // ── Restart button ──────────────────────────────────────
   _on(DOM.restartBtn, 'click', function (e) {
@@ -116,6 +123,8 @@ export function setupInput(DOM, handlers) {
   _on(DOM.jumpBtn, 'touchstart', function (e) {
     e.preventDefault(); jump();
   }, { passive: false });
+  _on(DOM.jumpBtn, 'touchend',    function () { endJump(); });
+  _on(DOM.jumpBtn, 'touchcancel', function () { endJump(); });
 
   // ── Duck button ─────────────────────────────────────────
   _on(DOM.duckBtn, 'mousedown',   startDuck);

@@ -12,7 +12,19 @@ export const GY = 360;   // ground Y (75% of H)
 // Physics defaults — may be overridden by data/config.json
 export let GRAVITY          = 0.6;
 export let JUMP_V           = -15;
-export const SPEED_DROP_COEFF = 3.0;   // fast-fall multiplier
+export const SPEED_DROP_COEFF = 3.0;   // fast-fall multiplier (downward motion only)
+
+// Jump state machine — mirrors Chromium Trex.startJump / endJump / setSpeedDrop
+// (components/neterror/resources/dino_game/trex.ts, normalJumpConfig):
+//   gravity 0.6 · initial velocity -10 (-10.6 at speed 6) · minJumpHeight 30 px ·
+//   maxJumpHeight → 63 px of rise · dropVelocity -5 · setSpeedDrop() → velocity 1.
+// Chromium's limits are px values tuned for a 150 px-tall world. Here they are
+// expressed as fractions of the free-flight apex (v0² / 2g ≈ 93.6 px at Chromium's
+// start speed) so they stay proportional to whatever JUMP_V / GRAVITY are set to.
+export const JUMP_MIN_RISE_FRAC = 0.32;  // 30 / 93.6 — a release before this height cannot cut the hop shorter
+export const JUMP_MAX_RISE_FRAC = 0.67;  // 63 / 93.6 — upward speed is capped once the dino climbs past this
+export const JUMP_DROP_V_FRAC   = 0.5;   // dropVelocity = JUMP_V / 2 (Chromium setJumpVelocity convention)
+export const SPEED_DROP_START_V = 1;     // Chromium setSpeedDrop(): jumpVelocity = 1 (px/frame, downward)
 
 // Dino dimensions
 export const DINO_W = 44;

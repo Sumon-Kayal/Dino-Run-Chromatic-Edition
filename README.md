@@ -399,7 +399,7 @@ Dino-Run-Chromatic-Edition/
 │   │   │                       #   (deprecated; import directly from source modules instead)
 │   │   ├── audio.js            # Web Audio: browser-format detection, OGG/MP3 load,
 │   │   │                       #   synthesised beep fallback, applyAudioConfig()
-│   │   ├── player.js           # Dino physics: jump, duck, idle animation
+│   │   ├── player.js           # Dino physics: variable-height jump, duck, fast-fall, idle animation
 │   │   ├── obstacles.js        # Cactus / pterodactyl spawning and movement
 │   │   ├── physics.js          # Two-pass AABB collision detection
 │   │   ├── renderer.js         # Three-layer canvas renderer (bgCanvas / gameCanvas / uiCanvas)
@@ -418,7 +418,8 @@ Dino-Run-Chromatic-Edition/
 │                               #   Auto-provisions a trusted local cert via `caddy trust`
 ├── tests/
 │   └── all.test.mjs            # Node --test regression suite — DB layer, audio, input,
-│                               #   leaderboard pruning, and game-logic changes (v0.8.0-beta)
+│                               #   leaderboard pruning, game-logic changes (v0.8.0-beta),
+│                               #   and player physics (fast-fall, variable-height jump)
 ├── .github/
 │   └── workflows/
 │       ├── codeql.yml              # CodeQL SAST — runs on push/PR to main and weekly
@@ -457,7 +458,7 @@ curl -L -o assets/fonts/vt323.woff2 \
 | Action                  | Keyboard             | Mobile                        |
 |-------------------------|----------------------|-------------------------------|
 | Start                   | Space / ↑            | Tap screen                    |
-| Jump                    | Space / ↑            | Tap / ▲ JUMP button           |
+| Jump (hold = higher)    | Space / ↑            | Tap / ▲ JUMP button           |
 | Duck                    | Hold ↓               | Hold ▼ DUCK button            |
 | Fast-fall (airborne)    | Hold ↓ while jumping | Hold ▼ DUCK while airborne    |
 | Pause                   | P                    | ❙❙ PAUSE button               |
@@ -465,6 +466,8 @@ curl -L -o assets/fonts/vt323.woff2 \
 | Fullscreen              | F                    | FULL button                   |
 | Restart                 | Space / ↑            | ↺ RESTART button              |
 | Reset top score         | —                    | ✕ beside HI display in header |
+
+**Jump height** follows Chromium's rule: keep Space / ↑ (or your finger) down for a full jump; releasing after the minimum height cuts the hop short, and a quick tap always gives the same short hop. Pressing ↓ in the air cancels the climb and drops the dino at 3× speed; releasing ↓ ends the fast-fall. Mouse clicks fire after the button is released, so they always give a full jump.
 
 ---
 
@@ -775,7 +778,7 @@ and `runtime.js`. Prefer importing directly from those source modules.
 | `renderer.js` | Canvas drawing | Three-layer stack; `lerpRGB` palette cached; sprite offscreen cache; `CACTUS_INTRA_GAP` used for multi-cactus spacing; `lerp` imported from `utils.js` |
 | `obstacles.js` | Obstacle management | Gap-based spawning matching Chrome source; `CACTUS_INTRA_GAP` constant controls intra-cluster spacing |
 | `audio.js` | Sound | Browser format detection; `fetch` + `decodeAudioData` for OGG/MP3; synthesised beep fallback; `applyAudioConfig()` for JSON path overrides |
-| `player.js` | Dino physics | Jump, duck, fast-fall, idle animation; sub-pixel `y` position for smooth descent |
+| `player.js` | Dino physics | Variable-height jump (release / min-max height), duck, fast-fall (`setSpeedDrop` semantics), idle animation; sub-pixel `y` position for smooth descent |
 | `input.js` | Input | Callbacks-based; full listener registry enables zero-leak `teardownInput()` |
 
 ### `js/utils/`

@@ -9,12 +9,18 @@
  *   - main.js: db:quota null-guard, goNewBest condition (prevBest > 0 removed),
  *              renderLeaderboard medal CSS vars, GAP_COEFF_INITIAL usage
  *
+ * Also covers the player-physics state machine (Chromium Trex parity):
+ *   - player.js: fast-fall (speed drop), jump release / min-max jump height,
+ *              input-order handling, frame-delta stability
+ *   - input.js:  jump-release wiring (keyup Space/ArrowUp, touchend/touchcancel)
+ *   - config.js: jump-limit constants
+ *
  * Run with:   node --test tests/all.test.mjs
  */
 
 'use strict';
 
-import { test, describe, before, beforeEach } from 'node:test';
+import { test, describe, before, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -163,6 +169,11 @@ const {
 
 const { GAP_COEFF_INITIAL } =
   await import(`file://${ROOT}/js/game/config.js`);
+
+// Player-physics modules (pure logic — no DOM needed beyond the stubs above)
+const { G: GAME } = await import(`file://${ROOT}/js/game/runtime.js`);
+const player      = await import(`file://${ROOT}/js/game/player.js`);
+const GCFG        = await import(`file://${ROOT}/js/game/config.js`);
 
 // ═══════════════════════════════════════════════════════════════
 // database.js — changes in this PR
@@ -1280,5 +1291,458 @@ describe('css/accessibility.css — focus ring and reduced-motion (PR change)', 
     // Verify that animation: none is set
     const hasAnimationNone = /animation\s*:\s*none/.test(mediaBody);
     assert.ok(hasAnimationNone, 'reduced-motion block must set animation: none');
+  });
+});
+
+// ═══════════════════════════════════════════════════════════════
+// Player physics — Chromium Trex state machine (fast-fall + jump release)
+//
+// Reference: Chromium components/neterror/resources/dino_game/trex.ts
+//   setSpeedDrop():  speedDrop = true; jumpVelocity = 1       ("cancels the jump")
+//   updateJump():    yPos += round(vel * (speedDrop ? 3 : 1) * frames); vel += gravity
+//   endJump():       if (reachedMinHeight && vel < dropVelocity) vel = dropVelocity
+//
+// dt in these tests is in 60 Hz frame units (dt = 1 → one frame), as in engine.js.
+// ═══════════════════════════════════════════════════════════════
+
+const LAND_Y    = GCFG.GY - GCFG.DINO_H;
+const FREE_APEX = (GCFG.JUMP_V * GCFG.JUMP_V) / (2 * GCFG.GRAVITY);   // v0² / 2g
+const MIN_RISE  = FREE_APEX * GCFG.JUMP_MIN_RISE_FRAC;
+const MAX_RISE  = FREE_APEX * GCFG.JUMP_MAX_RISE_FRAC;
+const DROP_V    = GCFG.JUMP_V * GCFG.JUMP_DROP_V_FRAC;                // negative = upward
+
+/** Fresh dino on the ground, game running, no key held. */
+function newRun() {
+  player.initPlayer();
+  GAME.state    = 'running';
+  GAME.duckHeld = false;
+}
+
+/**
+ * Perform one complete jump and record it. Actions fire BEFORE the update of the
+ * named (0-based) frame: releaseAt → endJump(), downAt → startDuck(), upAt → endDuck().
+ * Returns { peak, frames, trace[] } — trace entries are the state AFTER each update.
+ */
+function runJump({ dt = 1, releaseAt = null, downAt = null, upAt = null, maxFrames = 600 } = {}) {
+  newRun();
+  player.jump();
+  const trace = [];
+  let peak = 0;
+  for (let f = 0; f < maxFrames && GAME.dino.jumping; f++) {
+    if (releaseAt === f) player.endJump();
+    if (downAt    === f) player.startDuck();
+    if (upAt      === f) player.endDuck();
+    player.updatePlayer(dt);
+    peak = Math.max(peak, LAND_Y - GAME.dino.y);
+    trace.push({ y: GAME.dino.y, vy: GAME.dino.vy, speedDrop: GAME.dino.speedDrop });
+  }
+  GAME.duckHeld = false;   // leave nothing held for the next test
+  return { peak, frames: trace.length, trace };
+}
+
+describe('config.js — jump state-machine constants', () => {
+  test('limit fractions are ordered: 0 < min < max < 1', () => {
+    assert.ok(GCFG.JUMP_MIN_RISE_FRAC > 0);
+    assert.ok(GCFG.JUMP_MIN_RISE_FRAC < GCFG.JUMP_MAX_RISE_FRAC);
+    assert.ok(GCFG.JUMP_MAX_RISE_FRAC < 1);
+  });
+
+  test('drop velocity is half the jump velocity (Chromium setJumpVelocity convention)', () => {
+    assert.equal(GCFG.JUMP_DROP_V_FRAC, 0.5);
+  });
+
+  test('speed-drop start velocity is positive (downward) — Chromium setSpeedDrop() uses 1', () => {
+    assert.equal(GCFG.SPEED_DROP_START_V, 1);
+  });
+
+  test('speed-drop coefficient stays at Chromium speedDropCoefficient = 3', () => {
+    assert.equal(GCFG.SPEED_DROP_COEFF, 3);
+  });
+
+  test('derived limits for the shipped JUMP_V / GRAVITY', () => {
+    // v0 = 15, g = 0.6 → free apex 187.5 px → min 60 px, max ≈ 125.6 px, drop −7.5 px/frame
+    assert.ok(Math.abs(FREE_APEX - 187.5) < 1e-9);
+    assert.ok(Math.abs(MIN_RISE - 60) < 1e-9);
+    assert.ok(Math.abs(MAX_RISE - 125.625) < 1e-9);
+    assert.ok(Math.abs(DROP_V + 7.5) < 1e-9);
+  });
+});
+
+describe('player.js — fast-fall (speed drop)', () => {
+  afterEach(() => { GAME.state = 'idle'; GAME.duckHeld = false; cancelSoundTimers(); });
+
+  test('baseline: a normal jump leaves the ground and lands back on it', () => {
+    const r = runJump();
+    assert.ok(r.peak > MIN_RISE, `peak ${r.peak} should exceed the minimum height`);
+    assert.equal(GAME.dino.y, LAND_Y);
+    assert.equal(GAME.dino.jumping, false);
+  });
+
+  test('Down pressed while rising never lifts the dino above the normal-jump path (P0 regression)', () => {
+    const normal = runJump();
+    for (const k of [1, 3, 5, 8, 10, 15]) {
+      const r = runJump({ downAt: k });
+      assert.ok(r.peak <= normal.peak + 1e-9, `downAt ${k}: peak ${r.peak} > normal ${normal.peak}`);
+      const n = Math.min(r.trace.length, normal.trace.length);
+      for (let i = 0; i < n; i++) {
+        assert.ok(r.trace[i].y >= normal.trace[i].y - 1e-9,
+          `downAt ${k}, frame ${i}: dino is higher (y=${r.trace[i].y}) than the normal jump (y=${normal.trace[i].y})`);
+      }
+    }
+  });
+
+  test('the old failure mode is gone: Down mid-rise cannot triple the climb (peak ≪ 3 × normal)', () => {
+    const normal = runJump();
+    const r = runJump({ downAt: 1 });
+    assert.ok(r.peak < normal.peak, `peak ${r.peak} should be below the normal jump peak ${normal.peak}`);
+    assert.ok(r.peak < GCFG.H, 'dino must never leave the 480 px canvas');
+  });
+
+  test('G.duckHeld alone never scales a rising dino: every rising step equals vy (report 3.1, direct regression)', () => {
+    // The original defect: `d.y += d.vy * (G.duckHeld ? 3 : 1) * dt` tripled the *upward* step
+    // whenever Down was held while vy < 0. Set the flag directly (no speed-drop state) and
+    // verify the rising path is untouched.
+    newRun();
+    player.jump();
+    GAME.duckHeld = true;
+    let rising = 0;
+    for (let f = 0; f < 30; f++) {
+      const y0 = GAME.dino.y, vy0 = GAME.dino.vy;
+      if (vy0 >= 0) break;
+      player.updatePlayer(1);
+      rising++;
+      assert.ok(Math.abs((GAME.dino.y - y0) - vy0) < 1e-9,
+        `frame ${f}: step ${GAME.dino.y - y0} must equal vy ${vy0} (multiplier leaked into the climb)`);
+    }
+    assert.ok(rising > 5, 'test setup: dino should have been rising for several frames');
+    GAME.duckHeld = false;
+  });
+
+  test('Down pressed mid-rise stops the climb immediately and the dino only descends afterwards', () => {
+    const k = 5;
+    const r = runJump({ downAt: k });
+    assert.ok(r.trace[k].vy > 0, 'velocity must be downward right after the press');
+    for (let i = k; i < r.trace.length; i++) {
+      const prevY = i === 0 ? LAND_Y : r.trace[i - 1].y;
+      assert.ok(r.trace[i].y >= prevY - 1e-9, `frame ${i}: dino moved upward during fast-fall`);
+    }
+  });
+
+  test('Down pressed in the same frame as the jump cancels it (Chromium: "immediately cancels the jump")', () => {
+    newRun();
+    player.jump();
+    player.startDuck();
+    player.updatePlayer(1);
+    assert.equal(GAME.dino.jumping, false);
+    assert.equal(GAME.dino.y, LAND_Y);
+  });
+
+  test('fast-fall lands sooner than a normal jump', () => {
+    const normal = runJump();
+    const fast   = runJump({ downAt: 25 });
+    assert.ok(fast.frames < normal.frames, `${fast.frames} frames should be fewer than ${normal.frames}`);
+  });
+
+  test('while speed-drop is active each step is 3 × velocity (multiplier on the position step only)', () => {
+    const r = runJump({ downAt: 10, upAt: 20 });
+    // frames 11..19 are pure fast-fall: Δy(i) = 3 × vy(after frame i-1)
+    for (let i = 11; i < 20; i++) {
+      const dy = r.trace[i].y - r.trace[i - 1].y;
+      assert.ok(Math.abs(dy - 3 * r.trace[i - 1].vy) < 1e-9, `frame ${i}: Δy=${dy}, 3·vy=${3 * r.trace[i - 1].vy}`);
+    }
+  });
+
+  test('releasing Down ends fast-fall: velocity is kept, only the multiplier is removed', () => {
+    const r = runJump({ downAt: 10, upAt: 20 });
+    assert.equal(r.trace[19].speedDrop, true,  'still fast-falling before the release');
+    assert.equal(r.trace[20].speedDrop, false, 'speedDrop must clear on release');
+    const dy = r.trace[20].y - r.trace[19].y;
+    assert.ok(Math.abs(dy - r.trace[19].vy) < 1e-9, `after release Δy (${dy}) must equal vy (${r.trace[19].vy}), not 3·vy`);
+  });
+
+  test('Down pressed late in the fall never slows it down (deliberate deviation from raw setSpeedDrop)', () => {
+    const base = runJump();
+    // first frame after the apex where the dino is clearly falling fast
+    const apex = base.trace.findIndex((t) => t.vy > 0);
+    const late = apex + 15;
+    assert.ok(base.trace[late - 1].vy > GCFG.SPEED_DROP_START_V, 'test setup: dino must already be falling faster than the start velocity');
+    const r = runJump({ downAt: late });
+    assert.ok(r.trace[late].y > base.trace[late].y,
+      `late press: y=${r.trace[late].y} should be lower on screen than normal fall y=${base.trace[late].y}`);
+  });
+
+  test('landing clears the fast-fall state', () => {
+    runJump({ downAt: 10 });
+    assert.equal(GAME.dino.speedDrop, false);
+    assert.equal(GAME.dino.jumping, false);
+    assert.equal(GAME.dino.y, LAND_Y);
+  });
+
+  test('Down held through landing ducks immediately and blocks the next jump; releasing Down re-enables it', () => {
+    newRun();
+    player.jump();
+    player.startDuck();                 // stays held
+    for (let f = 0; f < 100 && GAME.dino.jumping; f++) player.updatePlayer(1);
+    assert.equal(GAME.dino.jumping, false);
+    assert.equal(GAME.dino.ducking, true, 'dino must be ducking on landing while Down is held');
+    player.jump();
+    assert.equal(GAME.dino.jumping, false, 'no jump while ducking');
+    player.updatePlayer(1);
+    assert.equal(GAME.dino.y, GCFG.GY - GCFG.DUCK_H);
+    player.endDuck();
+    player.updatePlayer(1);             // d.ducking refreshes once per game-loop update
+    player.jump();
+    assert.equal(GAME.dino.jumping, true, 'jump works again once Down is released');
+  });
+
+  test('input order: Down first, Space second (same frame) → duck, no jump', () => {
+    newRun();
+    player.startDuck();
+    player.jump();                      // d.ducking has not been refreshed yet — duckHeld must still block it
+    assert.equal(GAME.dino.jumping, false);
+  });
+
+  test('Down pressed while paused does not start a fast-fall', () => {
+    newRun();
+    player.jump();
+    for (let f = 0; f < 5; f++) player.updatePlayer(1);
+    const vyBefore = GAME.dino.vy;
+    GAME.state = 'paused';
+    player.startDuck();
+    assert.equal(GAME.dino.speedDrop, false);
+    assert.equal(GAME.dino.vy, vyBefore);
+    // resume with Down still held: the dino must carry on along its normal arc (no boost)
+    GAME.state = 'running';
+    const y0 = GAME.dino.y;
+    player.updatePlayer(1);
+    assert.ok(Math.abs((GAME.dino.y - y0) - vyBefore) < 1e-9, 'climb must not be accelerated after resuming');
+    player.endDuck();
+  });
+});
+
+describe('player.js — jump release and jump-height limits', () => {
+  afterEach(() => { GAME.state = 'idle'; GAME.duckHeld = false; cancelSoundTimers(); });
+
+  test('holding the jump key gives the full jump: above the max-rise threshold, never above free flight', () => {
+    const hold = runJump();
+    assert.ok(hold.peak > MAX_RISE, `hold peak ${hold.peak} should pass the max-rise threshold ${MAX_RISE}`);
+    assert.ok(hold.peak <= FREE_APEX, `hold peak ${hold.peak} must not exceed free-flight apex ${FREE_APEX}`);
+  });
+
+  test('releasing after the minimum height gives a shorter jump', () => {
+    const hold = runJump();
+    const tap  = runJump({ releaseAt: 6 });
+    assert.ok(tap.peak < hold.peak, `tap ${tap.peak} should be below hold ${hold.peak}`);
+  });
+
+  test('the later the release, the higher the jump (non-decreasing, up to the full jump)', () => {
+    const hold = runJump();
+    let last = 0;
+    for (const f of [5, 6, 8, 10, 12, 14, 20]) {
+      const r = runJump({ releaseAt: f });
+      assert.ok(r.peak >= last - 1e-9, `release@${f}: ${r.peak} < previous ${last}`);
+      assert.ok(r.peak <= hold.peak + 1e-9);
+      last = r.peak;
+    }
+  });
+
+  test('a release BEFORE the minimum height is latched: the hop still reaches the minimum, then is cut', () => {
+    const hold  = runJump();
+    const early = runJump({ releaseAt: 0 });          // released the instant the jump starts
+    assert.ok(early.peak >= MIN_RISE, `early release peak ${early.peak} must still reach the minimum height ${MIN_RISE}`);
+    assert.ok(early.peak < hold.peak, 'early release must still shorten the jump (not a full jump)');
+  });
+
+  test('any release before the minimum height yields the same short hop (consistent taps)', () => {
+    const peaks = [0, 1, 2, 3, 4].map((f) => runJump({ releaseAt: f }).peak);
+    for (const p of peaks) assert.ok(Math.abs(p - peaks[0]) < 1e-9, `taps differ: ${peaks.join(', ')}`);
+  });
+
+  test('the shortest hop still clears the tallest cactus the game can spawn', () => {
+    const tallest = GCFG.CONFIG.CACTUS_H_MIN + GCFG.CONFIG.CACTUS_H_RNG;   // 74 px
+    const hop = runJump({ releaseAt: 0 });
+    assert.ok(hop.peak > tallest, `short hop ${hop.peak} must exceed tallest cactus ${tallest}`);
+  });
+
+  test('endJump() on the ground is a no-op and does not leak into the next jump', () => {
+    const hold = runJump();
+    newRun();
+    player.endJump();
+    assert.equal(GAME.dino.releaseQueued, false);
+    player.jump();
+    for (let f = 0; f < 600 && GAME.dino.jumping; f++) player.updatePlayer(1);
+    // same trajectory as an untouched hold → same landing frame count is enough to prove no latch leaked
+    const again = runJump();
+    assert.equal(again.peak, hold.peak);
+  });
+
+  test('a new jump always starts with clean state flags (nothing stale can carry over)', () => {
+    newRun();
+    GAME.dino.releaseQueued = true;     // simulate stale state from some earlier path
+    GAME.dino.reachedMin    = true;
+    GAME.dino.speedDrop     = true;
+    player.jump();
+    assert.equal(GAME.dino.jumping, true);
+    assert.equal(GAME.dino.releaseQueued, false);
+    assert.equal(GAME.dino.reachedMin, false);
+    assert.equal(GAME.dino.speedDrop, false);
+    assert.equal(GAME.dino.vy, GCFG.JUMP_V);
+  });
+
+  test('release state is cleared on landing and on a new jump', () => {
+    runJump({ releaseAt: 2 });
+    assert.equal(GAME.dino.releaseQueued, false);
+    assert.equal(GAME.dino.reachedMin, false);
+    // a held jump straight after a tap must be a full jump again
+    const hold = runJump();
+    assert.ok(hold.peak > MAX_RISE);
+  });
+
+  test('endJump() can never push the dino upward (no-op while falling)', () => {
+    newRun();
+    player.jump();
+    for (let f = 0; f < 60 && !(GAME.dino.vy > 2); f++) player.updatePlayer(1);   // now clearly descending
+    const vy = GAME.dino.vy;
+    player.endJump();
+    assert.equal(GAME.dino.vy, vy);
+  });
+
+  test('releasing the jump key during a fast-fall changes nothing', () => {
+    const a = runJump({ downAt: 10 });
+    const b = runJump({ downAt: 10, releaseAt: 12 });
+    assert.equal(b.frames, a.frames);
+    assert.equal(b.peak, a.peak);
+  });
+
+  test('jump() initiation still sets vy to JUMP_V (guarded by CodeRabbit rule)', () => {
+    newRun();
+    player.jump();
+    assert.equal(GAME.dino.vy, GCFG.JUMP_V);
+    assert.equal(GAME.dino.jumping, true);
+  });
+
+  test('physics stays stable across frame deltas (30–120 Hz): hold within 6 %, tap within 20 % of the 60 Hz result', () => {
+    const hold60 = runJump({ dt: 1 }).peak;
+    const tap60  = runJump({ dt: 1, releaseAt: 0 }).peak;
+    for (const dt of [0.5, 0.75, 1.5, 2]) {
+      const hold = runJump({ dt }).peak;
+      const tap  = runJump({ dt, releaseAt: 0 }).peak;
+      assert.ok(Math.abs(hold - hold60) / hold60 < 0.06, `dt=${dt}: hold ${hold} vs ${hold60}`);
+      assert.ok(Math.abs(tap  - tap60)  / tap60  < 0.20, `dt=${dt}: tap ${tap} vs ${tap60}`);
+    }
+  });
+
+  test('the dino always lands exactly on the ground line, at any frame delta', () => {
+    for (const dt of [0.5, 1, 2, 3]) {
+      runJump({ dt, releaseAt: 3 });
+      assert.equal(GAME.dino.y, LAND_Y, `dt=${dt}`);
+      assert.equal(GAME.dino.vy, 0);
+    }
+  });
+});
+
+describe('input.js — jump-release wiring (keyup Space/ArrowUp, touchend/touchcancel)', () => {
+  /** Build DOM stubs that record listeners, and capture document-level ones. */
+  function harness(handlers) {
+    const rec = (store) => ({
+      addEventListener(evt, fn) { (store[evt] ||= []).push(fn); },
+      removeEventListener() {},
+      classList: { toggle() {}, add() {}, remove() {} },
+      setAttribute() {},
+    });
+    const els = { gameFrame: {}, restartBtn: {}, jumpBtn: {}, duckBtn: {}, pauseBtn: {}, muteBtn: {}, fullscreenBtn: {} };
+    const store = {};
+    for (const k of Object.keys(els)) { store[k] = {}; els[k] = rec(store[k]); }
+
+    const docStore = {};
+    const realAdd = globalThis.document.addEventListener;
+    globalThis.document.addEventListener = (evt, fn) => { (docStore[evt] ||= []).push(fn); };
+    return import(`file://${ROOT}/js/game/input.js`).then(({ setupInput, teardownInput }) => {
+      try { setupInput(els, handlers); } finally { globalThis.document.addEventListener = realAdd; }
+      return { store, docStore, teardownInput };
+    });
+  }
+
+  const keyEvent = (code, target = null) => ({ code, target, repeat: false, preventDefault() {} });
+
+  test('keyup Space and ArrowUp call endJump; ArrowDown calls endDuck only', async () => {
+    let jumps = 0, ducks = 0;
+    const h = await harness({
+      jump() {}, endJump() { jumps++; }, startDuck() {}, endDuck() { ducks++; },
+      togglePause() {}, toggleFullscreen() {}, restart() {},
+    });
+    try {
+      const keyup = h.docStore.keyup[0];
+      keyup(keyEvent('Space'));
+      keyup(keyEvent('ArrowUp'));
+      assert.equal(jumps, 2);
+      keyup(keyEvent('ArrowDown'));
+      assert.equal(jumps, 2, 'ArrowDown must not release the jump');
+      assert.equal(ducks, 1);
+      keyup(keyEvent('KeyP'));
+      assert.equal(jumps, 2, 'unrelated keys must not release the jump');
+    } finally { h.teardownInput(); }
+  });
+
+  test('keyup is ignored while focus is in an interactive control (same guard as keydown)', async () => {
+    let jumps = 0;
+    const h = await harness({
+      jump() {}, endJump() { jumps++; }, startDuck() {}, endDuck() {},
+      togglePause() {}, toggleFullscreen() {}, restart() {},
+    });
+    try {
+      const inBtn = { tagName: 'DIV', contentEditable: 'false', closest: () => ({}) };
+      h.docStore.keyup[0](keyEvent('Space', inBtn));
+      assert.equal(jumps, 0);
+    } finally { h.teardownInput(); }
+  });
+
+  test('touchend / touchcancel on the game frame and the jump button call endJump', async () => {
+    let jumps = 0;
+    const h = await harness({
+      jump() {}, endJump() { jumps++; }, startDuck() {}, endDuck() {},
+      togglePause() {}, toggleFullscreen() {}, restart() {},
+    });
+    try {
+      for (const el of ['gameFrame', 'jumpBtn']) {
+        for (const evt of ['touchend', 'touchcancel']) {
+          assert.ok(h.store[el][evt] && h.store[el][evt].length === 1, `${el} must have a ${evt} listener`);
+          h.store[el][evt][0]({});
+        }
+      }
+      assert.equal(jumps, 4);
+    } finally { h.teardownInput(); }
+  });
+
+  test('touchstart still jumps (start handlers unchanged) and does not release', async () => {
+    let jumps = 0, releases = 0;
+    const h = await harness({
+      jump() { jumps++; }, endJump() { releases++; }, startDuck() {}, endDuck() {},
+      togglePause() {}, toggleFullscreen() {}, restart() {},
+    });
+    try {
+      h.store.gameFrame.touchstart[0]({ preventDefault() {} });
+      assert.equal(jumps, 1);
+      assert.equal(releases, 0);
+    } finally { h.teardownInput(); }
+  });
+
+  test('handlers without endJump (older callers) do not throw on release events', async () => {
+    const h = await harness({
+      jump() {}, startDuck() {}, endDuck() {}, togglePause() {}, toggleFullscreen() {}, restart() {},
+    });
+    try {
+      assert.doesNotThrow(() => h.docStore.keyup[0](keyEvent('Space')));
+      assert.doesNotThrow(() => h.store.gameFrame.touchend[0]({}));
+    } finally { h.teardownInput(); }
+  });
+
+  test('main.js passes endJump to setupInput, and the game.js barrel exports it', async () => {
+    const { readFileSync } = await import('node:fs');
+    const main   = readFileSync(path.join(ROOT, 'js/main.js'), 'utf8');
+    const barrel = readFileSync(path.join(ROOT, 'js/game/game.js'), 'utf8');
+    assert.match(main, /endJump\s*:\s*doEndJump/);
+    assert.match(main, /function doEndJump\(\)\s*\{\s*playerEndJump\(\);\s*\}/);
+    assert.match(barrel, /\bendJump\b/);
   });
 });
