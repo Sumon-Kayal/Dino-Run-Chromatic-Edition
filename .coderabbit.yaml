@@ -118,8 +118,18 @@ reviews:
           Never hardcode the jump velocity here.
         - Gravity application: vy += GRAVITY * dt each frame. GRAVITY must be
           imported from config.js, never hardcoded.
-        - Fast-fall (duck while airborne): vy += GRAVITY * SPEED_DROP_COEFF * dt.
-          SPEED_DROP_COEFF must remain 3.0 and must be imported from config.js.
+        - Fast-fall (duck while airborne) follows Chromium Trex.setSpeedDrop():
+          pressing Down while airborne sets dino.speedDrop and forces vy to at
+          least SPEED_DROP_START_V (downward). The SPEED_DROP_COEFF multiplier
+          scales the POSITION step only (d.y += vy * coeff * dt) and must be
+          keyed on dino.speedDrop — never on G.duckHeld, or holding Down while
+          rising would multiply the climb. Gravity (vy += GRAVITY * dt) is never
+          multiplied. SPEED_DROP_COEFF must remain 3.0 and must be imported from
+          config.js.
+        - Jump release (Chromium Trex.endJump): once dino.reachedMin is set, the
+          upward speed is capped at JUMP_V * JUMP_DROP_V_FRAC on release and past
+          the max-rise threshold. endJump() must never push the dino upward and
+          must be a no-op when not airborne.
         - Ground clamp: dino.y must be clamped to GY - DINO_H (standing) or
           GY - DUCK_H (ducking) — never allow the dino to go below the ground line.
         - Sub-pixel y position: dino.y must be a float; floor/round only at draw time.

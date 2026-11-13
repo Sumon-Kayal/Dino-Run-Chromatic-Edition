@@ -15,7 +15,7 @@ import { W, H, GY, CONFIG, DINO_H, DINO_X, applyJSONConfig, applyObstaclesConfig
 import { G } from './game/runtime.js';
 import { Engine }            from './game/engine.js';
 import { initRenderer, draw, rebuildSkyLayer } from './game/renderer.js';
-import { initPlayer, updatePlayer, tickIdleAnimation, jump as playerJump, startDuck as playerStartDuck, endDuck as playerEndDuck } from './game/player.js';
+import { initPlayer, updatePlayer, tickIdleAnimation, jump as playerJump, endJump as playerEndJump, startDuck as playerStartDuck, endDuck as playerEndDuck } from './game/player.js';
 import { initObstacles, updateObstacles } from './game/obstacles.js';
 import { checkCollision }    from './game/physics.js';
 import { setupInput, teardownInput } from './game/input.js';
@@ -479,11 +479,13 @@ function renderLeaderboard(lb) {
    INPUT WIRING
    ─────────────────────────────────────────────────────────── */
 function doJump()      { playerJump(startGame, restart); }
+function doEndJump()   { playerEndJump(); }
 function doStartDuck() { playerStartDuck(DOM.duckBtn); }
 function doEndDuck()   { playerEndDuck(DOM.duckBtn); }
 
 setupInput(DOM, {
   jump:             doJump,
+  endJump:          doEndJump,
   startDuck:        doStartDuck,
   endDuck:          doEndDuck,
   togglePause:      togglePause,

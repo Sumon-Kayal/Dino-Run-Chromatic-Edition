@@ -8,7 +8,7 @@
 export { Engine }                                        from './engine.js';
 export { initRenderer, draw, rebuildSkyLayer }           from './renderer.js';
 export { initPlayer, updatePlayer, tickIdleAnimation,
-         jump, startDuck, endDuck }                      from './player.js';
+         jump, endJump, startDuck, endDuck }             from './player.js';
 export { initObstacles, updateObstacles, spawnObstacle } from './obstacles.js';
 export { checkCollision }                                from './physics.js';
 export { setupInput, teardownInput }                     from './input.js';

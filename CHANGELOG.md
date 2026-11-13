@@ -5,6 +5,65 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 ---
 
+## [Unreleased]
+
+### Fixed
+
+- **Fast-fall multiplied the dino's *upward* motion — holding ↓ while rising launched it off-screen** (`js/game/player.js`) — **HIGH**  
+  `updatePlayer()` applied `SPEED_DROP_COEFF` (×3) to the position step whenever `G.duckHeld`
+  was true, regardless of direction. While the dino is rising `vy` is negative, so pressing ↓
+  tripled the climb instead of speeding the descent: first-frame step −15 → −45 px, and a jump
+  with ↓ pressed on its first frame peaked at ≈555 px (normal jump ≈195 px) — far above the
+  480 px canvas. Replaced with Chromium's `setSpeedDrop()` semantics
+  (`dino_game/trex.ts`): pressing ↓ while airborne sets a `speedDrop` state and forces
+  `vy` to at least `SPEED_DROP_START_V` (1 px/frame, downward), so the ×3 multiplier — still
+  applied in the position step only — can only ever scale a downward move. Releasing ↓ clears
+  the state but keeps the velocity (`endDuck()`); landing clears it; pressing ↓ while paused
+  does nothing. `jump()` also refuses to start while ↓ is held, so ↓-then-Space within one frame
+  ducks instead of jumping (Chromium: no jump while ducking).  
+  *Deliberate deviation:* Chromium sets the velocity to exactly 1, which would **brake** a fall
+  that is already faster than that (more noticeable here, where falls reach ~15 px/frame);
+  `Math.max(vy, 1)` is used so ↓ can never slow the dino down.
+
+### Changed
+
+- **Variable-height jump — jump release and min/max jump height (Chromium `endJump()`)** (`js/game/player.js`, `js/game/config.js`, `js/game/input.js`, `js/main.js`, `js/game/game.js`)  
+  The jump was a fixed ballistic arc: nothing reacted to the jump key being released. Added
+  Chromium's rule — once the dino has climbed past a minimum height (`reachedMin`), releasing the
+  jump key caps the upward speed at a drop velocity; the same cap is applied automatically past a
+  maximum height. New `endJump()` export is wired to `keyup` (Space / ↑) and to `touchend` /
+  `touchcancel` on the game frame and the ▲ JUMP button (`setupInput` takes an optional
+  `endJump` handler; older callers are unaffected). Mouse clicks are unchanged: `click` fires
+  after the button is released, so a click is always a full jump.  
+  Chromium's limits are pixel values for a 150 px-tall world, so they are stored as fractions of
+  the free-flight apex (`v0² / 2g`) — `JUMP_MIN_RISE_FRAC = 0.32` (30 / 93.6),
+  `JUMP_MAX_RISE_FRAC = 0.67` (63 / 93.6), `JUMP_DROP_V_FRAC = 0.5` (`dropVelocity = v0 / 2`) —
+  and stay proportional if `JUMP_V` / `GRAVITY` are retuned. `JUMP_V` and `GRAVITY` themselves are
+  **unchanged**. Resulting jump apex with the shipped values: held ≈183 px (was ≈195 px — the
+  max-height cap), quick tap ≈120 px (the shortest hop still clears the tallest cactus, 74 px).  
+  *Deliberate deviation:* Chromium ignores a release that arrives before the minimum height, so
+  an ultra-short tap becomes a full jump. In this world that window is ~70 ms, so the release is
+  latched and applied the moment the minimum height is reached — every tap is the same short hop.
+
+### Tests
+
+- **Player-physics regression suites added to `all.test.mjs`** (100 → 139 tests)  
+  Covers fast-fall (rising / descending / late press / release / landing / paused / input order),
+  jump release (hold vs. tap, latched early release, minimum height, no leak between jumps,
+  frame-delta stability 30–120 Hz), jump-limit constants, and the `input.js` release wiring
+  (keyup, touchend / touchcancel, missing handler, interactive-control guard). The suite
+  previously had no coverage of `player.js`.
+
+### Docs
+
+- **`.coderabbit.yaml` — `player.js` fast-fall review rule corrected.** It described fast-fall
+  as `vy += GRAVITY * SPEED_DROP_COEFF * dt`, which is neither what the code does nor what
+  Chromium does (the multiplier scales the *position* step; gravity is unchanged). Rule now
+  states the `setSpeedDrop` semantics above and lists the jump-release rules.
+- **README controls** note jump-height behaviour and fast-fall; file-tree descriptions updated.
+
+---
+
 ## [0.8.0-beta] — CSS & DB Consolidation + Chromium Parity 2026-05-01
 
 ### Changed
